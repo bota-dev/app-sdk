@@ -1,6 +1,7 @@
 schemaVersion: 1
 protocolRevision: firmware-8b175a89374c
 contractRevisions:
+  LOCAL_WIFI_CONTRACT_REVISION: local-wifi-v2-2026-10-29
   RECORDING_MARKERS_CONTRACT_REVISION: recording-markers-v1-candidate-2026-10-09
   ENCRYPTED_UPLOAD_V2_CONTRACT_REVISION: encrypted-upload-v2-contract-v1
 
@@ -98,7 +99,25 @@ services:
       - { name: CHAR_FIND_BINDING_CONFIRM, uuid: B07A0009-0007-1000-8000-00805F9B34FB }
       - { name: CHAR_FIND_BINDING_ACK, uuid: B07A0009-0008-1000-8000-00805F9B34FB }
 
+  - name: SERVICE_BOTA_LOCAL_WIFI
+    uuid: B07A000B-0000-1000-8000-00805F9B34FB
+    characteristics:
+      - { name: CHAR_LOCAL_WIFI_CAPABILITIES, uuid: B07A000B-0001-1000-8000-00805F9B34FB }
+      - { name: CHAR_LOCAL_WIFI_CONTROL, uuid: B07A000B-0002-1000-8000-00805F9B34FB }
+      - { name: CHAR_LOCAL_WIFI_EVENT, uuid: B07A000B-0003-1000-8000-00805F9B34FB }
+
 constantGroups:
+  local_wifi:
+    LOCAL_WIFI_VERSION: 2
+    LOCAL_WIFI_REQUIRED_FLAGS: 31
+    LOCAL_WIFI_LINK_OPEN: 16
+    LOCAL_WIFI_LINK_QUERY: 17
+    LOCAL_WIFI_LINK_CLOSE: 18
+    LOCAL_WIFI_PREPARE: 48
+    LOCAL_WIFI_FINISH: 49
+    LOCAL_WIFI_LINK_STATE: 144
+    LOCAL_WIFI_PREPARED: 176
+    LOCAL_WIFI_EOF: 177
   find_device:
     FIND_VERSION: 1
     FIND_REVISION_2: 2
@@ -339,6 +358,7 @@ constantGroups:
     ENCRYPTED_UPLOAD_CHANNEL_BLE: 1
     ENCRYPTED_UPLOAD_CHANNEL_WIFI: 2
     ENCRYPTED_UPLOAD_CHANNEL_CELLULAR: 3
+    ENCRYPTED_UPLOAD_CHANNEL_LOCAL_WIFI: 4
   encrypted_upload_environments:
     ENCRYPTED_UPLOAD_ENVIRONMENT_DEVELOPMENT: 0
     ENCRYPTED_UPLOAD_ENVIRONMENT_GAMMA: 1
@@ -350,6 +370,7 @@ constantGroups:
     ENCRYPTED_UPLOAD_V2_BLOB_KIND_CONTEXT_RESULT: 4
     ENCRYPTED_UPLOAD_V2_BLOB_KIND_MARKED_AUTHORIZATION: 5
     ENCRYPTED_UPLOAD_V2_BLOB_KIND_MARKED_RECEIPT: 6
+    ENCRYPTED_UPLOAD_V2_BLOB_KIND_LOCAL_WIFI_CONTROL: 7
   encrypted_upload_v2_context:
     ENCRYPTED_UPLOAD_V2_CONTEXT_BEGIN: 101
     ENCRYPTED_UPLOAD_V2_CONTEXT_SNAPSHOT: 102
@@ -487,6 +508,10 @@ byteStrings:
   UPLOAD_CONTEXT_RESULT_MAGIC: 424f544143545852
 
 asciiStrings:
+  LOCAL_WIFI_CONTROL_AAD: bota/local-wifi/control/v1
+  LOCAL_WIFI_CONTROL_APP_INFO: bota/local-wifi/control/v1/app
+  LOCAL_WIFI_CONTROL_DEVICE_INFO: bota/local-wifi/control/v1/device
+  LOCAL_WIFI_CONTROL_HPKE_INFO: bota-local-wifi-control-v1
   RECORDING_MARKER_EVENT_DOMAIN: BOTA-MARKER-EVENT-V1
   ENCRYPTED_UPLOAD_V2_DOMAIN_LOCAL_WRAP: bota/enc-v2/local-wrap/v1
   ENCRYPTED_UPLOAD_V2_DOMAIN_WRAPPED_KEY_AAD: bota/enc-v2/wrapped-key-aad/v1
@@ -504,6 +529,74 @@ asciiStrings:
   ENCRYPTED_UPLOAD_V2_DOMAIN_PUBLICATION: bota/enc-v2/publication/v1
 
 layouts:
+  LOCAL_WIFI_CAPABILITIES:
+    minimumLength: 16
+    fixedLength: 16
+    fields:
+      - { name: encoding_version, offset: 0, width: 1, encoding: u8 }
+      - { name: contract_version, offset: 1, width: 1, encoding: u8 }
+      - { name: value_length, offset: 2, width: 2, encoding: u16_le }
+      - { name: flags, offset: 4, width: 4, encoding: u32_le }
+      - { name: band_mask, offset: 8, width: 1, encoding: u8 }
+      - { name: reserved, offset: 9, width: 1, encoding: zero }
+      - { name: minimum_att_mtu, offset: 10, width: 2, encoding: u16_le }
+      - { name: maximum_control_bytes, offset: 12, width: 2, encoding: u16_le }
+      - { name: maximum_event_bytes, offset: 14, width: 2, encoding: u16_le }
+  LOCAL_WIFI_PREPARE:
+    minimumLength: 84
+    fixedLength: 84
+    fields:
+      - { name: message_type, offset: 0, width: 1, encoding: u8 }
+      - { name: protocol_version, offset: 1, width: 1, encoding: u8 }
+      - { name: flags, offset: 2, width: 2, encoding: u16_le }
+      - { name: session_id, offset: 4, width: 8, encoding: u64_le }
+      - { name: upload_session_uuid, offset: 12, width: 16, encoding: bytes }
+      - { name: recording_uuid, offset: 28, width: 16, encoding: bytes }
+      - { name: recording_generation, offset: 44, width: 4, encoding: u32_le }
+      - { name: authorization_sha256, offset: 48, width: 32, encoding: bytes }
+      - { name: owner_revision, offset: 80, width: 4, encoding: u32_le }
+  LOCAL_WIFI_EVIDENCE:
+    minimumLength: 128
+    fixedLength: 128
+    fields:
+      - { name: message_type, offset: 0, width: 1, encoding: u8 }
+      - { name: protocol_version, offset: 1, width: 1, encoding: u8 }
+      - { name: flags, offset: 2, width: 2, encoding: u16_le }
+      - { name: session_id, offset: 4, width: 8, encoding: u64_le }
+      - { name: upload_session_uuid, offset: 12, width: 16, encoding: bytes }
+      - { name: recording_uuid, offset: 28, width: 16, encoding: bytes }
+      - { name: recording_generation, offset: 44, width: 4, encoding: u32_le }
+      - { name: owner_revision, offset: 48, width: 4, encoding: u32_le }
+      - { name: ciphertext_length, offset: 52, width: 8, encoding: u64_le }
+      - { name: ciphertext_sha256, offset: 60, width: 32, encoding: bytes }
+      - { name: manifest_sha256, offset: 92, width: 32, encoding: bytes }
+      - { name: block_count, offset: 124, width: 4, encoding: u32_le }
+  LOCAL_WIFI_LINK_STATE:
+    minimumLength: 16
+    fields:
+      - { name: message_type, offset: 0, width: 1, encoding: u8 }
+      - { name: protocol_version, offset: 1, width: 1, encoding: u8 }
+      - { name: flags, offset: 2, width: 2, encoding: u16_le }
+      - { name: session_id, offset: 4, width: 8, encoding: u64_le }
+      - { name: result, offset: 12, width: 2, encoding: u16_le }
+      - { name: link_state, offset: 14, width: 1, encoding: u8 }
+      - { name: request_message_type, offset: 15, width: 1, encoding: u8 }
+  LOCAL_WIFI_READY_PREFIX:
+    minimumLength: 30
+    fields:
+      - { name: message_type, offset: 0, width: 1, encoding: u8 }
+      - { name: protocol_version, offset: 1, width: 1, encoding: u8 }
+      - { name: flags, offset: 2, width: 2, encoding: u16_le }
+      - { name: session_id, offset: 4, width: 8, encoding: u64_le }
+      - { name: result, offset: 12, width: 2, encoding: u16_le }
+      - { name: link_state, offset: 14, width: 1, encoding: u8 }
+      - { name: request_message_type, offset: 15, width: 1, encoding: u8 }
+      - { name: band, offset: 16, width: 1, encoding: u8 }
+      - { name: channel, offset: 17, width: 2, encoding: u16_le }
+      - { name: ipv4, offset: 19, width: 4, encoding: bytes }
+      - { name: port, offset: 23, width: 2, encoding: u16_le }
+      - { name: expires_in_seconds, offset: 25, width: 4, encoding: u32_le }
+      - { name: ssid_length, offset: 29, width: 1, encoding: u8 }
   RECORDING_MARKER_BODY:
     minimumLength: 52
     fixedLength: 52
@@ -1164,6 +1257,15 @@ layouts:
       - { name: reserved, offset: 22, width: 2, encoding: zero }
 
 limits:
+  LOCAL_WIFI_CAPABILITIES_BYTES: 16
+  LOCAL_WIFI_CONTROL_BYTES: 182
+  LOCAL_WIFI_EVENT_BYTES: 182
+  LOCAL_WIFI_MINIMUM_ATT_MTU: 185
+  LOCAL_WIFI_PREPARE_BYTES: 84
+  LOCAL_WIFI_FINISH_BYTES: 124
+  LOCAL_WIFI_EVIDENCE_BYTES: 128
+  LOCAL_WIFI_LINK_PREFIX_BYTES: 16
+  LOCAL_WIFI_READY_MAX_BYTES: 159
   BYO_BLE_HEADER_BYTES: 12
   BYO_BLE_FRAME_MAX_BYTES: 512
   BYO_BLE_DOCUMENT_MAX_BYTES: 8192

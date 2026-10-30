@@ -1,5 +1,6 @@
 //! Customer-proxy encrypted-v2 policy. Hosts execute HTTP and durable IO only.
 //! Signed documents are relayed; their trust and decryption remain device/server owned.
+use crate::protocol::{LocalWifiCheckpoint, LocalWifiRecovery};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -66,6 +67,8 @@ pub struct ManagedUploadRecording {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ManagedUploadCapability {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_wifi_raw_value_hex: Option<String>,
     pub raw_value_hex: String,
     pub flags: u32,
 }
@@ -118,6 +121,9 @@ pub struct ManagedUploadJournal {
     pub authorization_nonce_sha256: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recovery_nonce_base64: Option<String>,
+    /// Only verified recovery parents; retained across crashes until completion.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub local_recovery_parents: Vec<ManagedUploadEntry>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -168,6 +174,11 @@ pub enum ManagedUploadEvent {
         phase: String,
         authorization_nonce_sha256: Option<String>,
         recovery_nonce_base64: Option<String>,
+        recovered_from: Option<ManagedUploadEntry>,
+    },
+    LocalWifiRecovery {
+        record: ManagedUploadJournal,
+        checkpoint: LocalWifiCheckpoint,
     },
     RollbackRejectedCreate {
         record: ManagedUploadJournal,
@@ -276,6 +287,10 @@ pub enum ManagedUploadEvent {
     ContextCreate {
         nonce: Vec<u8>,
     },
+    LocalControlGrant {
+        nonce: Vec<u8>,
+        session_id: String,
+    },
     ContextProof {
         initial: ManagedUploadContext,
         proof: Vec<u8>,
@@ -334,6 +349,14 @@ impl ManagedUploadEntry {
     }
 }
 impl ManagedUploadInput {
+    fn channel(&self) -> &'static str {
+        if self.capability.local_wifi_raw_value_hex.is_some() {
+            "local_wifi"
+        } else {
+            "ble"
+        }
+    }
+
     pub fn journal_key(&self) -> Result<String> {
         hash_json(&json!([
             self.scope.scope_key,
@@ -404,6 +427,13 @@ impl ManagedUploadInput {
             || !hex(&self.capability.raw_value_hex, 24)
         {
             return Err(ManagedUploadError::InvalidInput);
+        }
+        if let Some(local) = &self.capability.local_wifi_raw_value_hex {
+            if !hex(local, 16) || r.markers_required == Some(true) || self.checkpoint.is_some() {
+                return Err(ManagedUploadError::InvalidInput);
+            }
+            crate::protocol::decode_local_wifi_capabilities(&unhex(local)?, 185)
+                .map_err(|_| ManagedUploadError::InvalidInput)?;
         }
         let length = decimal(&r.ciphertext_length, SAFE)?;
         let start = decimal(&r.started_at_ms, DATE_MAX)?;
@@ -492,6 +522,33 @@ impl ManagedUploadInput {
         if let Some(e) = &record.entry {
             e.validate()?;
         }
+        if !record.local_recovery_parents.is_empty() {
+            let current = record.entry.as_ref().ok_or(ManagedUploadError::Journal)?;
+            if self.capability.local_wifi_raw_value_hex.is_none()
+                || record.local_recovery_parents.len() > 64
+            {
+                return Err(ManagedUploadError::Journal);
+            }
+            let mut revision = 0;
+            let mut sessions = std::collections::BTreeSet::new();
+            for parent in &record.local_recovery_parents {
+                parent.validate()?;
+                let id = parent
+                    .session_id
+                    .as_ref()
+                    .ok_or(ManagedUploadError::Journal)?;
+                let owner = parent.owner_revision.ok_or(ManagedUploadError::Journal)?;
+                if parent.recording_id != current.recording_id
+                    || owner <= revision
+                    || Some(owner) >= current.owner_revision
+                    || Some(id) == current.session_id.as_ref()
+                    || !sessions.insert(id)
+                {
+                    return Err(ManagedUploadError::Journal);
+                }
+                revision = owner;
+            }
+        }
         if let Some(nonce) = &record.recovery_nonce_base64 {
             if record.phase != "ready"
                 || record
@@ -523,7 +580,7 @@ impl ManagedUploadSession {
         self.pointer()?;
         if Some(&self.session_id) != entry.session_id.as_ref()
             || Some(self.owner_revision) != entry.owner_revision
-            || self.channel.as_deref() != Some("ble")
+            || self.channel.as_deref() != Some(input.channel())
             || self.ciphertext_length != Some(decimal(&input.recording.ciphertext_length, SAFE)?)
             || self.ciphertext_sha256.as_ref() != Some(&input.recording.ciphertext_sha256)
         {
@@ -580,6 +637,7 @@ impl ManagedUploadRequest {
                 phase,
                 authorization_nonce_sha256,
                 recovery_nonce_base64,
+                recovered_from,
             } => {
                 if let Some(p) = previous {
                     input.validate_journal(p)?;
@@ -604,6 +662,28 @@ impl ManagedUploadRequest {
                         })
                         .and_then(|p| p.authorization_nonce_sha256.clone())
                 });
+                let mut parents = previous
+                    .as_ref()
+                    .map(|p| p.local_recovery_parents.clone())
+                    .unwrap_or_default();
+                if let Some(parent) = recovered_from {
+                    let next = entry.as_ref().ok_or(ManagedUploadError::Journal)?;
+                    if previous.as_ref().and_then(|p| p.entry.as_ref()) != Some(parent)
+                        || parent.recording_id != next.recording_id
+                        || parent.session_id.is_none()
+                        || next.session_id.is_none()
+                        || parent.session_id == next.session_id
+                        || parent.owner_revision.is_none()
+                        || next.owner_revision <= parent.owner_revision
+                    {
+                        return Err(ManagedUploadError::IdentityConflict);
+                    }
+                    if input.capability.local_wifi_raw_value_hex.is_some() {
+                        parents.push(parent.clone());
+                    }
+                } else if previous.as_ref().and_then(|p| p.entry.as_ref()) != entry.as_ref() {
+                    parents.clear();
+                }
                 let r = ManagedUploadJournal {
                     version: 2,
                     identity: input.identity(false)?,
@@ -612,9 +692,58 @@ impl ManagedUploadRequest {
                     imported_prior_sha256: imported,
                     authorization_nonce_sha256: auth,
                     recovery_nonce_base64: recovery_nonce_base64.clone(),
+                    local_recovery_parents: parents,
                 };
                 input.validate_journal(&r)?;
                 json!({"record":r})
+            }
+            ManagedUploadEvent::LocalWifiRecovery { record, checkpoint } => {
+                input.validate_journal(record)?;
+                let current = record.entry.as_ref().ok_or(ManagedUploadError::Journal)?;
+                if input.capability.local_wifi_raw_value_hex.is_none()
+                    || checkpoint.recording_uuid != uuid_array(&input.recording.uuid)?
+                    || checkpoint.recording_generation != input.recording.generation
+                    || checkpoint.ciphertext_length
+                        != decimal(&input.recording.ciphertext_length, SAFE)?
+                    || checkpoint.ciphertext_sha256.as_slice()
+                        != unhex(&input.recording.ciphertext_sha256)?
+                {
+                    return Err(ManagedUploadError::IdentityConflict);
+                }
+                let session = uuid_array(
+                    current
+                        .session_id
+                        .as_ref()
+                        .ok_or(ManagedUploadError::Journal)?,
+                )?;
+                let owner = current.owner_revision.ok_or(ManagedUploadError::Journal)?;
+                if checkpoint.upload_session_uuid == session && checkpoint.owner_revision == owner {
+                    json!({"recovery":null})
+                } else {
+                    let mut authorized = false;
+                    for parent in &record.local_recovery_parents {
+                        if checkpoint.upload_session_uuid
+                            == uuid_array(
+                                parent
+                                    .session_id
+                                    .as_ref()
+                                    .ok_or(ManagedUploadError::Journal)?,
+                            )?
+                            && Some(checkpoint.owner_revision) == parent.owner_revision
+                        {
+                            authorized = true;
+                            break;
+                        }
+                    }
+                    if !authorized {
+                        return Err(ManagedUploadError::IdentityConflict);
+                    }
+                    json!({"recovery":LocalWifiRecovery {
+                        previous_upload_session_uuid:checkpoint.upload_session_uuid,
+                        previous_owner_revision:checkpoint.owner_revision,
+                        upload_session_uuid:session,owner_revision:owner,
+                    }})
+                }
             }
             ManagedUploadEvent::RollbackRejectedCreate { record, entry } => {
                 input.validate_journal(record)?;
@@ -649,7 +778,7 @@ impl ManagedUploadRequest {
                     format!("{}/recordings", input.base()),
                     json!({"device_id":input.scope.device_id,
                     "recording_uuid":input.recording.uuid,"recording_generation":input.recording.generation,
-                    "end_user_id":input.scope.end_user_id,"upload_method":"ble","streaming":false,
+                    "end_user_id":input.scope.end_user_id,"upload_method":if input.channel() == "ble" { "ble" } else { "unknown" },"streaming":false,
                     "metadata":{"started_at":iso_date(start),"ended_at":iso_date(end)}}),
                 )?
             }
@@ -672,14 +801,15 @@ impl ManagedUploadRequest {
                 if entry.session_id.is_some() || nonce.len() != 16 {
                     return Err(ManagedUploadError::State);
                 }
-                plan(
-                    input.sessions(entry),
-                    json!({"device_id":input.scope.device_id,"binding_generation":input.scope.binding_generation,
+                let mut body = json!({"device_id":input.scope.device_id,"binding_generation":input.scope.binding_generation,
                     "recording_uuid":input.recording.uuid,"recording_generation":input.recording.generation,
-                    "storage_format":"bota_enc_v2","channel":"ble","capabilities_base64":base64(&unhex(&input.capability.raw_value_hex)?),
+                    "storage_format":"bota_enc_v2","channel":input.channel(),"capabilities_base64":base64(&unhex(&input.capability.raw_value_hex)?),
                     "auth_nonce_base64":base64(nonce),"ciphertext_length":decimal(&input.recording.ciphertext_length,SAFE)?,
-                    "ciphertext_sha256":input.recording.ciphertext_sha256}),
-                )?
+                    "ciphertext_sha256":input.recording.ciphertext_sha256});
+                if let Some(local) = &input.capability.local_wifi_raw_value_hex {
+                    body["local_wifi_capabilities_base64"] = json!(base64(&unhex(local)?));
+                }
+                plan(input.sessions(entry), body)?
             }
             ManagedUploadEvent::NonceHash { nonce } => {
                 if nonce.len() != 16 {
@@ -1005,6 +1135,27 @@ impl ManagedUploadRequest {
                 date(&c.expires_at)?;
                 json!({"initial":c,"challenge":document(&c.challenge_base64,196,None)?})
             }
+            ManagedUploadEvent::LocalControlGrant { nonce, session_id } => {
+                let session = session_id
+                    .parse::<u64>()
+                    .map_err(|_| ManagedUploadError::InvalidDocument)?;
+                if input.channel() != "local_wifi"
+                    || session == 0
+                    || session.to_string() != *session_id
+                    || nonce.len() != 16
+                    || nonce.iter().all(|b| *b == 0)
+                {
+                    return Err(ManagedUploadError::InvalidDocument);
+                }
+                plan(
+                    format!(
+                        "{}/devices/{}/local-wifi/control-grant",
+                        input.base(),
+                        input.scope.device_id
+                    ),
+                    json!({"binding_generation":input.scope.binding_generation,"session_id":session_id,"auth_nonce_base64":base64(nonce)}),
+                )?
+            }
             ManagedUploadEvent::ContextCreate { nonce } => {
                 if nonce.len() != 16 {
                     return Err(ManagedUploadError::InvalidDocument);
@@ -1157,6 +1308,14 @@ fn unhex(v: &str) -> Result<Vec<u8>> {
             n(v[0]) * 16 + n(v[1])
         })
         .collect())
+}
+fn uuid_array(v: &str) -> Result<[u8; 16]> {
+    if !uuid(v) {
+        return Err(ManagedUploadError::InvalidDocument);
+    }
+    unhex(&v.replace('-', ""))?
+        .try_into()
+        .map_err(|_| ManagedUploadError::InvalidDocument)
 }
 fn uuid(v: &str) -> bool {
     v.len() == 36

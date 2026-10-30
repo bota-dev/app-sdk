@@ -5,6 +5,10 @@ publication target. It retains its internal identity/version and compiles the
 authoritative RN facade and generated Rust artifact without React Native imports,
 native autolinking, CocoaPods/Maven dependencies or a Codegen module.
 
+The optional local WiFi adapter follows the same rule: its exported declarations
+are structural interfaces, and importing or constructing the port loads no
+React Native module. The host supplies the installed network module explicitly.
+
 Applications use `@bota.dev/react-native-app-sdk/runtime` from the original public
 package. Published beta.17 supplies that generated-JS route; its exact public
 archive and fresh runtime/declaration consumer are verified. All five SDK

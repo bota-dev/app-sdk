@@ -4,7 +4,10 @@ import type { Spec as BackendSpec } from './specs/NativeBotaUploadV2Backend';
 
 /** The bridge contract is independent of npm, SwiftPM and Maven package versions. */
 export const BOTA_RUNTIME_API_VERSION = 1 as const;
-export type BotaRuntimeSpec = Spec & FindDeviceAdapter;
+/** Optional JS-host extension; native ABI remains unchanged and fails preflight. */
+export type BotaRuntimeSpec = Spec & FindDeviceAdapter & {
+  syncEncryptedRecordingV2LocalWifi: Spec['syncEncryptedRecordingV2'];
+};
 export type BotaDeviceAdapter = Partial<Omit<BotaRuntimeSpec, 'getConstants'>>;
 export type BotaNativeOperation = keyof BotaDeviceAdapter;
 export type BotaUploadBackendAdapter = Partial<Omit<BackendSpec, 'getConstants'>>;
@@ -40,6 +43,9 @@ const dependencies: Partial<Record<BotaNativeOperation, readonly BotaNativeOpera
   provision: ['onProvisioningMaterialRequested', 'resolveProvisioningMaterial', 'rejectApplicationMaterial'],
   factoryReset: ['onFactoryResetGrantRequested', 'resolveFactoryResetGrant', 'rejectApplicationMaterial'],
   syncRecording: ['onRecordingTransferProgress'],
+  syncEncryptedRecordingV2LocalWifi: ['onEncryptedUploadV2ProfileRequested', 'onEncryptedUploadV2Progress',
+    'resolveEncryptedUploadV2Profile', 'rejectEncryptedUploadV2Profile',
+    'cancelEncryptedRecordingV2', 'releaseEncryptedUploadV2Material'],
   syncEncryptedRecordingV2: ['onEncryptedUploadV2ProfileRequested', 'onEncryptedUploadV2Progress',
     'resolveEncryptedUploadV2Profile', 'rejectEncryptedUploadV2Profile',
     'cancelEncryptedRecordingV2', 'releaseEncryptedUploadV2Material'],

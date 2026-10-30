@@ -34,3 +34,12 @@ pub use recordings::*;
 pub use settings::*;
 pub use status::*;
 pub use transfer::*;
+
+mod local_wifi;
+pub use local_wifi::*;
+
+mod local_wifi_transfer;
+pub use local_wifi_transfer::*;
+
+mod local_wifi_control;
+pub use local_wifi_control::*;

@@ -98,3 +98,11 @@ test('optional hooks must be callable when supplied, and scope signals are struc
   f.ports.signal = { aborted: false, addEventListener: f.primitive };
   assert.throws(() => validateJsHostPorts(f.ports), { code: 'missing_primitive:signal.removeEventListener' });
 });
+
+test('optional local WiFi port must provide secure preflight and joined network acquisition', () => {
+  const f = fixture();
+  f.ports.localWifi = { preflight: f.primitive };
+  assert.throws(() => validateJsHostPorts(f.ports), { code: 'missing_primitive:localWifi.join' });
+  f.ports.localWifi.join = f.primitive;
+  validateJsHostPorts(f.ports); assert.equal(f.calls(), 0);
+});

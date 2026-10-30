@@ -712,7 +712,8 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
     await executor.cancel(lease.context?.operationId ?? operationId);
   };
   if (ports.files?.flush) {
-    adapter.syncEncryptedRecordingV2 = async (device, recording, operationId) => {
+    const syncV2 = async (device: NativeConnectedDevice, recording: NativeEncryptedUploadV2Recording,
+      operationId: string, localWifi: boolean) => {
       if (!operationId || operationId.length > 256 || operationLeases.has(operationId)) throw new BotaJsHostError('invalid_operation_id', 'TransferRecording');
       device = { ...captured(device) };
       recording = { ...recording };
@@ -751,9 +752,24 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
               const capability = await executor.gatt(context, () => ports.ble.read(
                 address(device, 'SERVICE_BOTA_STORAGE', 'CHAR_STORAGE_TRANSFER_CAPABILITIES_V2'), context));
               if (!(capability instanceof Uint8Array)) throw new BotaJsHostError('invalid_capability_value', context.operation);
-              const nativeCapability = core.codec('nativeEncryptedUploadV2Capability', { bytes: Array.from(capability) });
-              const journal = await ports.persistence.load(`encrypted-upload-v2/${journalKey}`, context);
-              const checkpoint = core.codec('nativeEncryptedUploadV2Checkpoint', {
+              const nativeCapability = { ...object(core.codec('nativeEncryptedUploadV2Capability', { bytes: Array.from(capability) })) };
+              let localCapability: Uint8Array | undefined;
+              if (localWifi) {
+                if (!ports.localWifi || recording.markersRequired || device.mtu < 185) {
+                  throw new BotaJsHostError('unsupported_capability', context.operation);
+                }
+                await ports.localWifi.preflight(device.id, context);
+                checkLease(lease, context.operation);
+                const value = await executor.gatt(context, () => ports.ble.read(
+                  address(device, 'SERVICE_BOTA_LOCAL_WIFI', 'CHAR_LOCAL_WIFI_CAPABILITIES'), context));
+                checkLease(lease, context.operation);
+                if (!(value instanceof Uint8Array)) throw new BotaJsHostError('invalid_capability_value', context.operation);
+                localCapability = value;
+                core.codec('localWifiTransfer', { op: 'Capabilities', bytes: Array.from(localCapability), att_mtu: device.mtu });
+                nativeCapability.localWifiRawValueHex = Array.from(localCapability, value => value.toString(16).padStart(2, '0')).join('');
+              }
+              const journal = localWifi ? null : await ports.persistence.load(`encrypted-upload-v2/${journalKey}`, context);
+              const checkpoint = localWifi ? null : core.codec('nativeEncryptedUploadV2Checkpoint', {
                 journal, scope: lease.scope,
                 serialNumber: device.serialNumber, recording: recording as unknown as JsValue,
               });
@@ -765,6 +781,7 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
                 recording: recording as unknown as JsValue, capabilityBytes: Array.from(capability),
                 decision: decision as unknown as JsValue, transportSessionId: (++registration).toString(),
                 sinkId: text(localIdentity.sinkId), maximumWriteBytes: device.mtu - 3, checkpoint,
+                ...(localWifi ? { localWifi: true, localWifiCapabilityBytes: Array.from(localCapability!) } : {}),
               });
               const sink = await ports.files!.open(text(object(request).sink_id), 'file', context);
               checkLease(lease, context.operation);
@@ -800,6 +817,10 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
         }
       }
     };
+    adapter.syncEncryptedRecordingV2 = (device, recording, operationId) => syncV2(device, recording, operationId, false);
+    if (ports.localWifi) {
+      adapter.syncEncryptedRecordingV2LocalWifi = (device, recording, operationId) => syncV2(device, recording, operationId, true);
+    }
   }
   if (streamingEffects) {
     adapter.startStreaming = async (device, request) => {

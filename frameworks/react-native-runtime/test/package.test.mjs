@@ -25,8 +25,9 @@ test('internal source fixture loads with native imports rejected', () => {
       if (id.startsWith('react-native') || id.includes('NativeBota')) throw Error('native dependency');
       return load.call(this, id, ...args);
     };
-    const {createBotaReactNativeRuntime} = require(${JSON.stringify(entry)});
+    const {createBotaReactNativeRuntime, createNativeLocalWifiPort} = require(${JSON.stringify(entry)});
     createBotaReactNativeRuntime({apiVersion:1, device:{}});
+    createNativeLocalWifiPort(null, {assertOwner: async () => {}});
   `], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
 });

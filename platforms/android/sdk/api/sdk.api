@@ -1295,6 +1295,36 @@ public final class dev/bota/sdk/WiFiManager {
 	public final fun statusUpdates (Ldev/bota/sdk/model/ConnectedDevice;)Lkotlinx/coroutines/flow/Flow;
 }
 
+public final class dev/bota/sdk/localwifi/LocalWiFiHTTP : java/io/Closeable {
+	public static final field Companion Ldev/bota/sdk/localwifi/LocalWiFiHTTP$Companion;
+	public fun <init> (Ljavax/net/SocketFactory;Ljava/lang/String;I[BJ)V
+	public fun close ()V
+	public final fun open (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ldev/bota/sdk/localwifi/LocalWiFiHTTP$Headers;
+	public final fun read (I)[B
+}
+
+public final class dev/bota/sdk/localwifi/LocalWiFiHTTP$Companion {
+}
+
+public final class dev/bota/sdk/localwifi/LocalWiFiHTTP$Headers {
+	public fun <init> (ILjava/util/Map;)V
+	public final fun getStatus ()I
+	public final fun getValues ()Ljava/util/Map;
+}
+
+public final class dev/bota/sdk/localwifi/LocalWiFiNetwork : java/io/Closeable {
+	public static final field Companion Ldev/bota/sdk/localwifi/LocalWiFiNetwork$Companion;
+	public synthetic fun <init> (Landroid/net/ConnectivityManager;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun close ()V
+	public final fun getReady ()Ljava/util/concurrent/CompletableFuture;
+	public final fun getTermination ()Ljava/util/concurrent/CompletableFuture;
+	public final fun reader (Ljava/lang/String;I[BJ)Ldev/bota/sdk/localwifi/LocalWiFiHTTP;
+}
+
+public final class dev/bota/sdk/localwifi/LocalWiFiNetwork$Companion {
+	public final fun join (Landroid/content/Context;Ljava/lang/String;Ljava/lang/String;)Ldev/bota/sdk/localwifi/LocalWiFiNetwork;
+}
+
 public final class dev/bota/sdk/model/AckType : java/lang/Enum {
 	public static final field Abort Ldev/bota/sdk/model/AckType;
 	public static final field Ack Ldev/bota/sdk/model/AckType;

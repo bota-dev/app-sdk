@@ -21,7 +21,7 @@ let package = Package(
                 .product(name: "BotaAppSDK", package: "BotaAppSDK"),
             ],
             path: "ios",
-            exclude: ["BotaDeviceSDK.mm", "BotaUploadV2Backend.mm"]
+            exclude: ["BotaDeviceSDK.mm", "BotaUploadV2Backend.mm", "BotaLocalWifiTransport.mm"]
         ),
         .testTarget(
             name: "BotaDeviceSDKAppleLifecycleTests",

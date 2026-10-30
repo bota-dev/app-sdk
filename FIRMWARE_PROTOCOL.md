@@ -954,3 +954,53 @@ The encrypted-token candidate uses the append-only B07A000A service and existing
 provisioning result notification. See [the canonical v1 wire contract](protocol/device-token-v1.md)
 for cryptography, bounds, trusted enrollment and rollout prerequisites. This is
 source documentation, not a published-runtime or physical-device qualification.
+
+## Local WiFi ordinary-v2 source preview (2026-10-23)
+
+Profile 2 (2026-10-29) is mandatory. Read [Minimal Control Security](protocol/local-wifi-control-v1.md)
+for the exact signed HPKE grant, existing nonce ordering, kind 7 allocation,
+609-byte envelope, direction-separated AEAD and expiry checks. Earlier profile-1
+capabilities and assumed secure-BLE callbacks are superseded; original payload
+fields, recording identity and receipt authority retain their meanings.
+
+Unreleased allocation: `B07A000B-0000-1000-8000-00805F9B34FB`.
+Append capabilities `0001` (read, 16 bytes), control `0002` (write with response)
+and event `0003` (indicate), using the same UUID suffix. Existing handles and
+24-byte v2 capabilities do not change. The service is not yet wired into the
+reference GATT runtime and must not be advertised before secure BLE/AP/TLS
+integration is qualified.
+
+| Message | Code | Bytes |
+| --- | --- | --- |
+| LOCAL_LINK_OPEN / QUERY / CLOSE | 0x10 / 0x11 / 0x12 | 12 |
+| LOCAL_PREPARE | 0x30 | 84 |
+| LOCAL_FINISH | 0x31 | 124 |
+| LOCAL_LINK_STATE | 0x90 | 16, or up to 159 when ready |
+| LOCAL_PREPARED / EOF | 0xB0 / 0xB1 | 128 |
+
+The canonical manifest defines layouts. All frames reuse the original v2
+header and nonzero transport `session_id`; original upload/recording UUIDs,
+generation, owner revision and hashes keep their original meanings.
+MANIFEST_CHUNK 0x43 remains on the original v2 transfer characteristic.
+Channel `local_wifi` is signed value 4 / authorization bit 0x08; channels 1..3
+remain unchanged. Only ordinary BATCH is supported by this source candidate.
+
+The reference admission helpers require the original exclusive recording owner.
+Open channel 4 durably before PREPARE; replay manifest metadata from offset zero.
+Join the HTTP reader before FINISH. FINISH neither deletes nor advances BLE
+checkpoints. Only validated, persisted original receipt plus CONFIRM permits
+cleanup. Clear the volatile admission on control lifetime change and reopen the
+same durable owner using a fresh transport ID. Link credentials, authorization,
+Range, expiry and radio cleanup still require target integration; these helpers
+do not establish a secure BLE session or provide a network server.
+
+The SDK source now has a shared local receiver and JS host branch inside the
+original v2 workflow. It validates Range/ETag and durable file recovery before
+FINISH, waits for OFF after CLOSE, and preserves the original cloud receipt gate.
+Explicit SDK/managed-provider selection is available in source. Composed tests
+use simulated OS/device effects. Native join/TLS IO and the optional JS/OS bridge
+are implemented in source; actual secure BLE, App permission/UI integration and
+phone/firmware acceptance remain pending. Production firmware is externally owned.
+
+See [source conformance](docs/parity/local-wifi.md) and the
+[complete field/security contract](../internal-docs/device/App-Local-WiFi-Protocol-Contract.md).

@@ -39,7 +39,7 @@ for (const flavor of ['commonjs', 'module', 'typescript']) {
 }
 // Emit structural adapter types from the exact Codegen contract, without an OS
 // type dependency. Runtime data, signatures and event payloads stay identical.
-for (const name of ['NativeBotaDeviceSDK', 'NativeBotaUploadV2Backend']) {
+for (const name of ['NativeBotaDeviceSDK', 'NativeBotaUploadV2Backend', 'NativeBotaLocalWifiTransport']) {
   const path = join(output, 'typescript/specs', `${name}.d.ts`);
   let source = readFileSync(path, 'utf8')
     .replace(/^import type .* from 'react-native(?:\/[^']+)?';\r?\n/gm, '')

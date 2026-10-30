@@ -1,0 +1,28 @@
+{
+  "notice": "SYNTHETIC TEST KEYS ONLY. Never enroll or trust these keys in any deployment.",
+  "profile": 2,
+  "sessionId": "41",
+  "recipientPrivateJwk": {
+    "kty": "EC",
+    "x": "9AyKOf8Iot6G1Wo0EajmevcalP1xFaB2yoLmrsL2L3E",
+    "y": "55tUe5Hl3CHRJDnKrNih_uxk9_ux-9pxN54VhJrQYy8",
+    "crv": "P-256",
+    "d": "U3DTwOC0IxEXyeHfS_I7mf3fDvc19oKb_mEiWCD2UtI"
+  },
+  "signerPublicJwk": {
+    "kty": "EC",
+    "x": "qCRN_hix32q19uxSZf4wyoyfA7hdnUsgXAP25UDJX2k",
+    "y": "5LTls669txoGAdjyTkcSK-jyrv-dbMBEpK2Y0sp96e0",
+    "crv": "P-256"
+  },
+  "response": {
+    "format": "bota-local-wifi-control-v1",
+    "control_key_base64": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=",
+    "envelope_base64": "Qk9UQVdGQzEAEAABAAMAAXm/Vypf6JVwZyVtRypsJbhLYzw2utuc/CYT+HZuiJANgkq2NARY0ObzrUn4PDaVLE1EDYwk3QuyOoASqUgGbQZxK3OD0HPlJ+M0H92Otw25wTtOg+K/sHDTpl51d9GlctV8VCHqzZL9ObHtzsikXmlCYZLLI5Jh8Xc4K5UivURUpFsExqVMnWNDy3LlGa1WbWiEXi6z2Z3vKidzwawO09ex2v/7FinKObCbR/gjqunGnQqr2kPFu/sCBbuTjKq3wnG82w6hwdlU5Ky/dHifTbQDOsn55ao8u0coLIJLPMuHfliiOc0ZKVI23NwVOZD1c5bDong2+7wiJos65FiEzTS+ExEB+4AFu+OC7OOe0hFwszPr32bprSwyyJbvfQNP+mnZaz1y1Pl0ZvqzwwcGfjglEWoo4qciiHbJYoMdQMTlSTIQtrWTkx7a61PPAxDYFSc8Evej4Svdd5+eZTE5W7yUjd5nHzWwVuPtk9Kn2KEoLXHix6GQvbeqvA8STuq7+L05RlI5P7N2jsK72rivBbY9qqMGLvsaX8yWJstjr2P8lkCOkYzDqnfWCnJnValGO4D/+tjerPAHcHV8zH5eVzkDgW63xMCO7fuHmCw18ajjL8M1OpS57QIqLPT2qAxV/EVSrOothKPiZK9Jv2g=",
+    "expires_in_seconds": 300
+  },
+  "queryPlainHex": "110200002900000000000000",
+  "queryWireHex": "11020000290000000000000000000000fa07560d5ec815ddeb1c5ac677c1a5dd",
+  "replyPlainHex": "90020000290000000000000000000011",
+  "replyWireHex": "9002000029000000000000000000000026416d9ae21824ed3db389ba497034279082100b"
+}

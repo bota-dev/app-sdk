@@ -889,6 +889,7 @@ mod tests {
         };
         let sink = RecordingSinkId::new("sink").unwrap();
         let v2 = EncryptedUploadV2BatchRequest {
+            local_wifi: false,
             device: device.clone(),
             recording,
             recording_generation: 9,

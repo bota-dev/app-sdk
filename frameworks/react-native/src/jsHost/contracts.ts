@@ -1,3 +1,4 @@
+import type { JsLocalWifiPort } from './localWifi';
 /** Primitive host contracts. Implementations supply OS effects, never Bota workflows. */
 export type JsValue = null | boolean | number | string | readonly JsValue[] |
   { readonly [key: string]: JsValue };
@@ -157,6 +158,7 @@ export interface BotaJsHostPorts {
   readonly randomBytes: (length: number) => Uint8Array | Promise<Uint8Array>;
   readonly files?: JsFilePort;
   readonly network?: JsNetworkPort;
+  readonly localWifi?: JsLocalWifiPort;
   readonly material?: JsHostMaterialPort;
   readonly lifecycle?: JsLifecyclePort;
 }

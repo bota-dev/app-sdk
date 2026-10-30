@@ -1,0 +1,20 @@
+{
+  "name": "@bota.dev/react-native-app-sdk",
+  "version": "2.0.0-beta.23",
+  "description": "React Native facade for the Bota App SDK",
+  "license": "MIT",
+  "author": "Bota",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bota-dev/app-sdk.git",
+    "directory": "frameworks/react-native"
+  },
+  "codegenConfig": {
+    "name": "BotaDeviceSDKSpec",
+    "type": "modules",
+    "jsSrcsDir": "./generated/specs",
+    "android": {
+      "javaPackageName": "dev.bota.sdk.reactnative"
+    }
+  }
+}

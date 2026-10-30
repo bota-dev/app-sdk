@@ -1929,12 +1929,13 @@ fn signed_document_length(kind: u8, operation: Operation) -> Result<usize, Devic
         }
         protocol::ENCRYPTED_UPLOAD_V2_BLOB_KIND_MARKED_AUTHORIZATION => Ok(864),
         protocol::ENCRYPTED_UPLOAD_V2_BLOB_KIND_MARKED_RECEIPT => Ok(632),
+        protocol::ENCRYPTED_UPLOAD_V2_BLOB_KIND_LOCAL_WIFI_CONTROL => Ok(509),
         _ if operation == Operation::Decode => Err(unknown_decode(kind, "signed blob kind")),
         _ => Err(invalid_encode("unknown signed blob kind")),
     }
 }
 
-fn decode_common(
+pub(super) fn decode_common(
     cursor: &Cursor<'_>,
     expected_message: u8,
 ) -> Result<CommonHeaderV2, DeviceSdkError> {
@@ -1963,7 +1964,7 @@ fn decode_common(
     })
 }
 
-fn encode_common_fixed(
+pub(super) fn encode_common_fixed(
     common: &CommonHeaderV2,
     expected_message: u8,
     length: usize,

@@ -32,6 +32,7 @@ fn capabilities() -> CapabilitySet {
 
 fn request() -> EncryptedUploadV2BatchRequest {
     EncryptedUploadV2BatchRequest {
+        local_wifi: false,
         device: DeviceSerialNumber::new("EVFXXW67KP").unwrap(),
         recording: RecordingUuid::from_bytes([0x22; 16]),
         recording_generation: 9,

@@ -1467,3 +1467,12 @@ migration and the complete protocol reference. The combined generated runtime
 comes from Linux CI 39260313375; 239 Rust core, 69 binding and 570 RN checks pass,
 with 146-RPC native/JS parity. Release and physical Find remain unqualified.
 See docs/parity/ble-find-device.md and the shared Bota completion checklist.
+
+## Local WiFi transport
+
+Local WiFi is an optional carrier inside the existing encrypted-v2 workflow.
+Rust owns control crypto, receive/checkpoint transitions and verified successor
+recovery. The JS host sequences durable writes and cloud receipt reconciliation;
+standalone Apple/Android ports own hotspot and pinned TLS IO. Cancellation joins
+cleanup before releasing the owner, and each recording closes its AP before
+cloud publication. See [the adapter design](docs/parity/local-wifi.md).

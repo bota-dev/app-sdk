@@ -36,6 +36,10 @@ export function validateJsHostPorts(ports: BotaJsHostPorts): void {
     requiredMethods(files, 'files', ['open', 'metadata', 'append', 'truncate', 'read', 'finalize', 'remove']);
     optionalMethods(files, 'files', ['create', 'flush']);
   }
+  if (supplied.localWifi !== undefined) {
+    const localWifi = requiredObject(supplied.localWifi, 'localWifi');
+    requiredMethods(localWifi, 'localWifi', ['preflight', 'join']);
+  }
   if (supplied.network !== undefined) {
     const network = requiredObject(supplied.network, 'network');
     requiredMethods(network, 'network', ['download', 'upload']);

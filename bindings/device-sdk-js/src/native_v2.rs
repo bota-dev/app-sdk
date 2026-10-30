@@ -74,6 +74,10 @@ struct NativeCheckpoint {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Plan {
+    #[serde(default)]
+    local_wifi: bool,
+    #[serde(default)]
+    local_wifi_capability_bytes: Vec<u8>,
     serial_number: String,
     recording: Recording,
     capability_bytes: Vec<u8>,
@@ -323,14 +327,11 @@ fn pending_recordings(input: PendingInput) -> Result<Vec<u8>, DeviceSdkError> {
     public_output(Value::Array(pending))
 }
 fn reduce_managed(mut value: Value) -> Result<Vec<u8>, DeviceSdkError> {
-    // Internally tagged serde enums buffer their contents. Only nowMs is u64;
-    // validate its exact decimal value before their normal serde deserializer.
+    // Internally tagged serde enums buffer their contents. Normalize only declared
+    // u64 fields in Rust, preserving exact decimal strings across the JS boundary.
     let parsed = (|| {
-        if let Some(now) = value
-            .get_mut("event")
-            .and_then(|event| event.get_mut("nowMs"))
-        {
-            let number = match now {
+        fn integer(value: &mut Value) -> Option<()> {
+            let number = match value {
                 Value::String(text) => {
                     let parsed = text.parse::<u64>().ok()?;
                     if parsed.to_string() != *text {
@@ -343,7 +344,18 @@ fn reduce_managed(mut value: Value) -> Result<Vec<u8>, DeviceSdkError> {
                     .filter(|number| *number <= 9_007_199_254_740_991)?,
                 _ => return None,
             };
-            *now = Value::Number(number.into());
+            *value = Value::Number(number.into());
+            Some(())
+        }
+        if let Some(event) = value.get_mut("event") {
+            if let Some(now) = event.get_mut("nowMs") {
+                integer(now)?;
+            }
+            if event.get("type").and_then(Value::as_str) == Some("LocalWifiRecovery") {
+                let checkpoint = event.get_mut("checkpoint")?;
+                integer(checkpoint.get_mut("ciphertext_length")?)?;
+                integer(checkpoint.get_mut("next_ciphertext_offset")?)?;
+            }
         }
         serde_json::from_value::<ManagedUploadRequest>(value).ok()
     })();
@@ -359,6 +371,26 @@ fn reduce_managed(mut value: Value) -> Result<Vec<u8>, DeviceSdkError> {
     }
 }
 fn plan(input: Plan) -> Result<EncryptedUploadV2BatchRequest, DeviceSdkError> {
+    if input.local_wifi {
+        if input.checkpoint.is_some() || input.recording.markers_required == Some(true) {
+            return Err(invalid(
+                "local WiFi requires ordinary transfer without BLE checkpoint",
+            ));
+        }
+        let mtu = input
+            .maximum_write_bytes
+            .checked_add(3)
+            .and_then(|value| u16::try_from(value).ok())
+            .ok_or_else(|| invalid("invalid local WiFi ATT MTU"))?;
+        bota_device_sdk_core::protocol::decode_local_wifi_capabilities(
+            &input.local_wifi_capability_bytes,
+            mtu,
+        )?;
+    } else if !input.local_wifi_capability_bytes.is_empty() {
+        return Err(invalid(
+            "local capability requires explicit local WiFi selection",
+        ));
+    }
     let capabilities = validate_encrypted_upload_v2_admission(&input.capability_bytes, false)?;
     let maximum_frame_bytes = (input.maximum_write_bytes as usize).min(wire::MAX_MTU);
     if maximum_frame_bytes < wire::ENCRYPTED_UPLOAD_V2_START_ACK_FIXED_LENGTH {
@@ -399,6 +431,7 @@ fn plan(input: Plan) -> Result<EncryptedUploadV2BatchRequest, DeviceSdkError> {
         .storage_format
         .unwrap_or(wire::STORAGE_FORMAT_BOTA_ENC_V2);
     let mut request = EncryptedUploadV2BatchRequest {
+        local_wifi: input.local_wifi,
         device: DeviceSerialNumber::new(input.serial_number)?,
         recording: input.recording.uuid.parse::<RecordingUuid>()?,
         recording_generation: input.recording.generation,
@@ -650,6 +683,26 @@ mod tests {
     }
     fn plan_input() -> Value {
         object!({"serialNumber":"C8SU2XXWHI","recording":{"uuid":"22222222-2222-2222-2222-222222222222","generation":9,"ciphertextLength":"330","ciphertextSha256":"33".repeat(32)},"capabilityBytes":capability(),"decision":{"profile":"encrypted_upload_v2","uploadSessionId":"11111111-1111-1111-1111-111111111111","ownerRevision":3,"securityPolicy":"v2_preferred","materialRegistrationId":"material"},"transportSessionId":"18446744073709551615","sinkId":"new-sink","maximumWriteBytes":244})
+    }
+    #[test]
+    fn local_plan_requires_capability_and_never_reuses_ble_checkpoint() {
+        let mut input = plan_input();
+        input["localWifi"] = object!(true);
+        assert!(call("planEncryptedUploadV2Request", input.clone()).is_err());
+        input["localWifiCapabilityBytes"] =
+            object!(vec![2, 2, 16, 0, 31, 0, 0, 0, 3, 0, 185, 0, 182, 0, 182, 0]);
+        assert_eq!(
+            call("planEncryptedUploadV2Request", input.clone()).unwrap()["local_wifi"],
+            true
+        );
+        input["maximumWriteBytes"] = object!(181);
+        assert!(call("planEncryptedUploadV2Request", input.clone()).is_err());
+        input["maximumWriteBytes"] = object!(182);
+        input["recording"]["markersRequired"] = object!(true);
+        assert!(call("planEncryptedUploadV2Request", input.clone()).is_err());
+        input["recording"]["markersRequired"] = object!(false);
+        input["checkpoint"] = object!({"version":1,"uploadSessionId":"11111111-1111-1111-1111-111111111111","ownerRevision":3,"revision":2,"nextCiphertextOffset":"128","prefixSha256":"77".repeat(32),"highestContiguousSequence":1,"transportSessionId":"55","sinkRegistrationId":"saved-sink","windowPackets":8,"dataPayloadBytes":100});
+        assert!(call("planEncryptedUploadV2Request", input).is_err());
     }
     #[test]
     fn native_request_plan_uses_negotiated_frames_and_restores_exact_resume_metadata() {

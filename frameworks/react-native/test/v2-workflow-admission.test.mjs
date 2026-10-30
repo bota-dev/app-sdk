@@ -20,7 +20,7 @@ function observe(promise) {
   return result;
 }
 
-async function fixture(t) {
+async function fixture(t, localWifi) {
   const core = createGeneratedJsCore(), metadata = core.codec('protocolMetadata', {});
   const saved = new Map(), events = [], http = [], scope = new AbortController();
   const values = new Map([
@@ -34,7 +34,7 @@ async function fixture(t) {
   ]);
   const f = { core, metadata, saved, events, http, scope, values, statusGate: gate(), httpGate: gate(), holdStatus: false, holdHttp: false, scopeEpoch: 0, fileOpens: 0 };
   const unusedFile = async () => { throw new Error('Unexpected ciphertext IO'); };
-  const ports = { apiVersion: 1, platform: 'ios', signal: scope.signal,
+  const ports = { localWifi, apiVersion: 1, platform: 'ios', signal: scope.signal,
     checkScope() { if (f.scopeEpoch !== 0) throw new Error('Fixture scope permanently retired'); },
     randomBytes: length => Uint8Array.from({ length }, (_, index) => index + 1),
     files: { async open() { f.fileOpens++; return unusedFile(); }, metadata: unusedFile, append: unusedFile, truncate: unusedFile,
@@ -267,4 +267,31 @@ test('identity nonce sink and the first generated effect retain one workflow own
     assert.equal(f.http.length, 0);
     await f.runtime.sdk.devices.readStatus();
   } finally { firstEffect.release(); await Promise.allSettled([sync.promise]); }
+});
+
+
+test('local WiFi admission refuses missing or insecure ports before provider and file work', { timeout: 5000 }, async t => {
+  const f = await fixture(t);
+  await assert.rejects(f.sync(recording, { transport: 'local_wifi' }), { code: 'native_operation_unavailable' });
+  assert.equal(f.http.length, 0); assert.equal(f.fileOpens, 0); assert.equal(f.managed().length, 0);
+});
+test('local WiFi admission validates secure BLE and actual capabilities before cloud creation', { timeout: 5000 }, async t => {
+  let allowed = false, preflights = 0;
+  const f = await fixture(t, { async preflight() { preflights++; if (!allowed) throw new Error('Secure link unavailable'); },
+    async join() { throw new Error('Must not join during admission'); } });
+  const attempt = () => f.sync(recording, { transport: 'local_wifi' });
+  await assert.rejects(attempt(), /Secure link unavailable/);
+  assert.equal(f.http.length, 0); assert.equal(f.fileOpens, 0); assert.equal(f.managed().length, 0);
+  allowed = true;
+  f.values.set(f.metadata.CHAR_LOCAL_WIFI_CAPABILITIES, new Uint8Array(16));
+  await assert.rejects(attempt()); assert.equal(f.http.length, 0); assert.equal(f.managed().length, 0);
+  f.values.set(f.metadata.CHAR_LOCAL_WIFI_CAPABILITIES, Uint8Array.from([2, 2, 16, 0, 31, 0, 0, 0, 3, 0, 185, 0, 182, 0, 182, 0]));
+  await assert.rejects(f.sync({ ...recording, markersRequired: true }, { transport: 'local_wifi' }));
+  assert.equal(f.http.length, 0);
+  await assert.rejects(attempt(), { code: 'BOTA_UPLOAD_HTTP_409' });
+  assert.equal(preflights, 3); assert.equal(f.http.length, 1);
+  assert.equal(f.http[0].body.upload_method, 'unknown');
+  assert.equal(f.http[0].body.recording_uuid, recording.uuid);
+  assert.equal(f.fileOpens, 0);
+  assert.equal(f.events.filter(event => event[0] === 'write' && event[1] !== f.metadata.CHAR_TIME_SYNC).length, 0);
 });

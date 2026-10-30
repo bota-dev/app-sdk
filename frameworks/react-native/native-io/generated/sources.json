@@ -1,0 +1,42 @@
+[
+  {
+    "source": "platforms/apple/Sources/BotaAppSDK/LocalWiFi/LocalWiFiHTTP.swift",
+    "destination": "apple/LocalWiFiHTTP.swift",
+    "sha256": "6eed76aa70a8beb376dbb4802b12130345a07ff235605a0d27d613db894c4337"
+  },
+  {
+    "source": "platforms/apple/Sources/BotaAppSDK/LocalWiFi/LocalWiFiHotspot.swift",
+    "destination": "apple/LocalWiFiHotspot.swift",
+    "sha256": "ed995b4994e143cfc7a1076889e330d04380f4f08a4ee2b5c2b5dd5daa0e2af3"
+  },
+  {
+    "source": "platforms/android/sdk/src/main/kotlin/dev/bota/sdk/localwifi/LocalWiFiHTTP.kt",
+    "destination": "android/LocalWiFiHTTP.kt",
+    "sha256": "42a59facf892f094dcf6ce7b26fbf720841c89b85d232c9de870fb04ee251de0"
+  },
+  {
+    "source": "platforms/android/sdk/src/main/kotlin/dev/bota/sdk/localwifi/LocalWiFiNetwork.kt",
+    "destination": "android/LocalWiFiNetwork.kt",
+    "sha256": "dd8b4d71510300c0b7822d0929e34c1343fab157a55fd05b0f55ff4f227906ce"
+  },
+  {
+    "source": "frameworks/react-native/ios/BotaLocalWifiTransportBridge.swift",
+    "destination": "apple/BotaLocalWifiTransportBridge.swift",
+    "sha256": "055d431f1d6407d7d803e4e213b9fe80b493c82b73ca21af04978c5ec99a1069"
+  },
+  {
+    "source": "frameworks/react-native/ios/BotaLocalWifiTransport.mm",
+    "destination": "apple/BotaLocalWifiTransport.mm",
+    "sha256": "c4899781424177dc756a66ec1eb13df3ccc86cc19c8c15b80a2764775b969183"
+  },
+  {
+    "source": "frameworks/react-native/android/src/main/java/dev/bota/sdk/reactnative/localwifi/BotaLocalWifiTransportModule.kt",
+    "destination": "android/BotaLocalWifiTransportModule.kt",
+    "sha256": "e866208a890bf7b270c06052e48beb51f90e63b50e618889fa35504667ab4edb"
+  },
+  {
+    "source": "frameworks/react-native/src/specs/NativeBotaLocalWifiTransport.ts",
+    "destination": "specs/NativeBotaLocalWifiTransport.ts",
+    "sha256": "9ad55f1ee7e407fe50c42d29640ccd7ead373def7ed12189aaf062add16a0a03"
+  }
+]

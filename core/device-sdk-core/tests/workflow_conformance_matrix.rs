@@ -86,6 +86,7 @@ fn commands() -> Vec<(&'static str, Command)> {
             "encrypted upload v2 transfer",
             Command::TransferEncryptedRecording {
                 request: EncryptedUploadV2BatchRequest {
+                    local_wifi: false,
                     device: device(),
                     recording: RecordingUuid::from_bytes([0x33; 16]),
                     recording_generation: 9,

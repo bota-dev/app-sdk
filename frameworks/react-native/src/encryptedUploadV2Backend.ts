@@ -53,6 +53,7 @@ export interface EncryptedUploadV2BackendOptions {
 }
 
 export interface EncryptedUploadV2SyncTarget {
+  transport?: 'ble' | 'local_wifi';
   deviceId: string;
   bindingGeneration: number;
   signal?: AbortSignal;
@@ -136,6 +137,9 @@ export function createManagedEncryptedUploadV2Backend(
           if (!context.operationId || (operationId && operationId !== context.operationId)) {
             throw new Error('Encrypted upload operation changed');
           }
+          if (target.transport === 'local_wifi' && !context.capability.localWifiRawValueHex) {
+            throw new Error('Local WiFi capability is missing');
+          }
           operationId = context.operationId;
           const revision = ++providerRevision;
           preparationFailure = undefined;
@@ -152,7 +156,8 @@ export function createManagedEncryptedUploadV2Backend(
               startedAtMs: context.recording.startedAtMs, durationMs: context.recording.durationMs,
               plaintextLength: context.recording.plaintextLength, storageFormat: context.recording.storageFormat,
               ...(context.recording.markersRequired ? { markersRequired: true } : {}) },
-            capability: { rawValueHex: context.capability.rawValueHex, flags: context.capability.flags },
+            capability: { rawValueHex: context.capability.rawValueHex, flags: context.capability.flags,
+              ...(target.transport === 'local_wifi' ? { localWifiRawValueHex: context.capability.localWifiRawValueHex } : {}) },
             ...(context.checkpoint === undefined ? {} : { checkpoint: {
               version: context.checkpoint.version, uploadSessionId: context.checkpoint.uploadSessionId,
               ownerRevision: context.checkpoint.ownerRevision, revision: context.checkpoint.revision,
@@ -183,7 +188,7 @@ export function createManagedEncryptedUploadV2Backend(
           return { profile: result.profile, uploadSessionId: result.uploadSessionId,
             ownerRevision: result.ownerRevision, securityPolicy: result.securityPolicy,
             materialRegistrationId: result.materialRegistrationId };
-        }, progress => { if (!signal.signal.aborted) target.onProgress?.(progress); }, { signal: signal.signal });
+        }, progress => { if (!signal.signal.aborted) target.onProgress?.(progress); }, { signal: signal.signal, transport: target.transport });
         check();
         if (!operationId || !selected) throw new Error('Encrypted upload confirmation is missing');
         // The native sync only resolves after signed receipt/CONFIRM. Never infer this from HTTP 2xx.

@@ -291,6 +291,9 @@ fn common(request: &EncryptedUploadV2BatchRequest, message_type: u8) -> CommonHe
     }
 }
 fn checkpoint(input: &Opening) -> Result<EncryptedUploadV2ReceiverCheckpoint, DeviceSdkError> {
+    if input.request.local_wifi {
+        return Err(invalid("local WiFi cannot open a BLE data transfer"));
+    }
     v2::validate_request(&input.request)?;
     match &input.checkpoint {
         None => Ok(EncryptedUploadV2ReceiverCheckpoint::initial()),
@@ -627,7 +630,12 @@ fn admit_authorization(input: Authorization) -> Result<AdmittedDocument, DeviceS
             && auth.profile == wire::UPLOAD_PROFILE_ENCRYPTED_UPLOAD_V2
             && auth.storage_format == request.storage_format
             && auth.policy == policy
-            && auth.channels & 1 != 0
+            && if request.local_wifi {
+                auth.channels == 8
+            } else {
+                auth.channels & 1 != 0
+            }
+            && (!request.local_wifi || !markers_required)
             && auth.flags & !0x0f == 0
             && auth.flags & 1 != 0
             && auth.upload_session_uuid == request.upload_session_uuid
@@ -657,6 +665,9 @@ fn admit_authorization(input: Authorization) -> Result<AdmittedDocument, DeviceS
     })
 }
 fn admit_receipt(input: Receipt) -> Result<AdmittedDocument, DeviceSdkError> {
+    if input.request.local_wifi && input.markers_required {
+        return Err(invalid("local WiFi does not admit marked receipts"));
+    }
     let request = &input.request;
     v2::validate_request(request)?;
     let blob_kind = if input.markers_required {
@@ -904,6 +915,7 @@ mod tests {
 
     fn request() -> EncryptedUploadV2BatchRequest {
         EncryptedUploadV2BatchRequest {
+            local_wifi: false,
             device: DeviceSerialNumber::new("C8SU2XXWHI").unwrap(),
             recording: RecordingUuid::from_bytes([0x22; 16]),
             recording_generation: 9,
@@ -1158,6 +1170,64 @@ mod tests {
         bytes[16..32].fill(7);
         bytes
     }
+    #[test]
+    fn local_authorization_has_exact_channel_and_cannot_open_ble_or_accept_markers() {
+        let mut authorization = vector("authorization-development");
+        let auth = decode_encrypted_upload_v2_authorization_identity(&authorization).unwrap();
+        let mut request = request();
+        request.local_wifi = true;
+        request.recording = RecordingUuid::from_bytes(auth.recording_uuid);
+        request.upload_session_uuid = auth.upload_session_uuid;
+        request.ciphertext_length = auth.minimum_ciphertext_length;
+        request.ciphertext_sha256 = auth.ciphertext_sha256;
+        request.selection.policy = match auth.policy {
+            0 => UploadSecurityPolicy::LegacyAllowed,
+            1 => UploadSecurityPolicy::V2Preferred,
+            _ => UploadSecurityPolicy::V2Required,
+        };
+        for mask in [1, 7, 9] {
+            authorization[wire::UPLOAD_AUTHORIZATION_V2_ALLOWED_CHANNEL_MASK_OFFSET] = mask;
+            assert!(
+                call(
+                    "validateEncryptedUploadV2Authorization",
+                    object!({"request":value(&request),"bytes":authorization})
+                )
+                .is_err()
+            );
+        }
+        authorization[wire::UPLOAD_AUTHORIZATION_V2_ALLOWED_CHANNEL_MASK_OFFSET] = 8;
+        assert!(
+            call(
+                "validateEncryptedUploadV2Authorization",
+                object!({"request":value(&request),"bytes":authorization})
+            )
+            .is_ok()
+        );
+        let marked = [
+            authorization,
+            vec![0; 176],
+            marker(
+                wire::RECORDING_MARKER_AUTHORIZATION,
+                wire::RECORDING_MARKER_AUTHORIZATION_LENGTH,
+            ),
+        ]
+        .concat();
+        assert!(
+            call(
+                "validateEncryptedUploadV2Authorization",
+                object!({"request":value(&request),"bytes":marked})
+            )
+            .is_err()
+        );
+        assert!(
+            call(
+                "planEncryptedUploadV2Opening",
+                object!({"request":value(&request),"checkpoint":null,"authorizationSha256":vec![1;32]})
+            )
+            .is_err()
+        );
+    }
+
     #[test]
     fn canonical_signed_document_vectors_admit_metadata_and_hash_only_audio_portions() {
         let authorization = vector("authorization-development");

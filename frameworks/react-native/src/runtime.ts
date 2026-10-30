@@ -43,6 +43,7 @@ export type { JsV2Fetch, JsV2UploadTarget } from './jsHost/uploadBackendV2';
 export type { JsByoSocket } from './jsHost/byoEffects';
 export type { JsEncryptedUploadV2Material } from './jsHost/encryptedUploadV2';
 export type { JsRecordingUploadTarget } from './jsHost/recordingUploads';
+export type { JsLocalWifiPort, JsLocalWifiMaterial, JsLocalWifiLease, JsLocalWifiReader } from './jsHost/localWifi';
 export { BOTA_JS_HOST_PORT_API_VERSION };
 export type { BotaJsHostPorts, JsBlePort, JsFilePort, JsHostContext, JsPersistencePort,
   JsNetworkPort, JsLifecyclePort, OpaqueHostHandle } from './jsHost/contracts';
@@ -200,3 +201,9 @@ export function createBotaReactNativeRuntime(
 }
 
 export type { FindDeviceCapabilities, FindDeviceStatus, FindDeviceRequest } from './findDevice';
+
+export { createNativeLocalWifiPort } from './jsHost/nativeLocalWifi';
+export type { NativeLocalWifiTransport, NativeLocalWifiOptions } from './jsHost/nativeLocalWifi';
+
+/** Mandatory local-control AEAD profile supported by this exact SDK. */
+export const LOCAL_WIFI_CONTROL_PROFILE = 2;

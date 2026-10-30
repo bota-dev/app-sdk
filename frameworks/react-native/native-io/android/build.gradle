@@ -1,0 +1,44 @@
+buildscript {
+  repositories { google(); mavenCentral() }
+  dependencies {
+    classpath "com.android.tools.build:gradle:8.13.2"
+    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.20"
+  }
+}
+
+apply plugin: "com.android.library"
+apply plugin: "org.jetbrains.kotlin.android"
+apply plugin: "com.facebook.react"
+
+react {
+  root = file("..")
+  reactNativeDir = file("../../node_modules/react-native")
+  codegenDir = file("../../node_modules/@react-native/codegen")
+  jsRootDir = file("../generated/specs")
+  libraryName = "BotaDeviceSDKSpec"
+  codegenJavaPackageName = "dev.bota.sdk.reactnative"
+}
+
+android {
+  namespace "dev.bota.sdk.reactnative.localwifi"
+  compileSdkVersion 36
+  defaultConfig { minSdkVersion 26 }
+  sourceSets.main.java.srcDirs += [
+    "../generated/android",
+  ]
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+  kotlinOptions { jvmTarget = "17"; allWarningsAsErrors = true }
+  lint {
+    abortOnError = true; checkReleaseBuilds = true; warningsAsErrors = true
+    // Versions follow the repository's qualified dependency set.
+    disable "AndroidGradlePluginVersion", "NewerVersionAvailable"
+  }
+}
+
+dependencies {
+  implementation "com.facebook.react:react-android"
+  implementation "com.squareup.okhttp3:okhttp:4.12.0"
+}

@@ -134,3 +134,13 @@ test('missing native binary, unsafe URL and invalid selection fail before journa
   await assert.rejects(f.create().sync(device, recording, target), /Invalid encrypted upload backend response/);
   assert.equal(f.calls.some(c => c[0] === 'complete'), false);
 });
+
+test('managed local choice forwards only the independent local capability and existing identity', async () => {
+  const f = fixture();
+  f.context.capability.localWifiRawValueHex = '020210001f0000000300b900b600b600';
+  let options;
+  f.client.syncEncryptedRecordingV2 = async (_, __, provider, ___, value) => { options = value; await provider(f.context); };
+  await f.create().sync(device, recording, { ...target, transport: 'local_wifi' });
+  assert.equal(options.transport, 'local_wifi');
+  assert.equal(f.calls.find(c => c[0] === 'prepare')[1].capability.localWifiRawValueHex, f.context.capability.localWifiRawValueHex);
+});
