@@ -102,6 +102,8 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     string,
     Promise<BotaAsyncEventSubscription>
   >();
+  private readonly subscriptionWork = new Set<Promise<unknown>>();
+  private subscriptionCleanupFailure: { error: unknown } | undefined;
   private readonly reconnectInFlight = new Map<
     string,
     Promise<ConnectedDevice>
@@ -726,10 +728,11 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     }
   }
 
-  /** Stop automatic retries and wait for reconnect attempts already submitted. */
-  pauseAutoReconnect(): Promise<void> {
+  /** Stop automatic retries and join submitted reconnect and subscription work. */
+  async pauseAutoReconnect(): Promise<void> {
     this.disableAutoReconnect();
-    return this.reconnectChain.then(() => undefined);
+    await this.reconnectChain;
+    await this.drainSubscriptionWork();
   }
 
   onCachedDeviceStateChanged(
@@ -777,12 +780,14 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
 
   private ensureStatusWatchdog(device: ConnectedDevice): void {
     if (this.statusSubscriptions.has(device.id)) return;
-    const subscription = this.client.devices.subscribeToStatus((status) => {
-      for (const callback of this.statusCallbacks.get(device.id) ?? []) {
-        callback(status);
-      }
-      this.emit('deviceStatusUpdated', device.id, status);
-    });
+    const subscription = this.trackSubscriptionWork(
+      this.client.devices.subscribeToStatus((status) => {
+        for (const callback of this.statusCallbacks.get(device.id) ?? []) {
+          callback(status);
+        }
+        this.emit('deviceStatusUpdated', device.id, status);
+      })
+    );
     this.statusSubscriptions.set(device.id, subscription);
     void subscription.catch(() => {
       if (this.statusSubscriptions.get(device.id) === subscription) {
@@ -931,6 +936,7 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     deviceId: string,
     next: Promise<BotaAsyncEventSubscription>
   ): Promise<BotaAsyncEventSubscription> {
+    this.trackSubscriptionWork(next);
     const removal = this.removeOwned(owner, deviceId);
     if (owner === this.logSubscriptions) this.observeLogRemoval(removal);
     else void removal;
@@ -941,24 +947,59 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     return next;
   }
 
-  private async removeExpected(
+  private removeExpected(
     owner: Map<string, Promise<BotaAsyncEventSubscription>>,
     deviceId: string,
     expected: Promise<BotaAsyncEventSubscription>
   ): Promise<void> {
-    if (owner.get(deviceId) !== expected) return;
+    if (owner.get(deviceId) !== expected) return Promise.resolve();
     owner.delete(deviceId);
-    await (await expected).remove();
+    return this.removeSubscription(expected);
   }
 
-  private async removeOwned(
+  private removeOwned(
     owner: Map<string, Promise<BotaAsyncEventSubscription>>,
     deviceId: string
   ): Promise<void> {
     const subscription = owner.get(deviceId);
-    if (!subscription) return;
+    if (!subscription) return Promise.resolve();
     owner.delete(deviceId);
-    await (await subscription).remove();
+    return this.removeSubscription(subscription);
+  }
+
+  private removeSubscription(subscription: Promise<BotaAsyncEventSubscription>): Promise<void> {
+    return this.trackSubscriptionWork((async () => {
+      const owned = await subscription;
+      try {
+        await owned.remove();
+      } catch (error) {
+        // A failed removal leaves ownership uncertain even after its Promise settles.
+        this.subscriptionCleanupFailure ??= { error };
+        throw error;
+      }
+    })());
+  }
+
+  private trackSubscriptionWork<T>(work: Promise<T>): Promise<T> {
+    this.subscriptionWork.add(work);
+    void work.then(
+      () => { this.subscriptionWork.delete(work); },
+      () => { this.subscriptionWork.delete(work); }
+    );
+    return work;
+  }
+
+  private async drainSubscriptionWork(): Promise<void> {
+    let failure: { error: unknown } | undefined;
+    while (this.subscriptionWork.size) {
+      const settled = await Promise.allSettled([...this.subscriptionWork]);
+      for (const result of settled) {
+        if (result.status === 'rejected') failure ??= { error: result.reason };
+      }
+    }
+    // Join every submitted lifecycle before reporting a failure to the caller.
+    if (this.subscriptionCleanupFailure) throw this.subscriptionCleanupFailure.error;
+    if (failure) throw failure.error;
   }
 
   private observeLogRemoval(removal: Promise<void>): void {

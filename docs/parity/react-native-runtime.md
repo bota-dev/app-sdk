@@ -452,6 +452,30 @@ progress callbacks.
 This is a JS boundary correction; native phase mappings and the public phase
 contract remain the compatibility authority.
 
+### Joining compatibility subscription cleanup
+
+`DeviceManager.pauseAutoReconnect()` stops automatic retries, joins submitted
+reconnect attempts and drains submitted subscription setup/removal work. The
+private lifecycle tracker retains removals after their entries leave the owner
+maps, including a removal still awaiting setup. Status callbacks and automatic
+reconnect continue sharing one watchdog; pausing does not remove a watchdog
+still used by an application callback. Synchronous unsubscribe signatures stay
+unchanged.
+
+Applications must close admission to new application BLE work and request their
+subscription cancellations before awaiting this pause. The pause is a barrier
+for already submitted lifecycle work, not an OTA session reservation. A failed
+removal leaves ownership uncertain: subsequent pauses reject rather than
+authorizing new work. A settled setup failure that created no subscription does
+not permanently poison the manager.
+
+| Requirement | Implementation and verification | Status |
+| --- | --- | --- |
+| Join hidden setup/removal before OTA | Real generated-runtime regressions hold status, WiFi, recording and log lifecycle ports; pause stays pending until actual removal settles, then Grant/RegisterFirmware can proceed | Verified with controlled OS ports |
+| Preserve shared watchdog ownership | The same runtime tests pause with and without a retained application status callback | Verified locally |
+| Surface uncertain cleanup | A settled removal failure makes repeated pauses reject; a settled setup failure remains recoverable | Verified locally |
+| Qualify consuming applications | Exact-source CI, SDK publication, normal dependency adoption and phone/device acceptance | Pending; deployed beta.22 is not changed by these source tests |
+
 The shared workflow allows 30 seconds for the device's Ready and Verify responses
 after the corresponding write settles. An early valid response is retained; a
 write acknowledgement alone cannot advance verification. The shared reconnect

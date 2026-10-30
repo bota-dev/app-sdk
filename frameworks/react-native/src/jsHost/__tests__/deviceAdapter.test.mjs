@@ -1147,6 +1147,157 @@ test('generated OTA rejects an unknown core firmware phase instead of publishing
   assert.equal(firmwareDataWrites(f).length, 0);
 });
 
+async function settleSubscriptionWork(promise, label) {
+  let watchdog;
+  try {
+    return await Promise.race([promise, new Promise((_, reject) => {
+      watchdog = setTimeout(() => reject(new Error(`Subscription lifecycle did not settle: ${label}`)), 5000);
+    })]);
+  } finally { clearTimeout(watchdog); }
+}
+
+async function subscriptionDrainFixture(t, kind, { failSetup = false, failRemoval = false } = {}) {
+  const f = otaFixture(), events = [];
+  const gate = () => { let release; const promise = new Promise(resolve => { release = resolve; }); return { promise, release }; };
+  const setup = gate(), entered = gate(), removing = gate(), removal = gate();
+  const characteristic = kind === 'status' ? f.metadata.CHAR_DEVICE_STATUS
+    : kind === 'wifi' ? f.metadata.CHAR_WIFI_STATUS
+    : kind === 'recording' ? f.metadata.CHAR_RECORDING_STATUS : f.metadata.CHAR_DEVICE_LOG_DATA;
+  f.ports.ble.subscribe = async address => {
+    assert.equal(address.characteristicUuid, characteristic);
+    events.push('setup'); entered.release(); await setup.promise;
+    if (failSetup) throw new Error('Synthetic subscription setup failure');
+    return { async remove() {
+      events.push('remove'); removing.release(); await removal.promise;
+      if (failRemoval) throw new Error('Synthetic subscription removal failure');
+      events.push('removed');
+    } };
+  };
+  f.ports.network.download = async () => { throw new Error('Synthetic download stop'); };
+  const { createBotaReactNativeJsRuntime } = loadSource('../runtime.ts');
+  const runtime = createBotaReactNativeJsRuntime(f.ports);
+  t.after(async () => {
+    setup.release(); removal.release();
+    await runtime.client.destroy().catch(() => {}); await f.adapter.destroy(); f.core.dispose();
+  });
+  await runtime.client.configure({ logLevel: 'none', backgroundSyncEnabled: false });
+  const manager = runtime.client.devices;
+  const device = await manager.connect({ id: 'original', rssi: -50, discoveredAt: new Date(0) });
+  return { ...f, events, setup, entered, removing, removal, runtime, manager, device };
+}
+
+for (const kind of ['status', 'wifi', 'logs', 'recording']) {
+  test(`pausing automatic reconnect joins real ${kind} setup and hidden removal before OTA admission`, async t => {
+    const f = await subscriptionDrainFixture(t, kind);
+    let unsubscribe;
+    if (kind === 'logs') {
+      const subscribing = f.manager.subscribeToDeviceLogs(f.device, () => {});
+      await settleSubscriptionWork(f.entered.promise, 'log setup entered'); f.setup.release();
+      unsubscribe = await settleSubscriptionWork(subscribing, 'log subscription setup');
+    } else {
+      unsubscribe = kind === 'status' ? f.manager.subscribeToStatus(f.device, () => {})
+        : kind === 'recording' ? f.manager.subscribeToRecordingState(f.device, () => {})
+        : f.manager.subscribeToWiFiStatus(f.device.id, () => {}).remove;
+      await settleSubscriptionWork(f.entered.promise, `${kind} setup entered`);
+    }
+    unsubscribe();
+    let paused = false;
+    const pause = f.manager.pauseAutoReconnect().then(() => { paused = true; });
+    const tick = () => new Promise(resolve => setImmediate(resolve));
+    await tick();
+    assert.equal(paused, false, 'pause cannot settle while setup/removal is pending outside the subscription map');
+    f.setup.release(); await settleSubscriptionWork(f.removing.promise, `${kind} removal entered`); await tick();
+    assert.equal(paused, false, 'the submitted OS removal must actually settle');
+    f.removal.release(); await settleSubscriptionWork(pause, `${kind} pause`);
+    assert.deepEqual(f.events, ['setup', 'remove', 'removed']);
+    const grant = Buffer.alloc(207, 1); grant[0] = 4;
+    await assert.rejects(settleSubscriptionWork(f.runtime.client.ota.performUpdate(f.device, {
+      version: f.image.version, size: f.image.sizeUnits, url: f.image.url,
+    }, grant.toString('base64')), `${kind} OTA admission`), { code: 'download_failed' });
+    assert.equal(f.registrations.length, 1, 'Grant and RegisterFirmware may proceed after cleanup');
+  });
+}
+
+for (const keepCallback of [false, true]) {
+  test(`pause joins watchdog setup and ${keepCallback ? 'retains the shared application callback' : 'its own removal'}`, async t => {
+    const f = await subscriptionDrainFixture(t, 'status');
+    f.manager.enableAutoReconnect(f.device.serialNumber);
+    await settleSubscriptionWork(f.entered.promise, 'watchdog setup entered');
+    const unsubscribe = keepCallback ? f.manager.subscribeToStatus(f.device, () => {}) : undefined;
+    let paused = false;
+    const pause = f.manager.pauseAutoReconnect().then(() => { paused = true; });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(paused, false);
+    f.setup.release();
+    if (!keepCallback) {
+      await settleSubscriptionWork(f.removing.promise, 'watchdog removal entered');
+      assert.equal(paused, false);
+      f.removal.release();
+    }
+    await settleSubscriptionWork(pause, 'watchdog pause');
+    assert.equal(f.events.filter(event => event === 'setup').length, 1);
+    assert.equal(f.events.includes('remove'), !keepCallback, 'automatic and App status consumers share one owner');
+    unsubscribe?.(); f.removal.release();
+  });
+}
+
+test('pause surfaces an already settled hidden cleanup failure instead of admitting another owner', async t => {
+  const f = await subscriptionDrainFixture(t, 'status', { failRemoval: true });
+  const unsubscribe = f.manager.subscribeToStatus(f.device, () => {});
+  await settleSubscriptionWork(f.entered.promise, 'failing cleanup setup entered'); f.setup.release();
+  await new Promise(resolve => setImmediate(resolve));
+  unsubscribe(); await settleSubscriptionWork(f.removing.promise, 'failing cleanup entered'); f.removal.release();
+  await new Promise(resolve => setImmediate(resolve));
+  await assert.rejects(settleSubscriptionWork(f.manager.pauseAutoReconnect(), 'failed cleanup pause'), /Synthetic subscription removal failure/);
+  await assert.rejects(settleSubscriptionWork(f.manager.pauseAutoReconnect(), 'repeated failed cleanup pause'), /Synthetic subscription removal failure/);
+});
+
+test('a settled failed setup without an owned subscription does not poison later pauses', async t => {
+  const f = await subscriptionDrainFixture(t, 'status', { failSetup: true });
+  const unsubscribe = f.manager.subscribeToStatus(f.device, () => {});
+  await settleSubscriptionWork(f.entered.promise, 'failing setup entered'); f.setup.release();
+  await new Promise(resolve => setImmediate(resolve));
+  unsubscribe();
+  await settleSubscriptionWork(f.manager.pauseAutoReconnect(), 'failed setup recovery pause');
+  assert.deepEqual(f.events, ['setup']);
+});
+
+test('compatibility pause joins other submitted cleanup before reporting one removal failure', async () => {
+  const { DeviceManager } = loadSource('../managers/DeviceManager.ts');
+  const { withCompatibilityClient } = loadSource('../compatibility/runtime.ts');
+  const gate = () => { let release; const promise = new Promise(resolve => { release = resolve; }); return { promise, release }; };
+  const statusRemoving = gate(), statusRemoval = gate(), wifiRemoving = gate(), wifiRemoval = gate();
+  const client = { devices: {
+    async connect(device) { return device; },
+    async subscribeToStatus() { return { async remove() {
+      statusRemoving.release(); await statusRemoval.promise;
+      throw new Error('Synthetic subscription removal failure');
+    } }; },
+  }, wifi: { async subscribeToStatus() { return { async remove() {
+    wifiRemoving.release(); await wifiRemoval.promise;
+  } }; } } };
+  const manager = withCompatibilityClient(client, () => new DeviceManager());
+  try {
+    const device = await manager.connect({ id: 'synthetic', serialNumber: 'SYNTHETIC1', connectionState: 'connected' });
+    const unsubscribeStatus = manager.subscribeToStatus(device, () => {});
+    const unsubscribeWiFi = manager.subscribeToWiFiStatus(device.id, () => {}).remove;
+    await settleSubscriptionWork(manager.pauseAutoReconnect(), 'parallel subscription setup');
+    unsubscribeStatus(); unsubscribeWiFi();
+    let paused = false;
+    const result = manager.pauseAutoReconnect().then(
+      () => { paused = true; return undefined; },
+      error => { paused = true; return error; }
+    );
+    await settleSubscriptionWork(statusRemoving.promise, 'parallel status removal entered');
+    await settleSubscriptionWork(wifiRemoving.promise, 'parallel WiFi removal entered');
+    statusRemoval.release();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(paused, false, 'one failure cannot release the barrier while another cleanup is pending');
+    wifiRemoval.release();
+    assert.match((await settleSubscriptionWork(result, 'parallel failed cleanup pause'))?.message ?? '', /Synthetic subscription removal failure/);
+  } finally { statusRemoval.release(); wifiRemoval.release(); manager.destroy(); }
+});
+
 test('generated OTA routes an expected reboot disconnect, adopts a changed peripheral, and never retransmits verified bytes', async t => {
   t.mock.timers.enable({ apis: ['Date'], now: 1793230112000 }); // Both time-sync payloads start with the firmware DATA opcode.
   const f = otaFixture();
