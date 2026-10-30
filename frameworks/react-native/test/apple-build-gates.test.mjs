@@ -38,7 +38,7 @@ test('Apple build tooling is pinned and exposes local and remote gates', () => {
     '../../tools/apple/build-xcframework.sh && swift test -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors'
   );
   assert.match(workflow, /DEVELOPER_DIR: \/Applications\/Xcode_26\.3\.app\/Contents\/Developer/);
-  assert.match(workflow, /BOTA_EXPECTED_RUBY_VERSION: "3\.3\.12"/);
+  assert.match(workflow, /BOTA_EXPECTED_RUBY_VERSION: "3\.3\.13"/);
   assert.match(workflow, /BOTA_EXPECTED_XCODE_BUILD: 17C529/);
   assert.match(workflow, /npm run test:apple:spm-workaround/);
   assert.match(swiftPackage, /path: "\.\.\/\.\.\/platforms\/apple"/);

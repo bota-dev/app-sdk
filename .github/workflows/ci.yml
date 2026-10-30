@@ -435,7 +435,7 @@ jobs:
     name: React Native Apple lifecycle adapter
     runs-on: macos-15
     env:
-      BOTA_EXPECTED_RUBY_VERSION: "3.3.12"
+      BOTA_EXPECTED_RUBY_VERSION: "3.3.13"
       BOTA_EXPECTED_XCODE_BUILD: 17C529
       BOTA_EXPECTED_XCODE_VERSION: "26.3"
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
