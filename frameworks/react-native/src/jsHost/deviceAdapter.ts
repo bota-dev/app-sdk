@@ -964,7 +964,7 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
               const notification = object(value).FirmwareProgress;
               if (!notification) return;
               const progress = object(object(notification).progress!);
-              const phase = text(progress.phase).toLowerCase();
+              const phase = firmwarePhase(progress.phase);
               if (phase === 'reconnecting' && connection?.device.id === device.id) {
                 // The core retired this physical link. A delayed observer from it
                 // must not invalidate a replacement that reuses the OS identifier.
@@ -1105,6 +1105,20 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
     }
   }
   return adapter;
+}
+
+/** Preserve the public phase names when translating the Rust enum. */
+function firmwarePhase(value: JsValue | undefined): string {
+  switch (value) {
+    case 'Downloading': return 'downloading';
+    case 'AwaitingDevice': return 'awaiting_device';
+    case 'Transferring': return 'transferring';
+    case 'Verifying': return 'verifying';
+    case 'Rebooting': return 'rebooting';
+    case 'Reconnecting': return 'reconnecting';
+    case 'Complete': return 'complete';
+    default: throw new BotaJsHostError('invalid_core_result', 'UpdateFirmware');
+  }
 }
 
 function object(value: JsValue | undefined): { readonly [key: string]: JsValue } {

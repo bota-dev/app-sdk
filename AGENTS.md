@@ -1062,7 +1062,8 @@ before the cancellation check starts. This is test ordering, not a runtime chang
   requires CocoaPods 1.13 or newer. It resolves the exact matching
   `BotaAppSDK` release by default; `BOTA_APPLE_SDK_PACKAGE_PATH` is only for
   local source and CI verification.
-- React Native Apple CI selects Xcode 26.3 and Ruby 3.3.12 and uses
+- React Native Apple CI selects Xcode 26.3, explicitly installs Ruby 3.3.13
+  independently of the runner image, and uses
   `frameworks/react-native/Gemfile.lock` for Bundler 2.6.9, CocoaPods 1.16.2,
   and xcodeproj 1.27.0. Main-branch lifecycle and linked-consumer gates use the
   nested local package at `platforms/apple/Package.swift` because the

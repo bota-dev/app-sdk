@@ -435,7 +435,7 @@ jobs:
     name: React Native Apple lifecycle adapter
     runs-on: macos-15
     env:
-      BOTA_EXPECTED_RUBY_VERSION: "3.3.12"
+      BOTA_EXPECTED_RUBY_VERSION: "3.3.13"
       BOTA_EXPECTED_XCODE_BUILD: 17C529
       BOTA_EXPECTED_XCODE_VERSION: "26.3"
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
@@ -464,6 +464,12 @@ jobs:
         working-directory: frameworks/react-native
         run: npm ci
 
+      - name: Select pinned Ruby independently of the runner image
+        uses: ruby/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f # v1.335.0
+        with:
+          ruby-version: ${{ env.BOTA_EXPECTED_RUBY_VERSION }}
+          bundler: none
+
       - name: Install and verify pinned Apple build tooling
         working-directory: frameworks/react-native
         run: |
@@ -484,7 +490,7 @@ jobs:
 
       - name: Test React Native Apple SPM compatibility
         working-directory: frameworks/react-native
-        run: npm run test:apple:spm-workaround
+        run: bundle _2.6.9_ exec npm run test:apple:spm-workaround
 
       - name: Build linked iOS consumer
         working-directory: frameworks/react-native

@@ -432,6 +432,50 @@ to the legacy full-adapter fallback only. Completion requires fresh exact serial
 and installed-version readback. Transfer or CRC failure cannot enter reboot
 recovery; an ACK does not prove the installed version.
 
+### Generated firmware progress compatibility
+
+The JS host explicitly translates all seven Rust firmware phases to the public
+phase values. In particular, `AwaitingDevice` becomes `awaiting_device`, which
+the compatibility `OTAManager` exposes as `preparing`. Lowercasing the enum alone
+produced `awaitingdevice` and aborted the public update before START. Unknown
+core phase values now fail with `invalid_core_result` instead of reaching public
+progress callbacks.
+
+| Requirement | Implementation and verification | Status |
+| --- | --- | --- |
+| Preserve every public firmware phase | Closed mapping in `deviceAdapter.ts`; the generated-runtime regression observes all seven phases through the real public client and `OTAManager` | Verified locally on Node 22 |
+| Continue from preparation to a verified update | The same regression writes a grant, asserts the actual START and DATA frames, simulates reboot, and requires fresh target-version readback before completion | Verified with controlled OS ports |
+| Reject unsupported core output | An injected unknown phase fails before DATA and is never published | Verified locally |
+| Native/generated RPC parity | `npm run react-native:verify-js-core` | Unavailable locally because Cargo is absent; retain the exact-source CI gate |
+| Qualify consuming applications | Exact-source CI, package publication and phone/device acceptance | Pending; source tests do not establish rollout |
+
+This is a JS boundary correction; native phase mappings and the public phase
+contract remain the compatibility authority.
+
+### Joining compatibility subscription cleanup
+
+`DeviceManager.pauseAutoReconnect()` stops automatic retries, joins submitted
+reconnect attempts and drains submitted subscription setup/removal work. The
+private lifecycle tracker retains removals after their entries leave the owner
+maps, including a removal still awaiting setup. Status callbacks and automatic
+reconnect continue sharing one watchdog; pausing does not remove a watchdog
+still used by an application callback. Synchronous unsubscribe signatures stay
+unchanged.
+
+Applications must close admission to new application BLE work and request their
+subscription cancellations before awaiting this pause. The pause is a barrier
+for already submitted lifecycle work, not an OTA session reservation. A failed
+removal leaves ownership uncertain: subsequent pauses reject rather than
+authorizing new work. A settled setup failure that created no subscription does
+not permanently poison the manager.
+
+| Requirement | Implementation and verification | Status |
+| --- | --- | --- |
+| Join hidden setup/removal before OTA | Real generated-runtime regressions hold status, WiFi, recording and log lifecycle ports; pause stays pending until actual removal settles, then Grant/RegisterFirmware can proceed | Verified with controlled OS ports |
+| Preserve shared watchdog ownership | The same runtime tests pause with and without a retained application status callback | Verified locally |
+| Surface uncertain cleanup | A settled removal failure makes repeated pauses reject; a settled setup failure remains recoverable | Verified locally |
+| Qualify consuming applications | Exact-source CI, SDK publication, normal dependency adoption and phone/device acceptance | Pending; deployed beta.22 is not changed by these source tests |
+
 The shared workflow allows 30 seconds for the device's Ready and Verify responses
 after the corresponding write settles. An early valid response is retained; a
 write acknowledgement alone cannot advance verification. The shared reconnect
