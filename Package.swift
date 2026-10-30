@@ -7,9 +7,11 @@ let package = Package(
     platforms: [
         .iOS(.v15),
         .macOS(.v13),
+        .watchOS(.v11),
     ],
     products: [
         .library(name: "BotaAppSDK", targets: ["BotaAppSDK"]),
+        .library(name: "BotaWatchControl", targets: ["BotaWatchControl"]),
     ],
     targets: [
         .binaryTarget(
@@ -21,6 +23,10 @@ let package = Package(
             name: "BotaAppSDK",
             dependencies: ["BotaDeviceSDKC"],
             path: "platforms/apple/Sources/BotaAppSDK"
+        ),
+        .target(
+            name: "BotaWatchControl",
+            path: "platforms/watch/Sources/BotaWatchControl"
         ),
     ]
 )

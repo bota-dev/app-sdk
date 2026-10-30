@@ -41,6 +41,10 @@
 /.build/
 /platforms/apple/Artifacts/
 /platforms/apple/.build/
+/platforms/watch/.build/
+/platforms/watch/.swiftpm/
+/tests/consumers/watch-control/.build/
+/tests/consumers/watch-control/.swiftpm/
 /platforms/android/.gradle/
 /platforms/android/**/.cxx/
 /platforms/android/local.properties
