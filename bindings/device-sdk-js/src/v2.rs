@@ -26,6 +26,9 @@ pub(crate) fn normalize_checkpoint(
     input: CheckpointInput,
 ) -> Result<Option<EncryptedUploadV2Checkpoint>, DeviceSdkError> {
     validate_request(&input.request)?;
+    if input.request.local_wifi {
+        return Ok(None);
+    }
     let mut coordinator = EncryptedUploadV2BatchCoordinator::new(input.request)?;
     coordinator.start()?;
     let checkpoint = input.checkpoint;

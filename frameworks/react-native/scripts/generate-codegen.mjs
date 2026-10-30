@@ -41,6 +41,7 @@ export const generateCodegen = (outputPath) => {
       schemaPath,
       resolve(packageRoot, 'src/specs/NativeBotaDeviceSDK.ts'),
       resolve(packageRoot, 'src/specs/NativeBotaUploadV2Backend.ts'),
+      resolve(packageRoot, 'src/specs/NativeBotaLocalWifiTransport.ts'),
     ]
   );
 

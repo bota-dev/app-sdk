@@ -178,3 +178,5 @@ export type { ByoStorageBackendOptions, ByoStorageBackend, ByoRecording, ByoSync
 export const createByoStorageBackend = defaultRuntime.createByoStorageBackend;
 
 export type { FindDeviceCapabilities, FindDeviceStatus, FindDeviceRequest, FindBindingProvider } from './findDevice';
+
+export { default as nativeLocalWifiTransport } from './specs/NativeBotaLocalWifiTransport';

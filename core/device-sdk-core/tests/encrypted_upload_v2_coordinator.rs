@@ -23,6 +23,7 @@ fn capabilities() -> EncryptedUploadV2Capabilities {
 
 fn request() -> EncryptedUploadV2BatchRequest {
     EncryptedUploadV2BatchRequest {
+        local_wifi: false,
         device: DeviceSerialNumber::new("EVFXXW67KP").unwrap(),
         recording: RecordingUuid::from_bytes([0x22; 16]),
         recording_generation: 9,
@@ -342,4 +343,69 @@ fn stale_phase_event_does_not_advance_or_confirm() {
 
 fn is_confirm(action: &EncryptedUploadV2Action) -> bool {
     matches!(action, EncryptedUploadV2Action::ConfirmWithReceipt { .. })
+}
+
+#[test]
+fn local_wifi_reuses_staging_without_ble_checkpoint_truncation_or_window_ack() {
+    let mut request = request();
+    request.local_wifi = true;
+    let mut coordinator = EncryptedUploadV2BatchCoordinator::new(request).unwrap();
+    assert_eq!(
+        coordinator.start().unwrap(),
+        vec![EncryptedUploadV2Action::PrepareSession]
+    );
+    assert!(
+        coordinator
+            .dispatch(EncryptedUploadV2BatchEvent::CheckpointLoaded(Some(
+                checkpoint()
+            )))
+            .is_err()
+    );
+    coordinator
+        .dispatch(EncryptedUploadV2BatchEvent::SessionPrepared {
+            authorization_sha256: [6; 32],
+        })
+        .unwrap();
+    coordinator
+        .dispatch(EncryptedUploadV2BatchEvent::TransferStarted)
+        .unwrap();
+    assert!(
+        coordinator
+            .dispatch(EncryptedUploadV2BatchEvent::WindowStaged {
+                checkpoint: checkpoint(),
+                missing_sequences: vec![]
+            })
+            .is_err()
+    );
+    assert_eq!(
+        coordinator
+            .dispatch(EncryptedUploadV2BatchEvent::TransferCompleted(
+                transfer_evidence()
+            ))
+            .unwrap(),
+        vec![EncryptedUploadV2Action::StageArtifacts {
+            evidence: transfer_evidence()
+        }]
+    );
+    coordinator
+        .dispatch(EncryptedUploadV2BatchEvent::ArtifactsStaged)
+        .unwrap();
+    assert_eq!(
+        coordinator
+            .dispatch(EncryptedUploadV2BatchEvent::CompletionReceiptAccepted {
+                receipt_sha256: [7; 32]
+            })
+            .unwrap(),
+        vec![EncryptedUploadV2Action::ConfirmWithReceipt {
+            receipt_sha256: [7; 32]
+        }]
+    );
+    assert_eq!(coordinator.status(), EncryptedUploadV2BatchStatus::Running);
+    coordinator
+        .dispatch(EncryptedUploadV2BatchEvent::RecordingConfirmed)
+        .unwrap();
+    assert_eq!(
+        coordinator.status(),
+        EncryptedUploadV2BatchStatus::Completed
+    );
 }

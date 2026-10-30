@@ -368,3 +368,21 @@ test('failed material unregistration still removes every captured abort observer
     await assert.rejects(material.authorization(f.context()), error => error.code === 'BOTA_UPLOAD_CANCELLED');
   } finally { await f.backend.dispose().catch(() => {}); f.core.dispose(); }
 });
+
+ test('local control uses a fresh nonce after session authorization and never journals its key response', async () => {
+   const grant={format:'bota-local-wifi-control-v1',control_key_base64:Buffer.alloc(32,7).toString('base64'),envelope_base64:Buffer.alloc(509,8).toString('base64'),expires_in_seconds:300};
+   const f=fixture((url,request)=>{
+     if(url.endsWith('/control-grant'))return response(url,200,grant);
+     if(url.endsWith('/sessions'))return response(url,201,session({channel:'local_wifi'}));
+     return baseHandler(url,request);
+   });
+   try {
+     const value=input();value.capability.localWifiRawValueHex='020210001f0000000300b900b600b600';
+     await f.backend.prepare(JSON.stringify(value));f.nonceState.value='09'.repeat(16);
+     const result=await f.materials.get('upload-1').localWifiControlGrant('41',f.context());
+     assert.deepEqual(JSON.parse(result),grant);
+     assert.equal(f.calls.at(-1).url,'https://api.example.com/v1/devices/dev_1/local-wifi/control-grant');
+     assert.deepEqual(JSON.parse(f.calls.at(-1).request.body),{binding_generation:2,session_id:'41',auth_nonce_base64:Buffer.alloc(16,9).toString('base64')});
+     assert.ok(!JSON.stringify([...f.journal]).includes(grant.control_key_base64));
+   } finally {await f.backend.dispose();f.core.dispose?.();}
+ });

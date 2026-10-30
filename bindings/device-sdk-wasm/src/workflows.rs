@@ -154,6 +154,7 @@ impl BridgeCore {
         self.start(
             Command::TransferEncryptedRecording {
                 request: EncryptedUploadV2BatchRequest {
+                    local_wifi: false,
                     device: DeviceSerialNumber::new(serial_number)?,
                     recording: RecordingUuid::from_bytes(recording_uuid),
                     recording_generation,

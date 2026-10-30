@@ -3,10 +3,11 @@ import type {
   OpaqueHostHandle, RawJsCoreFactory,
 } from './contracts';
 import { BotaJsHostError } from './executor';
+import { JsLocalWifiTransfer } from './localWifi';
 
 export interface JsEncryptedUploadV2Options {
   readonly core: Pick<RawJsCoreFactory, 'codec'>;
-  readonly ports: Pick<BotaJsHostPorts, 'persistence' | 'files'> & Partial<Pick<BotaJsHostPorts, 'ble' | 'randomBytes'>>;
+  readonly ports: Pick<BotaJsHostPorts, 'persistence' | 'files'> & Partial<Pick<BotaJsHostPorts, 'ble' | 'randomBytes' | 'localWifi'>>;
   /** Validated, non-secret Rust EncryptedUploadV2BatchRequest metadata. */
   readonly request: JsValue;
   /** Stable scoped registration key; reconnects use the same key. */
@@ -33,6 +34,10 @@ export interface JsEncryptedUploadV2MarkerDocument {
 /** App-scoped HTTP/material registrations. These callbacks do not verify signatures or decrypt. */
 export interface JsEncryptedUploadV2Material {
   authorization(context: JsHostContext): Promise<Uint8Array>;
+  /** Ephemeral HTTPS key response, never persisted or surfaced to application state. */
+  localWifiControlGrant?(sessionId: string, context: JsHostContext): Promise<string>;
+  /** Rust-validated durable recovery lineage, scoped to this managed upload. */
+  localWifiRecovery?(checkpoint: JsValue, context: JsHostContext): Promise<JsValue>;
   readonly uploadContext?: {
     challenge(attemptId: number, nonce: Uint8Array, context: JsHostContext): Promise<Uint8Array>;
     result(attemptId: number, proof: Uint8Array, context: JsHostContext): Promise<Uint8Array>;
@@ -464,6 +469,7 @@ export class JsEncryptedUploadV2Host {
   private exchange: JsUploadContextExchange | undefined;
   private hasherId: string | null = null;
   private hashedBytes = 0n;
+  private localWifi: JsLocalWifiTransfer | undefined;
 
   constructor(private readonly options: JsEncryptedUploadV2Options) {
     this.scope = options.ports.persistence.namespace;
@@ -472,6 +478,14 @@ export class JsEncryptedUploadV2Host {
       throw new BotaJsHostError('invalid_scope', 'TransferRecording');
     }
     this.request = clone(options.request);
+    if (object(this.request).local_wifi === true) {
+      const metadata = object(options.core.codec('protocolMetadata', {}));
+      if (typeof metadata.SERVICE_BOTA_LOCAL_WIFI !== 'string') {
+        // An older reducer would ignore the new optional field and choose BLE.
+        // Refuse before it can load/truncate a BLE checkpoint or admit a device.
+        throw new BotaJsHostError('unsupported_capability', 'TransferRecording');
+      }
+    }
     this.key = `encrypted-upload-v2/${options.journalKey}`;
     this.handle = (effect, context) => {
       const pending = this.tail.catch(() => undefined).then(() => this.execute(effect, context));
@@ -485,6 +499,7 @@ export class JsEncryptedUploadV2Host {
     if (this.closePromise) return this.closePromise;
     this.closed = true;
     this.cancelReceiver();
+    this.localWifi?.cancel();
     this.queueWake.resolve();
     this.boundaryGate?.resolve();
     this.closePromise = this.tail.catch(() => undefined).then(async () => {
@@ -513,6 +528,7 @@ export class JsEncryptedUploadV2Host {
         return event('CheckpointLoaded', this.readCheckpoint(journal));
       }
       case 'DeleteCheckpoint':
+        if (this.localWifi) { await this.localWifi.removeCheckpoint(context); return null; }
         await this.step(context, () => this.options.ports.persistence.remove(this.key, context));
         return null;
       case 'TruncateSink': {
@@ -545,6 +561,7 @@ export class JsEncryptedUploadV2Host {
       }
       case 'AbortV2':
         this.cancelReceiver();
+        this.localWifi?.cancel();
         this.queueWake.resolve();
         this.boundaryGate?.resolve();
         await this.pumpPromise?.catch(() => undefined);
@@ -581,6 +598,7 @@ export class JsEncryptedUploadV2Host {
       throw new BotaJsHostError('stale_host_owner', context.operation);
     }
     this.options.checkOwner(context);
+    this.localWifi?.assertHealthy(context);
   }
 
   private async step<T>(context: JsHostContext, body: () => Promise<T>): Promise<T> {
@@ -638,6 +656,21 @@ export class JsEncryptedUploadV2Host {
 
   private async prepareSession(context: JsEffectContext): Promise<JsValue> {
     this.protectedPorts(context);
+    if (object(this.request).local_wifi === true) {
+      if (!this.options.material!.localWifiControlGrant) throw new BotaJsHostError('unsupported_capability', context.operation);
+      this.localWifi = new JsLocalWifiTransfer({ core: this.options.core, ports: { ...this.options.ports, ble: this.options.ports.ble! },
+        request: this.request, sink: this.options.sink, journalKey: this.options.journalKey,
+        peripheralId: this.options.peripheralId!, maximumWriteBytes: this.options.maximumWriteBytes!,
+        gatt: this.options.gatt!, checkOwner: this.options.checkOwner,
+        inspect: (prefix, flush, owner) => this.inspectFile(this.options.sink, prefix, flush, owner, true),
+        controlGrant: (sessionId, owner) => this.options.material!.localWifiControlGrant!(sessionId, owner),
+        recovery: this.options.material!.localWifiRecovery
+          ? (checkpoint, owner) => this.options.material!.localWifiRecovery!(checkpoint, owner) : undefined,
+        sendSignedBlob: (kind, envelope, owner) => this.sendSignedBlob(kind, envelope, owner),
+        onTransferEvent: value => { this.confirmationListener?.(value); },
+        onCleanupFailure: error => this.markCleanupFailure(error, context) });
+      await this.localWifi.preflight(context);
+    }
     await this.refreshContext(context);
     const authorization = await this.step(context, () => this.options.material!.authorization(context));
     try {
@@ -681,6 +714,20 @@ export class JsEncryptedUploadV2Host {
   private async startTransfer(fields: Record<string, JsValue>, context: JsEffectContext): Promise<JsValue | null> {
     this.protectedPorts(context);
     if (canonical(fields.authorization_sha256!) !== canonical(this.authorizationSha256)) throw new BotaJsHostError('identity_mismatch', context.operation);
+    if (object(this.request).local_wifi === true) {
+      if (!this.localWifi) throw new BotaJsHostError('unsupported_capability', context.operation);
+      this.startContext = context;
+      await context.emit(event('TransferStarted'));
+      this.pumpPromise = this.localWifi.run(context, this.authorizationSha256!).then(async result => {
+        this.requireOwner(context);
+        this.manifest = result.manifest; this.evidence = result.evidence;
+        await context.emit(event('TransferCompleted', result.evidence));
+      }).catch(async error => {
+        if (!this.closed && !context.signal.aborted) await context.emit(this.codec('encryptedUploadV2Failure', errorMetadata(error)));
+      });
+      void this.pumpPromise.catch(() => undefined);
+      return null;
+    }
     await this.cleanupTransfer(context);
     this.startContext = context;
     this.targetContext = context;
@@ -1022,6 +1069,7 @@ export class JsEncryptedUploadV2Host {
   }
 
   private async cleanupTransfer(context: JsHostContext | null): Promise<void> {
+    if (this.localWifi) { await this.localWifi.close(); return; }
     let failed = false;
     let failure: unknown;
     if (context && this.transferAttempted && !this.confirmationAttempted && !this.confirmed) {

@@ -123,10 +123,13 @@ dependencies = [
 name = "bota-device-sdk-core"
 version = "2.0.0-beta.20"
 dependencies = [
+ "chacha20poly1305",
+ "hkdf",
  "serde",
  "serde_json",
  "sha2",
  "time",
+ "zeroize",
 ]
 
 [[package]]

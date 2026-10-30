@@ -4372,6 +4372,179 @@
           ]
         },
         "moduleName": "BotaUploadV2Backend"
+      },
+      "NativeBotaLocalWifiTransport": {
+        "type": "NativeModule",
+        "aliasMap": {},
+        "enumMap": {},
+        "spec": {
+          "eventEmitters": [],
+          "methods": [
+            {
+              "name": "preflight",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": []
+              }
+            },
+            {
+              "name": "createLease",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "StringTypeAnnotation"
+                  }
+                },
+                "params": []
+              }
+            },
+            {
+              "name": "join",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "handle",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  },
+                  {
+                    "name": "inputJSON",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "open",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "StringTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "handle",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  },
+                  {
+                    "name": "inputJSON",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "read",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "NullableTypeAnnotation",
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                },
+                "params": [
+                  {
+                    "name": "handle",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  },
+                  {
+                    "name": "maximumLength",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "NumberTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "closeReader",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "handle",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "closeLease",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "handle",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "moduleName": "BotaLocalWifiTransport"
       }
     }
   },
@@ -4382,16 +4555,20 @@
         "sha256": "3f1acef6907956745c7db721b5ec768a7d099da4a8e85bc50ae960451c261e2d"
       },
       {
+        "path": "java/dev/bota/sdk/reactnative/NativeBotaLocalWifiTransportSpec.java",
+        "sha256": "578ee6da41e8574ae3af7ed9834d0f90c224abe127cfab352d695e75d210d0f9"
+      },
+      {
         "path": "java/dev/bota/sdk/reactnative/NativeBotaUploadV2BackendSpec.java",
         "sha256": "a6b48b64cb3531d04b204172456115c041025d18db612d836174ced2617d50fe"
       },
       {
         "path": "jni/BotaDeviceSDKSpec-generated.cpp",
-        "sha256": "c98c66a2a320b56be0f7106e35a867d4664e6c8029836c153443cea4e1dd38ce"
+        "sha256": "38c4f2b7fa4f7b6496d74926e4fdf7146495f02f1fdd10e5a0a2030274095ac9"
       },
       {
         "path": "jni/BotaDeviceSDKSpec.h",
-        "sha256": "a4809b54c65c499c2ad727df1461d2044cfcb6de1eb3bbb05582e160426effce"
+        "sha256": "1ca4a5e0d8c1babd1a3fbdf92bdf0c0b5944843de2f210c6054a4e9946f1ca90"
       },
       {
         "path": "jni/CMakeLists.txt",
@@ -4399,23 +4576,23 @@
       },
       {
         "path": "jni/react/renderer/components/BotaDeviceSDKSpec/BotaDeviceSDKSpecJSI.h",
-        "sha256": "aabb87b1696c40aa84df2305be4804dcb4b21f5b8e7fc9dcce2b98e9a94d2715"
+        "sha256": "1389d9692d3a9be38aa292b3459c17a7cd94f6f2ec6e236bfec031e1e52ceaff"
       }
     ],
     "ios": [
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec-generated.mm",
-        "sha256": "23bd8488e1e6a59795ec1845d7d6287731e7924e3211655899a58992efa3f6e1"
+        "sha256": "719539a88111330243e8da9a5a1cc3b85e32d567f77726ca6e6c1376d75260f9"
       },
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec.h",
-        "sha256": "e903d4050cf521802d28dfedd6b0d9b3c690e1cb2f11284536ba491ded7eac96"
+        "sha256": "2a66f5565b625840e3929e1c5bcb2baaf065a14450adb06dd506dbfc69225c4d"
       },
       {
         "path": "BotaDeviceSDKSpecJSI.h",
-        "sha256": "aabb87b1696c40aa84df2305be4804dcb4b21f5b8e7fc9dcce2b98e9a94d2715"
+        "sha256": "1389d9692d3a9be38aa292b3459c17a7cd94f6f2ec6e236bfec031e1e52ceaff"
       }
     ]
   },
-  "contractDigest": "2be7dda7ea09a4780c1a689d41b762a755a6b9d1593c11bde0430e8e5f9a0ede"
+  "contractDigest": "660c55578abeae72ff13a67c55a91f1915c98e70f3cbd634ad07dae94a13ae2a"
 }

@@ -1360,3 +1360,19 @@ test('WiFi status and scan preserve unknown fallback and own status teardown', a
     ['stopWiFiStatusUpdates'],
   ]);
 });
+
+test('explicit local WiFi refuses unsupported adapters before callbacks or BLE sync', async () => {
+  const f = nativeFixture(), client = createBotaDeviceSDK(f.module);
+  await assert.rejects(client.recordings.syncEncryptedRecordingV2(connected, encryptedUploadV2Recording,
+    async () => { throw new Error('Provider must not run'); }, undefined, { transport: 'local_wifi' }),
+    { code: 'native_operation_unavailable' });
+  assert.equal(f.calls.length, 0);
+});
+test('explicit local WiFi routes through the existing lifecycle without BLE fallback', async () => {
+  const f = nativeFixture();
+  f.module.syncEncryptedRecordingV2LocalWifi = async (...args) => { f.calls.push(['local', ...args]); };
+  const client = createBotaDeviceSDK(f.module);
+  await client.recordings.syncEncryptedRecordingV2(connected, encryptedUploadV2Recording, async () => {}, undefined,
+    { transport: 'local_wifi' });
+  assert.equal(f.calls.length, 1); assert.equal(f.calls[0][0], 'local');
+});

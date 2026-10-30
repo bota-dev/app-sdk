@@ -17,6 +17,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct EncryptedUploadV2BatchRequest {
+    /// Opt-in local carrier; hosts must preflight secure BLE, AP join and pinned HTTPS.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub local_wifi: bool,
     pub device: DeviceSerialNumber,
     pub recording: RecordingUuid,
     pub recording_generation: u32,
@@ -32,6 +35,10 @@ pub struct EncryptedUploadV2BatchRequest {
     pub data_payload_bytes: u16,
     pub ciphertext_length: u64,
     pub ciphertext_sha256: [u8; 32],
+}
+
+fn is_false(value: &bool) -> bool {
+    !value
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -459,8 +466,13 @@ impl EncryptedUploadV2BatchCoordinator {
                 "encrypted upload v2 coordinator already started",
             ));
         }
-        self.phase = Phase::LoadingCheckpoint;
-        Ok(vec![EncryptedUploadV2Action::LoadCheckpoint])
+        if self.request.local_wifi {
+            self.phase = Phase::Preparing;
+            Ok(vec![EncryptedUploadV2Action::PrepareSession])
+        } else {
+            self.phase = Phase::LoadingCheckpoint;
+            Ok(vec![EncryptedUploadV2Action::LoadCheckpoint])
+        }
     }
 
     pub fn dispatch(
@@ -552,7 +564,7 @@ impl EncryptedUploadV2BatchCoordinator {
             EncryptedUploadV2BatchEvent::WindowStaged {
                 checkpoint,
                 missing_sequences,
-            } if self.phase == Phase::Transferring => {
+            } if self.phase == Phase::Transferring && !self.request.local_wifi => {
                 if !self.checkpoint_is_usable(&checkpoint)
                     || !self.checkpoint_is_monotonic(&checkpoint)
                     || missing_sequences.len()

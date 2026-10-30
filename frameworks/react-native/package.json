@@ -19,7 +19,8 @@
       "react-native": "./src/runtime.ts",
       "default": "./lib/commonjs/runtime.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./native-io": "./native-io/react-native.config.cjs"
   },
   "files": [
     "BotaDeviceSDK.podspec",
@@ -32,10 +33,11 @@
     "ios/",
     "lib/",
     "scripts/bota_device_sdk_spm_workaround.rb",
-    "src/"
+    "src/",
+    "native-io/"
   ],
   "scripts": {
-    "build": "bob build",
+    "build": "node scripts/prepare-local-wifi-native.mjs --check && bob build",
     "clean": "rm -rf lib generated/build",
     "codegen": "node scripts/verify-codegen.mjs --write",
     "codegen:check": "node scripts/verify-codegen.mjs",

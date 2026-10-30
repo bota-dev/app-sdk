@@ -249,7 +249,7 @@ export function createJsEncryptedUploadV2Backend(options: JsEncryptedUploadV2Bac
         await retry(slot, async () => {
           const response = await http(slot, plan.path, plan.bodyJSON, true);
           const successor = reduce(slot.input, { type: 'AcceptRecovery', parent, responseJson: response, visited }).entry as Entry;
-          await save(slot, successor, 'ready', { authorizationNonceSha256: plan.nonceSha256 });
+          await save(slot, successor, 'ready', { authorizationNonceSha256: plan.nonceSha256, recoveredFrom: parent });
         });
       } finally { bytes?.fill(0); }
     }
@@ -267,6 +267,19 @@ export function createJsEncryptedUploadV2Backend(options: JsEncryptedUploadV2Bac
   };
   const material = (slot: Slot): JsEncryptedUploadV2Material => ({
     async authorization(context) { check(slot, context); return slot.authorization!.slice(); },
+    async localWifiRecovery(checkpoint, context) {
+      check(slot, context);
+      return reduce(slot.input, { type: 'LocalWifiRecovery', record: slot.journal, checkpoint }).recovery;
+    },
+    async localWifiControlGrant(sessionId, context) {
+      check(slot, context);
+      const bytes = await nonce(slot);
+      try {
+        const plan = reduce(slot.input, { type: 'LocalControlGrant', sessionId, nonce: Array.from(bytes) });
+        const response = await http(slot, plan.path, plan.bodyJSON);
+        check(slot, context); return response;
+      } finally { bytes.fill(0); }
+    },
     async reconcileStaging(bytes, evidence, context) {
       check(slot, context); reduce(slot.input, { type: 'VerifyEvidence', evidence: mapEvidence(evidence) });
       if (!slot.uploadCiphertext) return false;

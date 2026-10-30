@@ -11,6 +11,7 @@ mod engine;
 mod find_device;
 mod host_policy;
 mod json;
+mod local_wifi;
 mod native_v2;
 mod planners;
 mod recording_upload;

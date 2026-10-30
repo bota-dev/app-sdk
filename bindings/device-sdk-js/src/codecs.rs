@@ -17,6 +17,7 @@ const MAX_LOG_PENDING_BYTES: usize = 64 * 1024;
 
 #[derive(Default)]
 pub(crate) struct CodecState {
+    local_wifi: crate::local_wifi::LocalWifiCodecs,
     logs: BTreeMap<String, LogState>,
     diagnostics: BTreeMap<String, DeviceDiagnosticsDecoder>,
     hashers: BTreeMap<String, dto::WebIntegrityHasher>,
@@ -248,6 +249,9 @@ struct ReceiverEvent {
 impl CodecState {
     #[inline(never)]
     pub(crate) fn execute(&mut self, name: &str, value: Value) -> Result<Vec<u8>, DeviceSdkError> {
+        if name == "localWifiTransfer" {
+            return self.local_wifi.call(value);
+        }
         if crate::find_device::supports(name) {
             return crate::find_device::call(name, value);
         }
@@ -1125,6 +1129,13 @@ fn metadata() -> Value {
         CHAR_WIFI_CONFIG,
         CHAR_PROVISIONING_RESULT,
         CHAR_DEVICE_SETTINGS,
+        SERVICE_BOTA_LOCAL_WIFI,
+        CHAR_LOCAL_WIFI_CAPABILITIES,
+        CHAR_LOCAL_WIFI_CONTROL,
+        CHAR_LOCAL_WIFI_EVENT,
+        LOCAL_WIFI_LINK_OPEN,
+        LOCAL_WIFI_LINK_QUERY,
+        LOCAL_WIFI_LINK_CLOSE,
         SERVICE_BOTA_STORAGE,
         CHAR_STORAGE_INFO,
         CHAR_RECORDING_LIST,

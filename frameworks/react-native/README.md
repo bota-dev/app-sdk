@@ -445,3 +445,18 @@ and cleanup remain available. `resumeUploads()` only unpauses operations and doe
 not override that configuration; omitted/true retains automatic recovery.
 Host-owned explicit auto-sync calls remain separate. See the
 [admission scope and evidence](../../docs/parity/background-sync-admission.md).
+
+### Unreleased local WiFi OS bridge
+
+The optional `BotaLocalWifiTransport` module and `/runtime` export
+`createNativeLocalWifiPort` connect native association/pinned TLS IO to the
+existing generated-JS workflow. A rebuilt native App and an actual authenticated
+BLE verifier are required; missing capability fails before provider admission.
+Generated-JS consumers can select the optional `/native-io` build configuration
+to link only network IO. Expo ignores the dependency root override: use Android
+`sourceDir: 'native-io/android'`, exclude the full iOS pod and explicitly add the
+standalone `BotaLocalWifiTransport` pod, as Bota One's config plugin does.
+The actual Android App candidate builds with this configuration; its generated
+schema contains only the WiFi IO module. Profile-2 control and App source are
+implemented; public release adoption, iOS target compilation and external
+firmware acceptance remain pending. See [installation, tests and limitations](../../docs/parity/local-wifi.md#generated-jsnative-os-bridge-checkpoint--2026-10-24).

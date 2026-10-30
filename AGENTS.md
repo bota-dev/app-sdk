@@ -1,4 +1,40 @@
+October 29 authorized JieLi reference source now includes protected local GATT,
+retained signed-token identity, AP and isolated TLS 1.3/Range; host checks pass,
+while default-off target qualification and the external BES port remain pending.
+See [reference evidence](../firmware-local-wifi/docs/local-wifi.md) and the
+[single checklist](../internal-docs/device/App-Local-WiFi-Protocol-Contract.md#9-single-completion-checklist).
+
 # AGENTS.md
+
+October 29 successor recovery now uses verified parents in the existing managed
+journal and shared Rust checkpoint migration. Fresh authenticated evidence and
+actual prefix verification precede durable migration, Range or FINISH. Complete
+bytes are reused; identity, receipt and cleanup guards remain strict. Canonical
+JS, 625 package/host tests and native component checks pass. See
+[recovery evidence and limits](docs/parity/local-wifi.md#authorized-successor-recovery--october-29-follow-up).
+
+
+October 29 local control source uses the [minimal profile-2 security contract](protocol/local-wifi-control-v1.md):
+existing identity/HPKE authorization, shared Rust AEAD, and App owner-fenced native
+IO. Bota One source and an isolated Android App candidate are verified; normal
+public release adoption, full iOS build and external target qualification remain pending. Earlier dated secure-link gaps below are historical checkpoints.
+
+Unreleased local WiFi source adds a Rust receive state machine and an opt-in
+carrier branch inside the existing encrypted-v2 workflow. The JS host executes
+secure-link preflight, bounded Range reads, durable prefix checkpoints, FINISH
+and confirmed hotspot shutdown, then reuses existing cloud reconciliation and
+receipt/CONFIRM. Explicit public SDK/managed-provider selection uses the same
+queue and cloud identity. Native Apple/Android hotspot and pinned TLS IO
+components and their optional generated-JS OS bridge are now implemented.
+A standalone native IO target now avoids linking a second native workflow
+runtime. Bota One source forwards explicit transport selection and handles
+permissions. Profile-2 control security and App host installation/user entry are
+implemented; target qualification and published SDK adoption remain pending. Production firmware belongs to the external
+team; local firmware is reference only and repository access is not required
+for our SDK/App development. Joint acceptance uses agreed protocol/test firmware.
+Production capability and issuance remain disabled. See
+[implementation evidence](docs/parity/local-wifi.md) for exact validation gates.
+
 
 Unreleased encrypted token delivery adds an opaque HPKE envelope to existing
 provisioning material and a dedicated credential characteristic. Apps retain the

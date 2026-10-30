@@ -401,3 +401,116 @@ fn retry_policy_never_retries_business_rejections() {
         false
     );
 }
+
+#[test]
+fn local_wifi_reuses_identity_but_requires_same_channel_and_original_documents() {
+    let mut local = input();
+    local["capability"]["localWifiRawValueHex"] = json!("020210001f0000000300b900b600b600");
+    assert_eq!(
+        run(&local, json!({"type":"Identity"})).unwrap(),
+        run(&input(), json!({"type":"Identity"})).unwrap()
+    );
+    let create = run(
+        &local,
+        json!({"type":"CreateSession","entry":{"recordingId":"rec_1"},"nonce":vec![1;16]}),
+    )
+    .unwrap();
+    let body: Value = serde_json::from_str(create["bodyJSON"].as_str().unwrap()).unwrap();
+    assert_eq!(body["channel"], "local_wifi");
+    assert_eq!(
+        body["local_wifi_capabilities_base64"],
+        "AgIQAB8AAAADALkAtgC2AA=="
+    );
+    assert!(body.get("capabilities_base64").is_some());
+    let create = run(&local, json!({"type":"CreateRecording"})).unwrap();
+    let body: Value = serde_json::from_str(create["bodyJSON"].as_str().unwrap()).unwrap();
+    assert_eq!(body["upload_method"], "unknown");
+    let restore = |s: Value| json!({"type":"Session","entry":entry(),"responseJson":s.to_string(),"restore":true});
+    assert_eq!(
+        run(&local, restore(session())).unwrap_err(),
+        ManagedUploadError::IdentityConflict
+    );
+    let mut same = session();
+    same["channel"] = json!("local_wifi");
+    assert!(run(&local, restore(same)).is_ok());
+    local["recording"]["markersRequired"] = json!(true);
+    assert_eq!(
+        run(&local, json!({"type":"Identity"})).unwrap_err(),
+        ManagedUploadError::InvalidInput
+    );
+    local["recording"]["markersRequired"] = json!(false);
+    local["capability"]["localWifiRawValueHex"] = json!("00".repeat(16));
+    assert_eq!(
+        run(&local, json!({"type":"Identity"})).unwrap_err(),
+        ManagedUploadError::InvalidInput
+    );
+}
+
+#[test]
+fn local_recovery_requires_durable_scoped_parent_not_just_a_higher_revision() {
+    let mut i = input();
+    i["capability"]["localWifiRawValueHex"] = json!("020210001f0000000300b900b600b600");
+    let old = entry();
+    let first = run(
+        &i,
+        json!({"type":"SaveJournal","previous":null,"entry":old,"phase":"ready"}),
+    )
+    .unwrap()["record"]
+        .clone();
+    let next = json!({"recordingId":"rec_1","sessionId":"22222222-2222-2222-2222-222222222222","ownerRevision":3});
+    let recovered = run(
+        &i,
+        json!({"type":"SaveJournal","previous":first,"entry":next,
+        "phase":"ready","recoveredFrom":old}),
+    )
+    .unwrap()["record"]
+        .clone();
+    assert_eq!(recovered["localRecoveryParents"], json!([old]));
+    let bytes = |v: &str| {
+        v.replace('-', "")
+            .as_bytes()
+            .chunks(2)
+            .map(|p| u8::from_str_radix(std::str::from_utf8(p).unwrap(), 16).unwrap())
+            .collect::<Vec<_>>()
+    };
+    let cp = json!({"version":1,"upload_session_uuid":bytes(SESSION),"recording_uuid":bytes(UUID),
+        "recording_generation":3,"owner_revision":2,"ciphertext_length":900,"ciphertext_sha256":vec![0xaa;32],
+        "manifest_sha256":vec![6;32],"next_ciphertext_offset":330,"prefix_sha256":vec![9;32]});
+    let event = |record: &Value, checkpoint: &Value| json!({"type":"LocalWifiRecovery","record":record,"checkpoint":checkpoint});
+    assert_eq!(
+        run(&i, event(&recovered, &cp)).unwrap()["recovery"]["owner_revision"],
+        3
+    );
+    let without_lineage = run(
+        &i,
+        json!({"type":"SaveJournal","previous":null,"entry":next,"phase":"ready"}),
+    )
+    .unwrap()["record"]
+        .clone();
+    assert!(run(&i, event(&without_lineage, &cp)).is_err());
+    for field in ["bindingGeneration", "accountId", "projectId"] {
+        let mut foreign = i.clone();
+        foreign["scope"][field] = if field == "bindingGeneration" {
+            json!(3)
+        } else {
+            json!("foreign")
+        };
+        assert!(run(&foreign, event(&recovered, &cp)).is_err());
+    }
+    let mut corrupt = cp.clone();
+    corrupt["ciphertext_sha256"] = json!(vec![0xbb; 32]);
+    assert!(run(&i, event(&recovered, &corrupt)).is_err());
+    let third = json!({"recordingId":"rec_1","sessionId":"33333333-3333-3333-3333-333333333333","ownerRevision":4});
+    let restarted=run(&i,json!({"type":"SaveJournal","previous":recovered,"entry":third,"phase":"ready","recoveredFrom":next})).unwrap()["record"].clone();
+    assert_eq!(
+        restarted["localRecoveryParents"].as_array().unwrap().len(),
+        2
+    );
+    assert_eq!(
+        run(&i, event(&restarted, &cp)).unwrap()["recovery"]["owner_revision"],
+        4
+    );
+    let mut unknown = cp.clone();
+    unknown["upload_session_uuid"] = json!(vec![0xff; 16]);
+    assert!(run(&i, event(&restarted, &unknown)).is_err());
+}

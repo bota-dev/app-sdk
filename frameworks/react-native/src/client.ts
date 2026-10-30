@@ -231,11 +231,16 @@ export type BotaEncryptedUploadV2PendingRecording = Omit<BotaEncryptedUploadV2Re
 };
 
 export type BotaEncryptedUploadV2SyncOptions = {
+  /** Explicit carrier selection. Unsupported ports reject; there is no automatic fallback. */
+  transport?: 'ble' | 'local_wifi';
   signal?: AbortSignal;
   operationId?: string;
 };
 
-export type BotaEncryptedUploadV2Capability = NativeEncryptedUploadV2Capability;
+export type BotaEncryptedUploadV2Capability = NativeEncryptedUploadV2Capability & {
+  /** Independent 16-byte capability read over the current authorized BLE connection. */
+  localWifiRawValueHex?: string;
+};
 
 export type BotaEncryptedUploadV2Checkpoint = NativeEncryptedUploadV2Checkpoint;
 
@@ -1251,7 +1256,11 @@ export const createBotaDeviceSDK = (
 
     async syncEncryptedRecordingV2(device, recording, provider, onProgress, options = {}) {
       if (options.signal?.aborted) throw new Error('encrypted upload v2 cancelled');
-      const module = requireNativeModule('syncEncryptedRecordingV2');
+      if (options.transport !== undefined && !['ble', 'local_wifi'].includes(options.transport)) {
+        throw new Error('invalid encrypted upload v2 transport');
+      }
+      const operation = options.transport === 'local_wifi' ? 'syncEncryptedRecordingV2LocalWifi' : 'syncEncryptedRecordingV2';
+      const module = requireNativeModule(operation);
       const operationId = options.operationId ?? createOpaqueId();
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(operationId)) {
         throw new Error('invalid encrypted upload v2 operation ID');
@@ -1315,7 +1324,7 @@ export const createBotaDeviceSDK = (
       );
         if (options.signal?.aborted) throw new Error('encrypted upload v2 cancelled');
         nativeStarted = true;
-        await module.syncEncryptedRecordingV2(
+        await module[operation](
           toNativeConnectedDevice(device),
           recording,
           operationId

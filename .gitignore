@@ -18,6 +18,10 @@
 /frameworks/react-native/lib/
 /frameworks/react-native/.build/
 /frameworks/react-native/android/build/
+/frameworks/react-native/native-io/android/build/
+/tests/conformance/react-native-local-wifi-android/.gradle/
+/tests/conformance/react-native-local-wifi-android/build/
+/tests/conformance/react-native-local-wifi-android/app/build/
 /frameworks/react-native/generated/build/
 /frameworks/flutter/bota_app_sdk/.dart_tool/
 /frameworks/flutter/bota_app_sdk/build/

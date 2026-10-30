@@ -200,6 +200,7 @@ pub(crate) unsafe fn command_from_packet(
             ])?;
             Ok(Command::TransferEncryptedRecording {
                 request: EncryptedUploadV2BatchRequest {
+                    local_wifi: false,
                     device: serial()?,
                     recording: RecordingUuid::from_str(
                         &fields.required_text(field_id::RECORDING_UUID)?,
