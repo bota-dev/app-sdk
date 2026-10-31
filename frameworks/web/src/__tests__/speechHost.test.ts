@@ -72,7 +72,6 @@ function setup(overrides: Partial<SpeechMediaPort> = {}) {
     },
   }
 }
-async function settle() { for (let i = 0; i < 30; i++) await Promise.resolve() }
 
 test('invalid grant is rejected by the real core before media construction', () => {
   const f = setup()
@@ -87,7 +86,7 @@ test('real core gates language playback on host, worker and platform while captu
     await client.ready
     await client.setMicrophone(true)
     await client.setListening(true)
-    f.event(applied()); f.event(audio()); await settle()
+    f.event(applied()); f.event(audio()); await client.setListening(true)
     assert.deepEqual(f.tracks, ['TR_zh'])
     const clear = deferred()
     f.port.clearPlayback = async () => clear.promise
@@ -98,9 +97,9 @@ test('real core gates language playback on host, worker and platform while captu
     f.resolveSubscription(2, 'ja')
     await changing
     f.event(audio(2, 'ja'))
-    await settle()
+    assert.equal(client.state.canPlay, false)
     assert.deepEqual(f.tracks, [])
-    clear.resolve(); await settle()
+    clear.resolve(); await client.setListening(true)
     assert.deepEqual(f.tracks, ['TR_ja'])
     await client.setListening(false)
     assert.equal(f.microphone, true)
@@ -118,10 +117,10 @@ test('superseded HTTP replies cannot undo the newest language selection', async 
     f.resolveSubscription(2, 'ja')
     const current = client.changeSubscription({ ...fixture.configuration.subscription, targetLanguage: 'en' })
     f.event(applied(3, 'en')); f.resolveSubscription(3, 'en')
-    await current; await rejected; await settle()
-    f.event(audio(2, 'ja')); await settle()
+    await current; await rejected; await client.setListening(true)
+    f.event(audio(2, 'ja')); await client.setListening(true)
     assert.deepEqual(f.tracks, [])
-    f.event(audio(3, 'en')); await settle()
+    f.event(audio(3, 'en')); await client.setListening(true)
     assert.deepEqual(f.tracks, ['TR_en'])
   } finally { await client.close() }
 })
@@ -132,8 +131,8 @@ test('closing during connect retires the owner before the connection callback', 
   const client = createSpeechSession(f.options)
   const rejected = assert.rejects(client.ready, /closed/)
   await client.close()
-  connection.resolve(); await rejected; await settle()
-  f.event(applied()); f.event(audio()); await settle()
+  connection.resolve(); await rejected
+  f.event(applied()); f.event(audio()); await client.close()
   assert.deepEqual(f.tracks, [])
   assert.equal(f.microphone, false)
   assert.equal(f.closed, 1)
@@ -143,8 +142,8 @@ test('grant expiration stops both directions even without a media disconnect eve
   const f = setup()
   const client = createSpeechSession(f.options)
   await client.ready; await client.setMicrophone(true); await client.setListening(true)
-  f.event(applied()); f.event(audio()); await settle()
-  f.advance(60_000); await settle()
+  f.event(applied()); f.event(audio()); await client.setListening(true)
+  f.advance(60_000); await client.close()
   assert.equal(f.microphone, false)
   assert.deepEqual(f.tracks, [])
   assert.equal(f.closed, 1)
@@ -157,7 +156,7 @@ test('media failures expose fixed codes and retire resources without echoing ven
   const client = createSpeechSession(f.options)
   await client.ready
   await assert.rejects(client.setMicrophone(true), /media_failed/)
-  await settle()
+  await client.close()
   assert.equal(f.closed, 1)
   assert.ok(!JSON.stringify(f.errors).includes('synthetic-private'))
 })
@@ -168,9 +167,9 @@ test('closing in a state observer prevents content delivery after teardown', asy
   const client = createSpeechSession({ ...f.options, onEvent: () => { emitted++ },
     onState: state => { if (state.tracks.length) void client.close() } })
   await client.ready; await client.setListening(true)
-  f.event(applied()); await settle()
+  f.event(applied()); await client.setListening(true)
   emitted = 0
-  f.event(audio()); await settle()
+  f.event(audio()); await client.close()
   assert.equal(emitted, 0)
   assert.equal(f.closed, 1)
   await client.close()

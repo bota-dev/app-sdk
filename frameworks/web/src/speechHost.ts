@@ -88,9 +88,10 @@ export interface SpeechSession {
   close(): Promise<void>
 }
 function defaultClock(): SpeechClock {
-  const epoch = Date.now(), monotonic = globalThis.performance?.now()
+  const performanceClock = (globalThis as { performance?: { now(): number } }).performance
+  const epoch = Date.now(), monotonic = performanceClock?.now()
   return {
-    now: () => Math.floor(Math.max(Date.now(), monotonic === undefined ? epoch : epoch + performance.now() - monotonic)),
+    now: () => Math.floor(Math.max(Date.now(), monotonic === undefined ? epoch : epoch + performanceClock!.now() - monotonic)),
     every(ms, callback) { const timer = setInterval(callback, ms); return () => clearInterval(timer) },
   }
 }
