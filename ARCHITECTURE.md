@@ -976,8 +976,31 @@ numeric fields rather than being discarded.
 
 The public header exposes Swift-importable typed numeric constants and a Clang
 module map. Standalone C and Swift programs compile and run against the shipping
-static library in CI; the old JSON C exports have been removed, leaving JSON
-only inside the explicitly enabled UniFFI decision spike.
+static library in CI. The old generic JSON C workflow exports have been removed;
+BLE workflows retain the typed packet ABI.
+
+The optional speech module has a separate `bota_device_sdk_v1_speech_*` owner.
+It projects the existing Rust `SpeechClient` through bounded UTF-8 JSON metadata,
+using the same configuration/command/update contract as Web/WASM and generated
+React Native JS. It does not occupy the BLE workflow engine. Swift and Kotlin/JNI
+serialize access and terminal close; invalid input or policy failure retires the
+owner, and native hosts must silence media and cancel pending IO on any error.
+Outputs are copied before their independent Rust allocation is freed and erased.
+JNI uses standard UTF-8 byte arrays, preserving supplementary characters and NUL.
+No audio, RTC objects or project/provider secrets cross the policy boundary.
+Platform adapters still own capture, permission, playback, actual buffer clearing
+and lifecycle; Flutter must delegate these to native facades through Pigeon.
+The confirmed first speech delivery covers every supported family in the
+[platform matrix](README.md#supported-platforms). Native policy bindings alone
+do not expose a complete speech facade or establish published media support.
+This is an explicit metadata-only exception to the original workflow ABI's
+no-JSON design: speech already consumes authenticated HTTP/event bodies with
+nested caption pages and one shared validation schema. Reusing that bounded
+projection avoids a second field-ID/schema translation for native clients.
+It does not restore the generic JSON workflow exports or permit BLE packets,
+recording bytes or firmware bytes on the speech boundary. The native ABI tests
+continue enforcing the typed workflow surface separately from this projection.
+
 ABI v1 is frozen for facade implementation: existing symbol names, packet-kind
 values, field meanings, ownership rules, and status/error values are additive
 only. The exact tested revision and header digest live in

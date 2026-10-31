@@ -552,6 +552,47 @@ BotaDeviceSdkStatusV1 bota_device_sdk_v1_packet_view(
 );
 void bota_device_sdk_v1_packet_free(BotaDeviceSdkPacketV1 *packet);
 
+/* Optional shared speech policy. These additive handles do not occupy the BLE
+ * workflow engine. No audio, RTC implementation or project secrets cross here.
+ * Inputs are borrowed UTF-8 JSON, not NUL-terminated strings: configuration and
+ * grant <= 32 KiB; command <= 896 KiB (core permits > 32 KiB only for caption
+ * pages). now_ms uses nonnegative exact-JS-integer milliseconds. The core owns
+ * all identity, authority, revision and playback decisions.
+ *
+ * Both output slots are required, distinct, writable and contain no outstanding
+ * owner. Success returns one speech/output owner and no error. Operation failure
+ * returns one error owner and no result. Invalid argument/panic returns no owner.
+ * Use error_view/error_free for stable error codes, never log input JSON.
+ * speech_step serializes calls but may not race speech_free. On ANY failure the
+ * host must silence media, cancel pending IO and close its speech handle; it must
+ * not apply a prior output or treat failure as permission to keep playing.
+ * Valid malformed commands retire the policy, including invalid UTF-8/length.
+ * Output views are borrowed, length-delimited UTF-8 until output_free. Copy them
+ * before freeing; do not retain caption content beyond the session's policy.
+ * Every non-NULL owner is freed exactly once; freeing NULL is allowed. */
+typedef struct BotaDeviceSdkSpeechV1 BotaDeviceSdkSpeechV1;
+typedef struct BotaDeviceSdkSpeechOutputV1 BotaDeviceSdkSpeechOutputV1;
+BotaDeviceSdkStatusV1 bota_device_sdk_v1_speech_new(
+    BotaDeviceSdkSliceV1 configuration,
+    BotaDeviceSdkSliceV1 grant,
+    uint64_t now_ms,
+    BotaDeviceSdkSpeechV1 **out_speech,
+    BotaDeviceSdkErrorV1 **out_error
+);
+BotaDeviceSdkStatusV1 bota_device_sdk_v1_speech_step(
+    BotaDeviceSdkSpeechV1 *speech,
+    BotaDeviceSdkSliceV1 command,
+    uint64_t now_ms,
+    BotaDeviceSdkSpeechOutputV1 **out_json,
+    BotaDeviceSdkErrorV1 **out_error
+);
+void bota_device_sdk_v1_speech_free(BotaDeviceSdkSpeechV1 *speech);
+BotaDeviceSdkStatusV1 bota_device_sdk_v1_speech_output_view(
+    const BotaDeviceSdkSpeechOutputV1 *output,
+    BotaDeviceSdkSliceV1 *out_view
+);
+void bota_device_sdk_v1_speech_output_free(BotaDeviceSdkSpeechOutputV1 *output);
+
 #ifdef __cplusplus
 }
 #endif

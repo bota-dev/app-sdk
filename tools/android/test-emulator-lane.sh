@@ -109,7 +109,7 @@ repository_aar="$repository/dev/bota/bota-app-sdk/$version/bota-app-sdk-$version
 release_digest="$(shasum -a 256 "$release_aar" | awk '{print $1}')"
 test "$release_digest" = "$(shasum -a 256 "$repository_aar" | awk '{print $1}')"
 
-instrumentation_classes="dev.bota.sdk.internal.bluetooth.BluetoothPermissionTest,dev.bota.sdk.internal.jni.NativeCoreBridgeTest,dev.bota.sdk.internal.core.ProtocolCodecTest,dev.bota.sdk.internal.core.WorkflowConformanceTest,dev.bota.sdk.internal.host.AtomicFilePersistenceHostTest,dev.bota.sdk.internal.host.AndroidFileHostTest,dev.bota.sdk.internal.host.KeystoreHostTest"
+instrumentation_classes="dev.bota.sdk.internal.bluetooth.BluetoothPermissionTest,dev.bota.sdk.internal.jni.NativeCoreBridgeTest,dev.bota.sdk.internal.jni.NativeSpeechPolicyTest,dev.bota.sdk.internal.core.ProtocolCodecTest,dev.bota.sdk.internal.core.WorkflowConformanceTest,dev.bota.sdk.internal.host.AtomicFilePersistenceHostTest,dev.bota.sdk.internal.host.AndroidFileHostTest,dev.bota.sdk.internal.host.KeystoreHostTest"
 "$ROOT/tools/android/test-package.sh" --api "$api" --skip-build \
   --instrumentation-class "$instrumentation_classes"
 "$ROOT/tools/android/test-legacy-consumer.sh" --api "$api" --mode source \

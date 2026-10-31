@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const root = new URL('../../', import.meta.url);
@@ -10,3 +10,18 @@ for (const platform of ['web', 'react-native']) {
   else if (readFileSync(path, 'utf8') !== generated) throw new Error(`Stale shared speech host: ${fileURLToPath(path)}`);
 }
 console.log('Shared speech IO host synchronized for Web and React Native.');
+
+const fixture = readFileSync(new URL('protocol/speech-session/client-v1.json', root));
+for (const directory of [
+  'platforms/apple/Tests/BotaAppSDKTests/Resources/SpeechFixtures/',
+  'platforms/android/sdk/src/androidTest/assets/SpeechFixtures/',
+]) {
+  const path = new URL(`${directory}client-v1.json`, root);
+  if (process.argv.includes('--write')) {
+    mkdirSync(new URL(directory, root), { recursive: true });
+    writeFileSync(path, fixture);
+  } else if (!readFileSync(path).equals(fixture)) {
+    throw new Error(`Stale native speech fixture: ${fileURLToPath(path)}`);
+  }
+}
+console.log('Native speech fixtures match the shared policy fixture.');
