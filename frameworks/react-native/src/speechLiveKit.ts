@@ -42,19 +42,39 @@ const RoomEvent = { TrackPublished: 'trackPublished', TrackSubscribed: 'trackSub
 const Track = { Kind: { Audio: 'audio' }, Source: { Microphone: 'microphone' } } as const
 
 /** Public vendor factories only. Returned media objects never cross the Rust/JS policy boundary. */
-export interface LiveKitNativeDependencies {
+export interface LiveKitNativeHostAudioSession {
+  /** The host owns OS routing/focus and ensures newly received Bota tracks are
+   * muted before any native playout. It must preserve its conference's tracks.
+   * A rejected acquisition cleans its own partial resources. A late successful
+   * acquisition still returns a lease that the SDK can release after teardown. */
+  acquireMutedPlayback(signal: AbortSignal): Promise<{ release(): Promise<void> }>
+}
+export type LiveKitNativeDependencies = {
   roomFactory(options: { reconnectPolicy: { nextRetryDelayInMs(): null }; stopLocalTrackOnUnpublish: boolean;
     disconnectOnPageLeave: boolean; adaptiveStream: boolean; dynacast: boolean }): unknown
-  createMicrophone(options: { echoCancellation: boolean; noiseSuppression: boolean; autoGainControl: boolean }): Promise<unknown>
+  createMicrophone?(options: { echoCancellation: boolean; noiseSuppression: boolean; autoGainControl: boolean }): Promise<unknown>
+  /** Host-admitted original input. Native WebRTC cannot be assumed to clone a
+   * track: the host's supported media bridge must create a fresh local track
+   * with independent enabled/stop lifecycle, not wrap or borrow sourceTrack.
+   * Its samples must preserve upstream host mute and source termination. */
+  externalInput?: {
+    participantId: string; memberGeneration: number
+    sourceTrack: { readonly id: string; readonly kind: string; readonly readyState: string }
+    createOwnedTrack(signal: AbortSignal): Promise<unknown>
+  }
   /** Disable raw vendor logs before constructing the room. The host owns its vendor logger. */
   silenceVendorLogs(): void
+} & ({
   /** The host has registered LiveKit globals and reserved this runtime for Bota. */
   audioSession: unknown
   audioSessionOwnership: 'exclusive'
   /** Restore the host's known prior default only after all media has disconnected. */
   restoreRemoteTrackVolume: number
   defaultOutput: 'earpiece' | 'speaker'
-}
+} | {
+  audioSessionOwnership: 'host'
+  audioSession: LiveKitNativeHostAudioSession
+})
 function methods(value: unknown, names: readonly string[]): value is Record<string, unknown> {
   return (typeof value === 'object' || typeof value === 'function') && value !== null && names.every(name => typeof (value as Record<string, unknown>)[name] === 'function')
 }
@@ -73,14 +93,22 @@ const audioOwners = new WeakSet<object>()
 
 /** Optional native LiveKit Cloud candidate using the host's public vendor factories. */
 export function createLiveKitNativeMedia(callbacks: SpeechMediaCallbacks, dependencies: LiveKitNativeDependencies): SpeechMediaPort {
-  if (dependencies.audioSessionOwnership !== 'exclusive' ||
+  const external = dependencies.externalInput && { ...dependencies.externalInput }
+  if (external ? !external.participantId || !Number.isSafeInteger(external.memberGeneration) || external.memberGeneration < 1 ||
+    !external.sourceTrack?.id || external.sourceTrack.kind !== 'audio' || external.sourceTrack.readyState !== 'live' ||
+    typeof external.createOwnedTrack !== 'function' : typeof dependencies.createMicrophone !== 'function')
+    throw new SpeechSessionError('invalid_input')
+  if (dependencies.audioSessionOwnership === 'exclusive' ?
       !Number.isFinite(dependencies.restoreRemoteTrackVolume) || dependencies.restoreRemoteTrackVolume < 0 || dependencies.restoreRemoteTrackVolume > 1 ||
       !['earpiece', 'speaker'].includes(dependencies.defaultOutput) ||
-      !methods(dependencies.audioSession, ['configureAudio', 'setDefaultRemoteAudioTrackVolume', 'startAudioSession', 'stopAudioSession'])) {
+      !methods(dependencies.audioSession, ['configureAudio', 'setDefaultRemoteAudioTrackVolume', 'startAudioSession', 'stopAudioSession']) :
+      dependencies.audioSessionOwnership !== 'host' || !methods(dependencies.audioSession, ['acquireMutedPlayback'])) {
     throw new SpeechSessionError('invalid_input')
   }
   const audioSession = dependencies.audioSession as unknown as NativeAudioSession
-  const restoreVolume = dependencies.restoreRemoteTrackVolume, defaultOutput = dependencies.defaultOutput
+  const hostAudio = dependencies.audioSessionOwnership === 'host' ? dependencies.audioSession : undefined
+  const restoreVolume = dependencies.audioSessionOwnership === 'exclusive' ? dependencies.restoreRemoteTrackVolume : 0
+  const defaultOutput = dependencies.audioSessionOwnership === 'exclusive' ? dependencies.defaultOutput : 'earpiece'
   dependencies.silenceVendorLogs()
   const rawRoom = dependencies.roomFactory({
     reconnectPolicy: { nextRetryDelayInMs: () => null },
@@ -91,19 +119,40 @@ export function createLiveKitNativeMedia(callbacks: SpeechMediaCallbacks, depend
       !methods(rawRoom.localParticipant, ['publishTrack', 'unpublishTrack']) ||
       !methods(rawRoom.remoteParticipants, ['values'])) throw new SpeechSessionError('invalid_input')
   const room = rawRoom as unknown as Room
-  const acquire = () => dependencies.createMicrophone({
-    echoCancellation: true, noiseSuppression: true, autoGainControl: true,
-  })
+  const inputLifetime = new AbortController()
+  const acquire = async () => {
+    if (!external) return dependencies.createMicrophone!({ echoCancellation: true, noiseSuppression: true, autoGainControl: true })
+    if (external.sourceTrack.readyState !== 'live') throw new SpeechSessionError('media_failed')
+    let local: unknown
+    try { local = await external.createOwnedTrack(inputLifetime.signal) } catch { throw new SpeechSessionError('media_failed') }
+    const media = typeof local === 'object' && local !== null ? (local as { mediaStreamTrack?: unknown }).mediaStreamTrack : undefined
+    // A borrowed original is never ours to mute, stop or dispose, even on error.
+    if (media === external.sourceTrack || typeof media === 'object' && media !== null &&
+      (media as { id?: unknown }).id === external.sourceTrack.id) throw new SpeechSessionError('media_failed')
+    if (!methods(local, ['stop']) || typeof media !== 'object' || media === null ||
+      typeof (media as { id?: unknown }).id !== 'string' || !(media as { id: string }).id ||
+      (media as { kind?: unknown }).kind !== 'audio' || (media as { readyState?: unknown }).readyState !== 'live' ||
+      typeof (media as { enabled?: unknown }).enabled !== 'boolean') {
+      if (methods(local, ['stop']) && typeof media === 'object' && media !== null &&
+        typeof (media as { id?: unknown }).id === 'string' && (media as { id: string }).id) stopTrack(local)
+      else uncertainCaptureCleanup = true
+      throw new SpeechSessionError('media_failed')
+    }
+    if (external.sourceTrack.readyState !== 'live') { stopTrack(local); throw new SpeechSessionError('media_failed') }
+    return local
+  }
   let closed = false, joined = false, processor = '', captureVersion = 0
   let microphone: LocalAudioTrack | undefined
   let holdingMicrophone = false, microphoneSid: string | undefined
   let acquisition: { promise: Promise<unknown>; claim: number } | undefined
   let closing: Promise<void> | undefined
   let ownsAudio = false
+  let hostLease: { release(): Promise<void> } | undefined
   let attempted = false
   let uncertainCaptureCleanup = false
   let preparing: Promise<void> | undefined, connecting: Promise<void> | undefined
   let publishing: Promise<unknown> | undefined
+  const stopped = new WeakSet<object>()
   const allowed = new Set<string>()
   const received = new Map<string, { track: RemoteAudioTrack; publication: RemoteTrackPublication }>()
   const clears = new Set<() => void>()
@@ -113,6 +162,8 @@ export function createLiveKitNativeMedia(callbacks: SpeechMediaCallbacks, depend
   function check(signal: AbortSignal) { if (closed || signal.aborted) throw new SpeechSessionError('closed') }
   function stopTrack(track: unknown) {
     if (!methods(track, ['stop'])) { uncertainCaptureCleanup = true; throw new SpeechSessionError('cleanup_failed') }
+    if (stopped.has(track)) return
+    stopped.add(track)
     try { (track as unknown as { stop(): void }).stop() }
     catch { uncertainCaptureCleanup = true; throw new SpeechSessionError('cleanup_failed') }
   }
@@ -205,7 +256,7 @@ export function createLiveKitNativeMedia(callbacks: SpeechMediaCallbacks, depend
 
   function close(): Promise<void> {
     if (closing) return closing
-    closed = true; joined = false
+    closed = true; joined = false; inputLifetime.abort()
     let synchronousFailure = false
     const attempt = (task: () => void) => { try { task() } catch { synchronousFailure = true } }
     // Retire handlers before asynchronous teardown or queued vendor callbacks.
@@ -236,6 +287,11 @@ export function createLiveKitNativeMedia(callbacks: SpeechMediaCallbacks, depend
         }
         if (!failed) { audioOwners.delete(audioSession); ownsAudio = false }
       }
+      // The host retains its conference and owns global defaults. Do not release
+      // our lease while any of our native effects have uncertain cleanup.
+      if (hostLease && !failed) {
+        try { await hostLease.release(); hostLease = undefined } catch { failed = true }
+      }
       if (failed) throw new SpeechSessionError('cleanup_failed')
     })
     return closing
@@ -243,15 +299,24 @@ export function createLiveKitNativeMedia(callbacks: SpeechMediaCallbacks, depend
   return {
     async connect(grant: SpeechGrant, signal) {
       check(signal)
-      if (attempted) throw new SpeechSessionError('invalid_input')
+      if (attempted || external && (external.participantId !== grant.participant_id || external.memberGeneration !== grant.member_generation))
+        throw new SpeechSessionError('invalid_input')
       attempted = true; processor = grant.processor_identity
       const abort = () => { void close().catch(() => callbacks.failed()) }
       signal.addEventListener('abort', abort, { once: true })
       try {
-        if (audioOwners.has(audioSession)) throw new SpeechSessionError('media_failed')
-        audioOwners.add(audioSession); ownsAudio = true
+        if (!hostAudio) {
+          if (audioOwners.has(audioSession)) throw new SpeechSessionError('media_failed')
+          audioOwners.add(audioSession); ownsAudio = true
+        }
         preparing = Promise.resolve().then(async () => {
           check(signal)
+          if (hostAudio) {
+            const lease = await hostAudio.acquireMutedPlayback(inputLifetime.signal)
+            if (!methods(lease, ['release'])) { uncertainCaptureCleanup = true; throw new SpeechSessionError('media_failed') }
+            hostLease = lease
+            return
+          }
           await audioSession.configureAudio({ android: {
             preferredOutputList: ['bluetooth', 'headset', defaultOutput, defaultOutput === 'speaker' ? 'earpiece' : 'speaker'],
             audioTypeOptions: {
@@ -320,6 +385,7 @@ export function createLiveKitNativeMedia(callbacks: SpeechMediaCallbacks, depend
         if (old) { stopTrack(old); await room.localParticipant.unpublishTrack(old, true) }
         return
       }
+      if (!joined) throw new SpeechSessionError('media_failed')
       if (microphone) { microphone.mediaStreamTrack.enabled = !holdingMicrophone; return }
       const version = captureVersion
       const pending = acquisition ?? { promise: acquire(), claim: version }

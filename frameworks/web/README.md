@@ -688,8 +688,37 @@ have strict exact-optional incompatibilities, so the host must separately qualif
 its vendor import/build configuration. The example disables vendor logs in the
 shared JavaScript realm; integrate that with the host's logging policy.
 
-The first adapter captures the browser microphone only. Authorized external
-participant tracks and native device audio remain unfinished integrations.
+The adapter captures the microphone by default, or accepts one authorized
+external participant track through `externalInput`. The customer backend must
+first admit that participant with `source_kind: 'host_external'`. The adapter
+checks the supplied participant/member generation against the grant and derives
+an independent track from the original's rendered audio using its own Web Audio
+context. Host mute remains authoritative; a direct track clone would bypass
+later changes to the original's `enabled` state. It never mutes or stops the host
+original. Supply the vendor's public wrapper for that exact owned branch:
+
+```ts
+externalInput: {
+  participantId: grant.participant_id,
+  memberGeneration: grant.member_generation,
+  track: authorizedOriginalAudioTrack,
+  wrapTrack: ownedBranch => new LocalAudioTrack(ownedBranch, undefined, true),
+}
+```
+
+Import `LocalAudioTrack` from the host's `livekit-client`. The input must be a live
+audio track for that one speaker; a mixed conference track cannot establish
+per-person identity. No `createMicrophone` factory is needed for external input.
+Start input from a user gesture where browser audio activation requires it.
+If the owned audio context cannot run, input fails without a microphone fallback.
+Optional browser factories must return a fresh context owned solely by Bota;
+input retirement closes that context and stops its destination track.
+Use `setInput(true)` and `finishInput()` for either source kind; these are aliases
+of the existing shared-policy microphone controls, not separate state machines.
+The existing `microphoneEnabled` state field and media-port names are unchanged.
+Closing joins late acquisition, publication and connection work before resolving.
+Host-specific capture clocks, original archive correlation and real RTC remain
+qualification work.
 Microphone capture starts only on an explicit call; listening, microphone mute
 and subscription changes are independent. A successful subscription callback
 acknowledges desired state, not audible playback: the worker-applied revision and

@@ -10,7 +10,7 @@ const { RoomEvent, Track } = createRequire(import.meta.url)('livekit-client')
 
 const grant = { protocol_version: 1, provider: 'livekit', url: 'wss://synthetic.livekit.cloud', token: 'synthetic',
   room: 'synthetic-room', identity: 'synthetic-member', processor_identity: 'synthetic-worker', expires_at: '',
-  session_id: '', participant_id: '', member_generation: 1, worker_generation: 1 }
+  session_id: 'synthetic-session', participant_id: 'synthetic-participant', member_generation: 1, worker_generation: 1 }
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(yes => { resolve = yes }); return { promise, resolve } }
 function fake() {
   let published = 0, stopped = 0, attaches = 0, plays = 0, disconnects = 0
@@ -78,13 +78,114 @@ test('source finish holds a late microphone acquisition muted until normal sourc
   await port.close()
 })
 
+function audioGraph(original: MediaStreamTrack, branch: unknown) {
+  let closes = 0
+  const stream = {} as MediaStream
+  const context = {
+    state: 'suspended',
+    createMediaStreamSource(value: MediaStream) { assert.equal(value, stream); return { connect() {}, disconnect() {} } },
+    createMediaStreamDestination() { return { stream: { getAudioTracks: () => [branch] }, disconnect() {} } },
+    async resume() { this.state = 'running' },
+    async close() { this.state = 'closed'; closes++ },
+  }
+  return { context, get closes() { return closes }, deps: {
+    createAudioContext: () => context as unknown as AudioContext,
+    createMediaStream: (tracks: MediaStreamTrack[]) => { assert.deepEqual(tracks, [original]); return stream },
+  } }
+}
+
+test('external Web input publishes an owned audio branch and never stops or mutes the host track', async () => {
+  const f = fake(), signal = new AbortController().signal
+  let originalStops = 0, cloneStops = 0, microphoneCalls = 0
+  const branch = { id: 'branch', kind: 'audio', readyState: 'live', enabled: true, stop() { if (this.readyState !== 'ended') cloneStops++; this.readyState = 'ended' } }
+  const original = { id: 'original', kind: 'audio', readyState: 'live', enabled: true,
+    clone: () => branch, stop() { originalStops++ } } as unknown as MediaStreamTrack
+  const graph = audioGraph(original, branch)
+  const port = createLiveKitWebMedia(f.callbacks, { ...f.deps, ...graph.deps,
+    createMicrophone: async () => { microphoneCalls++; return f.local },
+    externalInput: { participantId: grant.participant_id, memberGeneration: 1, track: original,
+      wrapTrack: track => ({ mediaStreamTrack: track, stop: () => track.stop() }) },
+  })
+  await port.connect(grant, signal); await port.setMicrophone(true, signal)
+  assert.equal(f.published, 1); assert.equal(microphoneCalls, 0)
+  port.holdMicrophone!(); assert.equal(branch.enabled, false); assert.equal(original.enabled, true)
+  assert.equal(port.microphonePublication!(), 'TR_original')
+  await port.setMicrophone(false, signal)
+  assert.equal(originalStops, 0); assert.equal(cloneStops, 1); assert.equal(f.disconnects, 0)
+  await port.close(); assert.equal(original.enabled, true); assert.equal(originalStops, 0); assert.equal(graph.closes, 1)
+})
+
+test('external Web input refuses another member before capture and refuses a borrowed wrapper without touching it', async () => {
+  const f = fake(), signal = new AbortController().signal
+  let cloneStops = 0, originalStops = 0
+  const branch = { id: 'branch', kind: 'audio', readyState: 'live', enabled: true, stop() { if (this.readyState !== 'ended') cloneStops++; this.readyState = 'ended' } }
+  const original = { id: 'original', kind: 'audio', readyState: 'live', enabled: true, clone: () => branch,
+    stop() { originalStops++ } } as unknown as MediaStreamTrack
+  const externalInput = { participantId: 'another-member', memberGeneration: 1, track: original,
+    wrapTrack: () => ({ mediaStreamTrack: original, stop: () => original.stop() }) }
+  const other = createLiveKitWebMedia(f.callbacks, { ...f.deps, externalInput })
+  await assert.rejects(other.connect(grant, signal), /invalid_input|media_failed/)
+  assert.equal(f.published, 0); assert.equal(originalStops, 0)
+  await other.close()
+  const fresh = fake()
+  const graph = audioGraph(original, branch)
+  const port = createLiveKitWebMedia(fresh.callbacks, { ...fresh.deps, ...graph.deps, externalInput: { ...externalInput, participantId: grant.participant_id } })
+  await port.connect(grant, signal)
+  await assert.rejects(port.setMicrophone(true, signal), /media_failed/)
+  assert.equal(originalStops, 0); assert.equal(original.enabled, true); assert.equal(cloneStops, 1)
+  assert.equal(fresh.published, 0); await port.close(); assert.equal(graph.closes, 1)
+})
+
+test('closing external Web input joins its late wrapper and disposes only the owned branch', async () => {
+  const f = fake(), signal = new AbortController().signal, wrapped = deferred<unknown>(), entered = deferred<void>()
+  let branchStops = 0
+  const branch = { id: 'branch', kind: 'audio', readyState: 'live', enabled: true, stop() { if (this.readyState !== 'ended') branchStops++; this.readyState = 'ended' } }
+  const original = { id: 'original', kind: 'audio', readyState: 'live', enabled: true, clone: () => branch,
+    stop() { assert.fail('host source must survive') } } as unknown as MediaStreamTrack
+  const graph = audioGraph(original, branch)
+  const port = createLiveKitWebMedia(f.callbacks, { ...f.deps, ...graph.deps, externalInput: { participantId: grant.participant_id,
+    memberGeneration: 1, track: original, wrapTrack: () => { entered.resolve(); return wrapped.promise } } })
+  await port.connect(grant, signal)
+  const capture = port.setMicrophone(true, signal)
+  await entered.promise
+  let done = false; const closing = port.close().then(() => { done = true })
+  await Promise.resolve(); await Promise.resolve(); assert.equal(done, false)
+  wrapped.resolve({ mediaStreamTrack: branch, stop: () => branch.stop() })
+  await capture; await closing
+  assert.equal(f.published, 0); assert.equal(branchStops, 1); assert.equal(original.enabled, true); assert.equal(graph.closes, 1)
+})
+
+for (const failure of ['activation', 'cleanup'] as const) {
+  test(`external Web ${failure} failure preserves the host source and reports fixed errors`, async () => {
+    const f = fake(), signal = new AbortController().signal
+    const original = { id: 'original', kind: 'audio', readyState: 'live', enabled: true,
+      stop() { assert.fail('host source must survive') } } as unknown as MediaStreamTrack
+    const branch = { id: 'branch', kind: 'audio', readyState: 'live', enabled: true, stop() { this.readyState = 'ended' } }
+    const graph = audioGraph(original, branch)
+    if (failure === 'activation') graph.context.resume = async () => { throw Error('private activation details') }
+    else graph.context.close = async () => { throw Error('private cleanup details') }
+    const port = createLiveKitWebMedia(f.callbacks, { ...f.deps, ...graph.deps,
+      externalInput: { participantId: grant.participant_id, memberGeneration: 1, track: original,
+        wrapTrack: track => ({ mediaStreamTrack: track, stop: () => track.stop() }) } })
+    await port.connect(grant, signal)
+    if (failure === 'activation') {
+      await assert.rejects(port.setMicrophone(true, signal), { message: 'media_failed' })
+      await port.close(); assert.equal(f.published, 0); assert.equal(graph.closes, 1)
+    } else {
+      await port.setMicrophone(true, signal)
+      await assert.rejects(port.close(), { message: 'cleanup_failed' })
+    }
+    assert.equal(original.enabled, true); assert.equal(branch.readyState, 'ended')
+  })
+}
+
 test('source finish preserves a publication whose acknowledgement arrives after local stop', async () => {
-  const f = fake(), published = deferred<{ trackSid: string }>(), signal = new AbortController().signal
-  f.room.localParticipant.publishTrack = async () => published.promise
+  const f = fake(), published = deferred<{ trackSid: string }>(), entered = deferred<void>(), signal = new AbortController().signal
+  f.room.localParticipant.publishTrack = async () => { entered.resolve(); return published.promise }
   const port = createLiveKitWebMedia(f.callbacks, f.deps)
   await port.connect(grant, signal)
   const capture = port.setMicrophone(true, signal)
-  await Promise.resolve(); await Promise.resolve()
+  await entered.promise
   port.holdMicrophone!(); assert.equal(f.local.mediaStreamTrack.enabled, false)
   published.resolve({ trackSid: 'TR_original' }); await capture
   assert.equal(port.microphonePublication!(), 'TR_original'); assert.equal(f.stopped, 0)

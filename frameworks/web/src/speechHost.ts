@@ -136,6 +136,8 @@ export interface SpeechSession {
   readonly ready: Promise<void>
   readonly state: SpeechUpdate
   setMicrophone(enabled: boolean): Promise<void>
+  /** Controls the configured input branch; same shared policy as setMicrophone. */
+  setInput(enabled: boolean): Promise<void>
   setListening(enabled: boolean): Promise<void>
   changeSubscription(selection: SpeechSelection): Promise<void>
   resumeAudio(): Promise<void>
@@ -143,6 +145,8 @@ export interface SpeechSession {
   recoverCaptions(): Promise<SpeechCaptionRecovery>
   /** Stop new capture, preserve listening, and reconcile this source's bounded server outcome. */
   finishMicrophone(): Promise<SpeechSourceFinish>
+  /** Finish the configured microphone or external input; does not stop the host source. */
+  finishInput(): Promise<SpeechSourceFinish>
   close(): Promise<void>
 }
 function defaultClock(): SpeechClock {
@@ -415,7 +419,7 @@ export function createSpeechSession(options: SpeechSessionOptions): SpeechSessio
   })()
   // The caller still observes a rejected ready promise; this also bounds fire-and-forget teardown.
   void ready.catch(() => {})
-  return {
+  const session: SpeechSession = {
     ready,
     get state() { return snapshot() },
     async setMicrophone(enabled) {
@@ -425,6 +429,7 @@ export function createSpeechSession(options: SpeechSessionOptions): SpeechSessio
       if (enabled && state.sourceFinish.holdPublication) throw new SpeechSessionError('source_finish_pending')
       await waitCapture()
     },
+    setInput: enabled => session.setMicrophone(enabled),
     async setListening(enabled) { active(); command({ type: 'set_listening', enabled }); await waitPlayback() },
     async changeSubscription(selection) {
       active()
@@ -489,6 +494,8 @@ export function createSpeechSession(options: SpeechSessionOptions): SpeechSessio
       try { command({ type: 'begin_source_finish' }) } catch { /* command closes and retires the pending waiter. */ }
       return result
     },
+    finishInput: () => session.finishMicrophone(),
     close,
   }
+  return session
 }

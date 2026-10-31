@@ -576,7 +576,7 @@ await speech.setListening(true)
 await speech.close()
 ```
 
-This adapter requires the host to reserve the native audio session exclusively;
+With `audioSessionOwnership: 'exclusive'`, the host reserves the native audio session exclusively;
 it cannot run alongside another room/player that independently changes LiveKit's
 global defaults. Pass the actual singleton `AudioSession`, not a fresh wrapper.
 The host supplies its known prior incoming-track volume because LiveKit does not
@@ -596,8 +596,50 @@ authority. The host must manage interruption/background policy and must not retr
 uncertain native cleanup by constructing another wrapper. `resumeAudio()` has no
 browser autoplay action on this connected native adapter.
 
+An existing conference can instead set `audioSessionOwnership: 'host'` and supply
+an `audioSession` implementing `acquireMutedPlayback(signal)`. It returns a lease
+with `release(): Promise<void>`. The host coordinator owns native routing, focus,
+activation and global incoming-track defaults; it must ensure Bota's new receive
+tracks are muted **before native playout**, while preserving its own conference's
+audio. For LiveKit, the public default-volume setter affects all newly received
+tracks in that runtime, so the host must explicitly manage its other rooms too.
+Do not implement this port as an acknowledgement-only callback or let another
+uncoordinated owner change these global settings. Bota never calls global
+configure/start/stop/volume methods in host mode. It releases only its lease after
+its room and late media work settle. Uncertain cleanup retains the lease; the
+host must reconcile it before granting a replacement. An aborted acquisition that
+later succeeds still returns its releasable lease.
+
+For authorized external input, admit the speaker as `host_external` on the backend
+and supply a separate owned branch from the host's supported media bridge:
+
+```ts
+audioSessionOwnership: 'host',
+audioSession: conferenceAudioCoordinator,
+externalInput: {
+  participantId: grant.participant_id,
+  memberGeneration: grant.member_generation,
+  sourceTrack: authorizedOriginalMediaStreamTrack,
+  createOwnedTrack: signal => meetingMediaBridge.createIndependentAudioTrack(signal),
+},
+```
+
+`createOwnedTrack` must return a fresh public LiveKit `LocalAudioTrack` whose
+underlying audio track has a different ID and independent enabled/stop lifecycle.
+It transfers that branch to Bota and must preserve upstream host mute and source
+termination in the samples it supplies. An independent lifecycle does not permit
+bypassing the host microphone mute. Rewrapping the same original is rejected without
+mutating it. The native WebRTC implementation's `clone()` is not assumed available;
+the host must provide a qualified bridge, and must not silently fall back to a
+second microphone or mixed system audio. No microphone factory is needed in this
+mode. `setInput` and `finishInput` alias the same Rust-owned workflow as
+`setMicrophone` and `finishMicrophone`; finish keeps listening and retires only
+Bota's branch. Participant/member mismatches fail before audio lease acquisition.
+These ports provide source integration, not an automatic bridge for every meeting
+vendor. Qualify the actual host bridge/coordinator and consuming App.
+
 LiveKit Cloud region routing has the same qualification constraint as the Web
 candidate. Native linkage, focus interruptions, Bluetooth changes, physical buffer
 tails, AEC/double-talk and end-to-end latency still need acceptance. Authorized
-external tracks and coexistence with an existing meeting's audio session remain
-separate integration work; this microphone adapter does not complete that story.
+external input and host audio coordination now have source adapters, while actual
+vendor linkage, host integration and physical coexistence remain unqualified.

@@ -8,6 +8,7 @@ import {
   type SdkClientContext,
   type WiFiStatusInfo,
 } from '@bota.dev/web-app-sdk'
+import { verifyExternalSpeechInput } from './speechInput'
 
 const OPERATION_ID = 'browser-staged-upload'
 const RECORDING_UUID = 'a1b2c3d4-0000-0000-0000-000000000000'
@@ -34,6 +35,7 @@ interface BrowserGate {
 
 declare global {
   interface Window {
+    __botaExternalSpeechTest: typeof verifyExternalSpeechInput
     __botaFake?: BrowserGate
     __botaConsumerTest: {
       holdProvider(): void
@@ -42,6 +44,8 @@ declare global {
     }
   }
 }
+
+window.__botaExternalSpeechTest = verifyExternalSpeechInput
 
 const result = requiredElement<HTMLPreElement>('#result')
 const serial = requiredElement<HTMLInputElement>('#serial')

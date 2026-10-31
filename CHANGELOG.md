@@ -13,6 +13,12 @@ tracked separately.
 
 ## Unreleased
 
+- Add optional authorized external audio input to Web and React Native speech
+  adapters, with `setInput` / `finishInput` aliases. Web preserves host mute through
+  an owned Web Audio branch; native hosts supply an independent media bridge and
+  may coordinate audio ownership through a lease. Host integration, real RTC and
+  physical audio coexistence remain unqualified.
+
 - Add a Watch HTTP command source product and primary Double Tap helper to the
   root Swift package and release generator, separate from the native core.
   Developers supply their own application UI, authorization headers and business

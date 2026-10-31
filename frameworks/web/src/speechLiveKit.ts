@@ -47,7 +47,17 @@ const Track = { Kind: { Audio: 'audio' }, Source: { Microphone: 'microphone' } }
 export interface LiveKitWebDependencies {
   roomFactory(options: { reconnectPolicy: { nextRetryDelayInMs(): null }; stopLocalTrackOnUnpublish: boolean;
     disconnectOnPageLeave: boolean; adaptiveStream: boolean; dynacast: boolean }): unknown
-  createMicrophone(options: { echoCancellation: boolean; noiseSuppression: boolean; autoGainControl: boolean }): Promise<unknown>
+  createMicrophone?(options: { echoCancellation: boolean; noiseSuppression: boolean; autoGainControl: boolean }): Promise<unknown>
+  /** Admit this participant as host_external on the host backend first. The SDK
+   * derives audio from this track's output (including its mute state); wrap only the owned branch in
+   * the vendor's public LocalAudioTrack constructor (userProvidedTrack=true). */
+  externalInput?: {
+    participantId: string; memberGeneration: number; track: MediaStreamTrack
+    wrapTrack(ownedBranch: MediaStreamTrack): unknown | Promise<unknown>
+  }
+  /** Optional browser factories. Each context is fresh and owned by this adapter. */
+  createAudioContext?(): AudioContext
+  createMediaStream?(tracks: MediaStreamTrack[]): MediaStream
   /** Disable raw vendor logs before constructing the room. The host owns its vendor logger. */
   silenceVendorLogs(): void
   createAudioElement?(): HTMLAudioElement
@@ -58,6 +68,11 @@ function methods(value: unknown, names: readonly string[]): value is Record<stri
 
 /** Optional LiveKit Cloud candidate; inject the host's qualified LiveKit runtime. */
 export function createLiveKitWebMedia(callbacks: SpeechMediaCallbacks, dependencies: LiveKitWebDependencies): SpeechMediaPort {
+  const external = dependencies.externalInput && { ...dependencies.externalInput }
+  if (external ? !external.participantId || !Number.isSafeInteger(external.memberGeneration) || external.memberGeneration < 1 ||
+    !methods(external.track, ['stop']) || !external.track.id || external.track.kind !== 'audio' || external.track.readyState !== 'live' ||
+    typeof external.wrapTrack !== 'function' : typeof dependencies.createMicrophone !== 'function')
+    throw new SpeechSessionError('invalid_input')
   dependencies.silenceVendorLogs()
   const rawRoom = dependencies.roomFactory({
     reconnectPolicy: { nextRetryDelayInMs: () => null },
@@ -68,15 +83,61 @@ export function createLiveKitWebMedia(callbacks: SpeechMediaCallbacks, dependenc
       !methods(rawRoom.localParticipant, ['publishTrack', 'unpublishTrack']) ||
       !methods(rawRoom.remoteParticipants, ['values'])) throw new SpeechSessionError('invalid_input')
   const room = rawRoom as unknown as Room
-  const acquire = () => dependencies.createMicrophone({
-    echoCancellation: true, noiseSuppression: true, autoGainControl: true,
-  })
+  const acquire = async () => {
+    if (!external) return dependencies.createMicrophone!({ echoCancellation: true, noiseSuppression: true, autoGainControl: true })
+    if (external.track.readyState !== 'live') throw new SpeechSessionError('media_failed')
+    let context: AudioContext
+    try { context = dependencies.createAudioContext?.() ?? new AudioContext() } catch { throw new SpeechSessionError('media_failed') }
+    let source: MediaStreamAudioSourceNode | undefined, destination: MediaStreamAudioDestinationNode | undefined
+    let branch: MediaStreamTrack | undefined, retiring: Promise<void> | undefined
+    const resource = { retire: () => {
+      if (retiring) return retiring
+      let failed = false
+      try { source?.disconnect() } catch { failed = true }
+      try { destination?.disconnect() } catch { failed = true }
+      try { if (branch && branch !== external.track && branch.id !== external.track.id) branch.stop() } catch { failed = true }
+      retiring = Promise.resolve().then(async () => {
+        if (context.state !== 'closed') await context.close()
+        if (failed) throw new SpeechSessionError('cleanup_failed')
+      }).catch(() => { uncertainCaptureCleanup = true; throw new SpeechSessionError('cleanup_failed') })
+        .finally(() => { branches.delete(resource) })
+      void retiring.catch(() => {})
+      return retiring
+    } }
+    branches.add(resource)
+    try {
+      const stream = dependencies.createMediaStream?.([external.track]) ?? new MediaStream([external.track])
+      source = context.createMediaStreamSource(stream); destination = context.createMediaStreamDestination()
+      branch = destination.stream.getAudioTracks()[0]
+      if (!branch || branch === external.track || !branch.id || branch.id === external.track.id ||
+        branch.kind !== 'audio' || branch.readyState !== 'live') throw new SpeechSessionError('media_failed')
+      branch.enabled = false
+      // A direct clone bypasses later host-track enabled=false. Derive from the
+      // original track's rendered samples so host mute remains authoritative.
+      source.connect(destination)
+      await context.resume()
+      if (closed || context.state !== 'running') throw new SpeechSessionError('media_failed')
+      const local = await external.wrapTrack(branch)
+      if (!methods(local, ['stop']) || local.mediaStreamTrack !== branch) throw new SpeechSessionError('media_failed')
+      if (external.track.readyState !== 'live') throw new SpeechSessionError('media_failed')
+      graphs.set(local as unknown as LocalAudioTrack, resource)
+      return local
+    } catch {
+      await resource.retire()
+      throw new SpeechSessionError('media_failed')
+    }
+  }
   const audioElement = dependencies.createAudioElement ?? (() => document.createElement('audio'))
   let closed = false, joined = false, processor = '', captureVersion = 0
   let microphone: LocalAudioTrack | undefined
   let holdingMicrophone = false, microphoneSid: string | undefined
   let acquisition: { promise: Promise<unknown>; claim: number } | undefined
   let closing: Promise<void> | undefined
+  let connecting: Promise<void> | undefined, publishing: Promise<unknown> | undefined
+  let attempted = false, uncertainCaptureCleanup = false
+  const stopped = new WeakSet<object>()
+  const branches = new Set<{ retire(): Promise<void> }>()
+  const graphs = new WeakMap<LocalAudioTrack, { retire(): Promise<void> }>()
   const allowed = new Set<string>()
   const received = new Map<string, { track: RemoteAudioTrack; publication: RemoteTrackPublication }>()
   const attached = new Map<string, { track: RemoteAudioTrack; element: HTMLAudioElement }>()
@@ -85,6 +146,13 @@ export function createLiveKitWebMedia(callbacks: SpeechMediaCallbacks, dependenc
   const handlers: Array<() => void> = []
 
   function check(signal: AbortSignal) { if (closed || signal.aborted) throw new SpeechSessionError('closed') }
+  function stopTrack(track: LocalAudioTrack) {
+    if (stopped.has(track)) return graphs.get(track)?.retire()
+    stopped.add(track)
+    try { track.stop() } catch { uncertainCaptureCleanup = true; throw new SpeechSessionError('cleanup_failed') }
+    finally { void graphs.get(track)?.retire() }
+    return graphs.get(track)?.retire()
+  }
   function detach(sid: string) {
     const output = attached.get(sid)
     if (!output) return
@@ -188,22 +256,37 @@ export function createLiveKitWebMedia(callbacks: SpeechMediaCallbacks, dependenc
     if (closing) return closing
     closed = true; joined = false
     // Retire handlers before asynchronous teardown or queued vendor callbacks.
-    for (const remove of handlers) remove()
-    room.unregisterTextStreamHandler('bota.speech.v1')
+    let failed = false
+    const attempt = (work: () => void) => { try { work() } catch { failed = true } }
+    for (const remove of handlers) attempt(remove)
+    attempt(() => room.unregisterTextStreamHandler('bota.speech.v1'))
     for (const reader of readers) reader.abort()
-    silencePlayback(); muteMicrophone()
-    microphone?.stop(); microphone = undefined
+    attempt(silencePlayback); attempt(muteMicrophone)
+    attempt(() => { if (microphone) stopTrack(microphone) }); microphone = undefined
+    const retiring = [...branches].map(branch => branch.retire())
     notifyClear()
-    closing = Promise.resolve().then(() => room.disconnect()).then(() => { received.clear() })
+    closing = Promise.resolve().then(async () => {
+      const pendingConnection = connecting
+      try { await room.disconnect() } catch { failed = true }
+      await Promise.allSettled([pendingConnection, acquisition?.promise, publishing, ...retiring])
+      await Promise.allSettled([...branches].map(branch => branch.retire()))
+      if (pendingConnection) { try { await room.disconnect() } catch { failed = true } }
+      received.clear()
+      if (failed || uncertainCaptureCleanup) throw new SpeechSessionError('cleanup_failed')
+    })
     return closing
   }
   return {
     async connect(grant: SpeechGrant, signal) {
-      check(signal); processor = grant.processor_identity
+      check(signal)
+      if (attempted || external && (external.participantId !== grant.participant_id || external.memberGeneration !== grant.member_generation))
+        throw new SpeechSessionError('invalid_input')
+      attempted = true; processor = grant.processor_identity
       const abort = () => { void close().catch(() => callbacks.failed()) }
       signal.addEventListener('abort', abort, { once: true })
       try {
-        await room.connect(grant.url, grant.token, { autoSubscribe: false, maxRetries: 0, websocketTimeout: 8_000 })
+        connecting = room.connect(grant.url, grant.token, { autoSubscribe: false, maxRetries: 0, websocketTimeout: 8_000 })
+        try { await connecting } finally { connecting = undefined }
         check(signal)
         if (room.name !== grant.room || room.localParticipant.identity !== grant.identity) throw new SpeechSessionError('media_failed')
         joined = true
@@ -254,9 +337,10 @@ export function createLiveKitWebMedia(callbacks: SpeechMediaCallbacks, dependenc
         muteMicrophone()
         holdingMicrophone = false; microphoneSid = undefined
         const old = microphone; microphone = undefined
-        if (old) { old.stop(); await room.localParticipant.unpublishTrack(old, true) }
+        if (old) { const retired = stopTrack(old); await room.localParticipant.unpublishTrack(old, true); await retired }
         return
       }
+      if (!joined) throw new SpeechSessionError('media_failed')
       if (microphone) { microphone.mediaStreamTrack.enabled = !holdingMicrophone; return }
       const version = captureVersion
       const pending = acquisition ?? { promise: acquire(), claim: version }
@@ -268,20 +352,22 @@ export function createLiveKitWebMedia(callbacks: SpeechMediaCallbacks, dependenc
           typeof (acquired.mediaStreamTrack as { enabled?: unknown }).enabled !== 'boolean') throw new SpeechSessionError('media_failed')
       const local = acquired as unknown as LocalAudioTrack
       if (closed || signal.aborted || version !== captureVersion) {
-        if (closed || pending.claim === version) local.stop()
+        if (closed || pending.claim === version) await stopTrack(local)
         return
       }
       microphone = local
       local.mediaStreamTrack.enabled = !holdingMicrophone
       try {
-        const publication = await room.localParticipant.publishTrack(local, { source: Track.Source.Microphone, name: 'bota-original' })
+        publishing = room.localParticipant.publishTrack(local, { source: Track.Source.Microphone, name: 'bota-original' })
+        let publication: unknown
+        try { publication = await publishing } finally { publishing = undefined }
         if (closed || signal.aborted || version !== captureVersion) {
-          local.mediaStreamTrack.enabled = false; local.stop()
+          local.mediaStreamTrack.enabled = false; stopTrack(local)
           await room.localParticipant.unpublishTrack(local, true)
           if (microphone === local) microphone = undefined
         } else microphoneSid = typeof publication === 'object' && publication !== null &&
           typeof (publication as { trackSid?: unknown }).trackSid === 'string' ? (publication as { trackSid: string }).trackSid : undefined
-      } catch { local.stop(); if (microphone === local) microphone = undefined; throw new SpeechSessionError('media_failed') }
+      } catch { stopTrack(local); if (microphone === local) microphone = undefined; throw new SpeechSessionError('media_failed') }
     },
     async resumeAudio() { if (closed) throw new SpeechSessionError('closed'); await room.startAudio() },
     close,

@@ -10,7 +10,7 @@ const require = createRequire(import.meta.url);
 const factory = (...args) => require('../lib/commonjs/speechLiveKit.js').createLiveKitNativeMedia(...args);
 const grant = { protocol_version: 1, provider: 'livekit', url: 'wss://synthetic.livekit.cloud', token: 'synthetic',
   room: 'synthetic-room', identity: 'synthetic-member', processor_identity: 'synthetic-worker', expires_at: '',
-  session_id: '', participant_id: '', member_generation: 1, worker_generation: 1 };
+  session_id: 'synthetic-session', participant_id: 'synthetic-participant', member_generation: 1, worker_generation: 1 };
 const signal = () => new AbortController().signal;
 function deferred() { let resolve; const promise = new Promise(yes => { resolve = yes; }); return { promise, resolve }; }
 
@@ -62,6 +62,62 @@ function fixture(roomGrant = grant) {
     unsubscribe() { room.emit('trackUnsubscribed', remote, publication, participant); },
   };
 }
+
+test('native external input controls only the host-provided owned branch', async () => {
+  const f = fixture();
+  const original = { id: 'original', kind: 'audio', readyState: 'live', enabled: true };
+  Object.assign(f.local.mediaStreamTrack, { id: 'branch', kind: 'audio', readyState: 'live' });
+  const port = factory(f.callbacks, { ...f.deps, createMicrophone: () => assert.fail('must not acquire another microphone'),
+    externalInput: { participantId: grant.participant_id, memberGeneration: 1, sourceTrack: original, createOwnedTrack: async () => f.local } });
+  await port.connect(grant, signal()); await port.setMicrophone(true, signal());
+  port.holdMicrophone(); assert.equal(f.local.mediaStreamTrack.enabled, false); assert.equal(original.enabled, true);
+  assert.equal(port.microphonePublication(), 'TR_original');
+  await port.setMicrophone(false, signal()); assert.equal(f.started, true);
+  await port.close(); assert.equal(original.enabled, true);
+});
+
+test('native external input refuses a borrowed host track before muting or stopping it', async () => {
+  const f = fixture(), original = { id: 'original', kind: 'audio', readyState: 'live', enabled: true };
+  const port = factory(f.callbacks, { ...f.deps, externalInput: { participantId: grant.participant_id, memberGeneration: 1,
+    sourceTrack: original, createOwnedTrack: async () => ({ mediaStreamTrack: original, stop: () => assert.fail('borrowed source stopped') }) } });
+  await port.connect(grant, signal());
+  await assert.rejects(port.setMicrophone(true, signal()), /media_failed/);
+  assert.equal(original.enabled, true); assert.equal(f.actions.includes('publish'), false); await port.close();
+});
+
+test('native host audio lease preserves the running conference and releases only after Bota media closes', async () => {
+  const f = fixture(); await f.audioSession.setDefaultRemoteAudioTrackVolume(0); await f.audioSession.startAudioSession(); f.actions.length = 0;
+  let releases = 0;
+  const port = factory(f.callbacks, { ...f.deps, audioSessionOwnership: 'host',
+    audioSession: { async acquireMutedPlayback() { f.actions.push('lease'); return { async release() { releases++; f.actions.push('release'); } }; } } });
+  await port.connect(grant, signal()); await port.setMicrophone(true, signal());
+  f.subscribe(); assert.equal(f.volume, 0);
+  await port.setPlayback(f.tracks, signal()); assert.equal(f.volume, 1);
+  await port.close();
+  assert.equal(releases, 1); assert.equal(f.started, true); assert.equal(f.stops, 0); assert.equal(f.defaultVolume, 0);
+  assert.ok(f.actions.indexOf('disconnect') < f.actions.indexOf('release'));
+  assert.equal(f.actions.some(action => ['configure', 'start-session', 'stop-session'].includes(action) || action.startsWith('default-volume')), false);
+});
+
+test('native host audio lease is joined and released when it arrives after close', async () => {
+  const f = fixture(), acquire = deferred(), entered = deferred(); let releases = 0, aborted;
+  const port = factory(f.callbacks, { ...f.deps, audioSessionOwnership: 'host',
+    audioSession: { async acquireMutedPlayback(signal) { aborted = signal; entered.resolve(); return acquire.promise; } } });
+  const connected = assert.rejects(port.connect(grant, signal()), /closed|media_failed/); await entered.promise;
+  let closed = false; const closing = port.close().then(() => { closed = true; });
+  await Promise.resolve(); assert.equal(closed, false); assert.equal(aborted.aborted, true);
+  acquire.resolve({ async release() { releases++; } }); await connected; await closing;
+  assert.equal(releases, 1); assert.equal(f.actions.includes('connect'), false); assert.equal(f.stops, 0);
+});
+
+test('native external member binding is checked before acquiring host audio authority', async () => {
+  const f = fixture(); let leases = 0;
+  const port = factory(f.callbacks, { ...f.deps, audioSessionOwnership: 'host',
+    audioSession: { async acquireMutedPlayback() { leases++; return { async release() {} }; } },
+    externalInput: { participantId: 'another-member', memberGeneration: 1,
+      sourceTrack: { id: 'original', kind: 'audio', readyState: 'live' }, createOwnedTrack: async () => f.local } });
+  await assert.rejects(port.connect(grant, signal()), /invalid_input/); assert.equal(leases, 0); await port.close();
+});
 
 test('native finish holds a late acquisition muted and preserves the exact published SID', async () => {
   const f = fixture(), acquired = deferred(); f.deps.createMicrophone = () => acquired.promise;
@@ -252,10 +308,16 @@ test('generated Rust and native media adapter preserve capture through language 
   assert.equal(f.started, false);
 });
 
-test('native LiveKit finish executes generated Rust, retires only capture and keeps the audio session alive', async () => {
+for (const inputKind of ['microphone', 'external']) test(`native ${inputKind} finish executes generated Rust and keeps listening alive`, async () => {
   const vector = JSON.parse(readFileSync(new URL('../../../protocol/speech-session/client-v1.json', import.meta.url), 'utf8'));
   const scoped = { ...vector.grant, expires_at: new Date(Date.now() + 60_000).toISOString() };
   const f = fixture(scoped), requests = [];
+  const original = { id: 'original', kind: 'audio', readyState: 'live', enabled: true };
+  if (inputKind === 'external') {
+    Object.assign(f.local.mediaStreamTrack, { id: 'branch', kind: 'audio', readyState: 'live' });
+    f.deps.externalInput = { participantId: scoped.participant_id, memberGeneration: scoped.member_generation,
+      sourceTrack: original, createOwnedTrack: async () => f.local };
+  }
   const previous = globalThis.WebAssembly; let session;
   try {
     globalThis.WebAssembly = undefined;
@@ -270,8 +332,9 @@ test('native LiveKit finish executes generated Rust, retires only capture and ke
             finish: { state: 'completed', worker_generation: scoped.worker_generation, sequence: '1', samples: '1600' } } };
         } },
     });
-    await session.ready; await session.setMicrophone(true);
-    const finishing = session.finishMicrophone(); assert.equal(f.local.mediaStreamTrack.enabled, false);
+    await session.ready; await session.setInput(true);
+    const finishing = session.finishInput(); assert.equal(session.finishMicrophone(), finishing);
+    assert.equal(f.local.mediaStreamTrack.enabled, false); assert.equal(original.enabled, true);
     assert.equal((await finishing).status, 'completed'); assert.equal(requests.length, 1);
     assert.equal(requests[0].trackSid, 'TR_original'); assert.equal(requests[0].workerGeneration, 3);
     assert.equal(f.actions.filter(value => value === 'unpublish').length, 1);
@@ -279,4 +342,5 @@ test('native LiveKit finish executes generated Rust, retires only capture and ke
     assert.equal(session.state.connected, true); assert.equal(session.state.canCapture, false);
   } finally { await session?.close(); globalThis.WebAssembly = previous; }
   assert.equal(f.started, false);
+  assert.equal(original.enabled, true);
 });
