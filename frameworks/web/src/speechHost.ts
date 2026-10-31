@@ -419,8 +419,9 @@ export function createSpeechSession(options: SpeechSessionOptions): SpeechSessio
     ready,
     get state() { return snapshot() },
     async setMicrophone(enabled) {
+      active()
       if (enabled && finishTask) throw new SpeechSessionError('source_finish_pending')
-      active(); const state = command({ type: 'set_microphone', enabled })
+      const state = command({ type: 'set_microphone', enabled })
       if (enabled && state.sourceFinish.holdPublication) throw new SpeechSessionError('source_finish_pending')
       await waitCapture()
     },
