@@ -698,6 +698,39 @@ the listener's trailing audio. `close()` is terminal; reconnect requires a new
 authorized session owner. Errors expose fixed codes, not vendor responses or
 credentials. The SDK retains no transcript history.
 
+For normal source completion, call `await speech.finishMicrophone()`. It silences
+new microphone input immediately, keeps the exact publication while the server
+processes its accepted tail, and leaves listening connected. After a terminal
+result it unpublishes that input; await this method before enabling a new
+microphone publication. Ordinary mute/unpublish and `close()` remain interruption
+paths. The optional LiveKit adapter implements the required `holdMicrophone` and
+`microphonePublication` port capabilities, including late acquisition/publication.
+
+Supply optional `host.finishSource(request, signal)` through an authenticated
+customer proxy. On the first request, `sourceId` and `sourceEpoch` are null: resolve
+exactly one registered source from the session's `sources`, matching the actual
+signed-in publisher, member generation, current worker generation and local
+`trackSid`. A source not registered yet is temporarily unavailable. Never select
+the latest or another speaker's source. POST its exact identity to
+`/v1/speech-sessions/:id/participants/:participantId/sources/:sourceId/finish` with
+`member_generation`, `worker_generation`, `source_epoch` and `track_sid`, and return
+the response JSON unchanged. Later requests carry the pinned source ID/epoch and
+must reuse them. Client-provided IDs are not authorization; project keys stay in
+the proxy. Map denied, stale and temporary outcomes to `SpeechSourceFinishError`
+codes `unauthorized`, `stale_source` and `unavailable`, and honor cancellation.
+
+`state.sourceFinish` reports preparation, requested/draining and terminal states.
+`no_source` means no local publication existed, not completed ASR. Shared Rust
+checks returned ownership, worker/source identity, transitions and immutable
+boundary counters. It polls at one-second intervals with a 90-second processing
+deadline; each host request has a five-second timeout. Concurrent calls share one
+operation. An unavailable outcome preserves the muted publication and pinned
+identity for explicit `finishMicrophone()` reconciliation or terminal `close()`;
+it cannot resume capture or silently choose a new source. Authorization loss
+closes the owner. `completed` covers server processing, not successful translation
+for every listener, actual hearing or original-archive completeness. The helper
+rejects unsupported ports/proxies before changing capture.
+
 `readCaptions` is optional and calls the customer's authenticated backend proxy,
 which forwards the current session/member/subscription and opaque cursor to the
 caption endpoint. Return its JSON body unchanged; map denied authorization to

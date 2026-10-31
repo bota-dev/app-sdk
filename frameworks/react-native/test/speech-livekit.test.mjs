@@ -29,7 +29,7 @@ function fixture(roomGrant = grant) {
   class FakeRoom extends EventEmitter {
     name = roomGrant.room;
     localParticipant = { identity: roomGrant.identity,
-      publishTrack: async () => { actions.push('publish'); }, unpublishTrack: async () => { actions.push('unpublish'); } };
+      publishTrack: async () => { actions.push('publish'); return { trackSid: 'TR_original' }; }, unpublishTrack: async () => { actions.push('unpublish'); } };
     remoteParticipants = new Map([[participant.identity, participant]]);
     async connect(_url, _token, options) {
       assert.equal(started, true); assert.equal(defaultVolume, 0);
@@ -62,6 +62,19 @@ function fixture(roomGrant = grant) {
     unsubscribe() { room.emit('trackUnsubscribed', remote, publication, participant); },
   };
 }
+
+test('native finish holds a late acquisition muted and preserves the exact published SID', async () => {
+  const f = fixture(), acquired = deferred(); f.deps.createMicrophone = () => acquired.promise;
+  const port = factory(f.callbacks, f.deps); await port.connect(grant, signal());
+  const capture = port.setMicrophone(true, signal()); port.holdMicrophone();
+  acquired.resolve(f.local); await capture;
+  assert.equal(f.local.mediaStreamTrack.enabled, false); assert.equal(port.microphonePublication(), 'TR_original');
+  assert.equal(f.actions.includes('unpublish'), false); assert.equal(f.actions.includes('mic-stop'), false);
+  assert.equal(f.started, true);
+  await port.setMicrophone(false, signal()); assert.equal(port.microphonePublication(), null);
+  assert.equal(f.actions.includes('unpublish'), true); assert.equal(f.started, true);
+  await port.close(); assert.equal(f.started, false);
+});
 
 test('native session starts with muted incoming tracks and admits only the selected processor audio', async () => {
   const f = fixture(), port = factory(f.callbacks, f.deps);
@@ -236,5 +249,34 @@ test('generated Rust and native media adapter preserve capture through language 
     audio(2, 'ja'); await client.setListening(true); f.subscribe(); assert.equal(f.volume, 1);
     assert.equal(f.stops, 0); assert.equal(client.state.canCapture, true);
   } finally { await client.close(); }
+  assert.equal(f.started, false);
+});
+
+test('native LiveKit finish executes generated Rust, retires only capture and keeps the audio session alive', async () => {
+  const vector = JSON.parse(readFileSync(new URL('../../../protocol/speech-session/client-v1.json', import.meta.url), 'utf8'));
+  const scoped = { ...vector.grant, expires_at: new Date(Date.now() + 60_000).toISOString() };
+  const f = fixture(scoped), requests = [];
+  const previous = globalThis.WebAssembly; let session;
+  try {
+    globalThis.WebAssembly = undefined;
+    session = require('../lib/commonjs/speech.js').createNativeSpeechSession({
+      configuration: vector.configuration, grant: scoped,
+      mediaFactory: callbacks => factory(callbacks, f.deps),
+      host: { renewGrant: async () => scoped, changeSubscription: async () => { throw Error('unused'); },
+        finishSource: async request => {
+          requests.push(request);
+          return { source: { id: '44444444-4444-4444-8444-444444444444', epoch: 1,
+            participant_id: scoped.participant_id, member_generation: scoped.member_generation, track_sid: 'TR_original', state: 'ended',
+            finish: { state: 'completed', worker_generation: scoped.worker_generation, sequence: '1', samples: '1600' } } };
+        } },
+    });
+    await session.ready; await session.setMicrophone(true);
+    const finishing = session.finishMicrophone(); assert.equal(f.local.mediaStreamTrack.enabled, false);
+    assert.equal((await finishing).status, 'completed'); assert.equal(requests.length, 1);
+    assert.equal(requests[0].trackSid, 'TR_original'); assert.equal(requests[0].workerGeneration, 3);
+    assert.equal(f.actions.filter(value => value === 'unpublish').length, 1);
+    assert.equal(f.started, true); assert.equal(f.actions.includes('disconnect'), false);
+    assert.equal(session.state.connected, true); assert.equal(session.state.canCapture, false);
+  } finally { await session?.close(); globalThis.WebAssembly = previous; }
   assert.equal(f.started, false);
 });

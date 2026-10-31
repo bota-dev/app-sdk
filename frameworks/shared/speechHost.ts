@@ -21,10 +21,32 @@ export interface SpeechTrack {
   origin: string; outputId: string | null
 }
 export interface SpeechUpdate {
+  sourceFinish: SpeechSourceFinish
   connected: boolean; disconnect: boolean; canCapture: boolean; canPlay: boolean
   subscriptionRevision: number; changeId: number; clearGeneration: number; clearPlayback: boolean
   expiresAtMs: number; gap: boolean; event: Record<string, unknown> | null; tracks: SpeechTrack[]
   recovery: SpeechCaptionRecovery; captions: SpeechCaptionUpdate[]
+}
+export interface SpeechFinishRequest {
+  requestId: number; projectId: string; sessionId: string; participantId: string
+  memberGeneration: number; workerGeneration: number; trackSid: string
+  sourceId: string | null; sourceEpoch: number | null
+}
+export interface SpeechFinishedSource {
+  id: string; epoch: number; participant_id: string; member_generation: number; track_sid: string
+  state: 'active' | 'ended' | 'interrupted'
+  finish: { state: 'requested' | 'draining' | 'completed' | 'interrupted'; worker_generation: number;
+    sequence: string | null; samples: string | null }
+}
+export interface SpeechSourceFinish {
+  status: 'idle' | 'preparing' | 'waiting' | 'requested' | 'draining' | 'retrying' |
+    'completed' | 'interrupted' | 'no_source' | 'unavailable' | 'stale' | 'closed'
+  holdPublication: boolean; trackSid: string | null; source: SpeechFinishedSource | null
+  request: SpeechFinishRequest | null
+}
+export class SpeechSourceFinishError extends Error {
+  readonly code: 'unauthorized' | 'stale_source' | 'unavailable'
+  constructor(code: SpeechSourceFinishError['code']) { super(code); this.name = 'SpeechSourceFinishError'; this.code = code }
 }
 export interface SpeechCaptionRequest {
   requestId: number; projectId: string; sessionId: string; participantId: string
@@ -62,6 +84,10 @@ export interface SpeechMediaPort {
   silencePlayback(): void
   /** Synchronous: disable already acquired capture; cancel pending capture on signal. */
   muteMicrophone(): void
+  /** Optional finish capability: synchronous silence without unpublishing, including late acquisition. */
+  holdMicrophone?(): void
+  /** Read only after capture IO settles; never infer the SID from a track name. */
+  microphonePublication?(): string | null
   /** Resolve only when old native playback buffers have been discarded. */
   clearPlayback(signal: AbortSignal): Promise<void>
   setPlayback(tracks: readonly SpeechTrack[], signal: AbortSignal): Promise<void>
@@ -76,6 +102,9 @@ export interface SpeechHostCallbacks {
   /** Optional retained-caption recovery through the customer's authenticated proxy.
    * Return the response body unchanged; shared Rust validates its complete scope. */
   readCaptions?(request: Readonly<SpeechCaptionRequest>, signal: AbortSignal): Promise<unknown>
+  /** Resolve the authenticated publisher's exact source by track SID on the first call,
+   * then POST the pinned finish identity. Return the Bota response body unchanged. */
+  finishSource?(request: Readonly<SpeechFinishRequest>, signal: AbortSignal): Promise<unknown>
 }
 export interface SpeechClock {
   now(): number
@@ -83,7 +112,7 @@ export interface SpeechClock {
 }
 export type SpeechErrorCode = 'invalid_input' | 'closed' | 'superseded' | 'media_failed' |
   'media_timeout' | 'subscription_unavailable' | 'authorization_unavailable' | 'playback_blocked' | 'cleanup_failed' |
-  'caption_recovery_unavailable' | 'caption_recovery_stale'
+  'caption_recovery_unavailable' | 'caption_recovery_stale' | 'source_finish_unavailable' | 'source_finish_stale' | 'source_finish_pending'
 export class SpeechSessionError extends Error {
   readonly code: SpeechErrorCode
   constructor(code: SpeechErrorCode) { super(code); this.name = 'SpeechSessionError'; this.code = code }
@@ -111,6 +140,8 @@ export interface SpeechSession {
   resumeAudio(): Promise<void>
   /** Join one recovery page. Automatic bounded polling continues while connected. */
   recoverCaptions(): Promise<SpeechCaptionRecovery>
+  /** Stop new capture, preserve listening, and reconcile this source's bounded server outcome. */
+  finishMicrophone(): Promise<SpeechSourceFinish>
   close(): Promise<void>
 }
 function defaultClock(): SpeechClock {
@@ -155,16 +186,22 @@ export function createSpeechSession(options: SpeechSessionOptions): SpeechSessio
   let closePromise: Promise<void> | undefined
   let captureTask: Promise<void> | undefined, playbackTask: Promise<void> | undefined
   let captureAbort = new AbortController(), playbackAbort = new AbortController()
-  let captureKey: boolean | undefined, playbackKey = ''
+  let captureKey: 'on' | 'off' | 'hold' | undefined, playbackKey = ''
   let captureDirty = false, playbackDirty = false
   let changing: AbortController | undefined, renewing: AbortController | undefined
   let recoveryTask: Promise<void> | undefined, recoveryAbort: AbortController | undefined, recoveryId: number | undefined
+  let finishRequestTask: Promise<void> | undefined, finishAbort: AbortController | undefined, finishId: number | undefined
+  let finishTask: Promise<SpeechSourceFinish> | undefined
+  const finishWaiters = new Set<() => void>()
   let lastRenewal = 0
 
   const report = (code: SpeechErrorCode) => safely(() => options.onError?.(new SpeechSessionError(code)))
   const recoverySnapshot = (): SpeechCaptionRecovery => ({ ...latest.recovery,
     request: latest.recovery.request ? { ...latest.recovery.request } : null })
-  const snapshot = (): SpeechUpdate => ({ ...latest, event: null, captions: [], recovery: recoverySnapshot(),
+  const finishSnapshot = (): SpeechSourceFinish => ({ ...latest.sourceFinish,
+    request: latest.sourceFinish.request ? { ...latest.sourceFinish.request } : null,
+    source: latest.sourceFinish.source ? { ...latest.sourceFinish.source, finish: { ...latest.sourceFinish.source.finish } } : null })
+  const snapshot = (): SpeechUpdate => ({ ...latest, event: null, captions: [], recovery: recoverySnapshot(), sourceFinish: finishSnapshot(),
     tracks: latest.tracks.map(track => ({ ...track })) })
   function active() { if (ended) throw new SpeechSessionError('closed') }
   function fail(code: SpeechErrorCode) {
@@ -182,6 +219,8 @@ export function createSpeechSession(options: SpeechSessionOptions): SpeechSessio
     if (result.disconnect) { void close().catch(() => {}); return result }
     reconcile()
     reconcileRecovery()
+    reconcileFinish()
+    for (const notify of finishWaiters) notify()
     safely(() => options.onState?.(snapshot()))
     const current = () => !ended && latest.changeId === result.changeId && latest.subscriptionRevision === result.subscriptionRevision
     for (const caption of captions) { if (!current()) break; safely(() => options.onCaption?.(caption)) }
@@ -204,10 +243,17 @@ export function createSpeechSession(options: SpeechSessionOptions): SpeechSessio
 
   function reconcile() {
     if (ended || !connected) return
-    if (captureKey !== latest.canCapture) {
-      captureKey = latest.canCapture; captureDirty = true
-      captureAbort.abort(); captureAbort = new AbortController()
-      if (!latest.canCapture) {
+    const captureMode = latest.sourceFinish.holdPublication ? 'hold' : latest.canCapture ? 'on' : 'off'
+    if (captureKey !== captureMode) {
+      captureKey = captureMode; captureDirty = true
+      if (captureMode === 'hold') {
+        // Preserve an in-flight publication, but its late acquired track must
+        // already be muted by the port before any publish can begin.
+        try { port.holdMicrophone!() } catch { fail('media_failed'); return }
+      } else {
+        captureAbort.abort(); captureAbort = new AbortController()
+      }
+      if (captureMode === 'off') {
         try { port.muteMicrophone() } catch { fail('media_failed'); return }
       }
       startCapture()
@@ -225,18 +271,22 @@ export function createSpeechSession(options: SpeechSessionOptions): SpeechSessio
   }
   function startCapture() {
     if (captureTask || ended) return
-    captureTask = (async () => {
+    captureTask = Promise.resolve().then(async () => {
       while (captureDirty && !ended) {
         captureDirty = false
         const signal = captureAbort.signal, enabled = latest.canCapture
-        try { await bounded(() => port.setMicrophone(enabled, signal), signal, 'superseded', 'media_timeout') }
+        try {
+          if (latest.sourceFinish.holdPublication) {
+            if (latest.sourceFinish.status === 'preparing') command({ type: 'source_publication', trackSid: port.microphonePublication!() })
+          } else await bounded(() => port.setMicrophone(enabled, signal), signal, 'superseded', 'media_timeout')
+        }
         catch (error) {
           if (signal.aborted) continue
           const code = error instanceof SpeechSessionError ? error.code : 'media_failed'
           fail(code); throw new SpeechSessionError(code)
         }
       }
-    })().finally(() => { captureTask = undefined; if (captureDirty && !ended) startCapture() })
+    }).finally(() => { captureTask = undefined; if (captureDirty && !ended) startCapture() })
     void captureTask.catch(() => {})
   }
   function reconcileRecovery() {
@@ -262,6 +312,29 @@ export function createSpeechSession(options: SpeechSessionOptions): SpeechSessio
       if (!ended) reconcileRecovery()
     })
     void recoveryTask.catch(() => {})
+  }
+  function reconcileFinish() {
+    const request = latest.sourceFinish.request
+    if (ended || !connected || !request || request.requestId !== finishId) finishAbort?.abort()
+    if (ended || !connected || !options.host.finishSource || !request || finishRequestTask) return
+    const pending = new AbortController(); finishAbort = pending; finishId = request.requestId
+    finishRequestTask = Promise.resolve().then(async () => {
+      try {
+        const body = await bounded(() => options.host.finishSource!({ ...request }, pending.signal), pending.signal,
+          'superseded', 'source_finish_unavailable', 5_000)
+        if (!ended && !pending.signal.aborted) command({ type: 'source_finish_result', requestId: request.requestId, body })
+      } catch (error) {
+        if (ended || pending.signal.aborted) return
+        const reason = error instanceof SpeechSourceFinishError ? error.code : 'unavailable'
+        command({ type: 'source_finish_failure', requestId: request.requestId, reason })
+        if (reason !== 'unavailable') report(reason === 'unauthorized' ? 'authorization_unavailable' : 'source_finish_stale')
+      }
+    }).finally(() => {
+      pending.abort(); finishRequestTask = undefined
+      if (finishAbort === pending) { finishAbort = undefined; finishId = undefined }
+      if (!ended) reconcileFinish()
+    })
+    void finishRequestTask.catch(() => {})
   }
   function startPlayback() {
     if (playbackTask || ended) return
@@ -305,7 +378,8 @@ export function createSpeechSession(options: SpeechSessionOptions): SpeechSessio
     if (closePromise) return closePromise
     ended = true; connected = false
     cancelTimer(); options.signal?.removeEventListener('abort', externalAbort)
-    lifetime.abort(); captureAbort.abort(); playbackAbort.abort(); changing?.abort(); renewing?.abort(); recoveryAbort?.abort()
+    lifetime.abort(); captureAbort.abort(); playbackAbort.abort(); changing?.abort(); renewing?.abort(); recoveryAbort?.abort(); finishAbort?.abort()
+    for (const notify of finishWaiters) notify()
     let cleanupFailed = false
     try { port.silencePlayback() } catch { cleanupFailed = true }
     try { port.muteMicrophone() } catch { cleanupFailed = true }
@@ -314,7 +388,7 @@ export function createSpeechSession(options: SpeechSessionOptions): SpeechSessio
     try { policy.dispose() } catch { cleanupFailed = true }
     // Publish the promise before executing a port that can synchronously callback.
     closePromise = Promise.resolve().then(async () => {
-      await Promise.allSettled([recoveryTask])
+      await Promise.allSettled([recoveryTask, finishRequestTask])
       try { await bounded(() => port.close(), new AbortController().signal, 'closed', 'cleanup_failed') }
       catch { cleanupFailed = true }
       if (cleanupFailed) { report('cleanup_failed'); throw new SpeechSessionError('cleanup_failed') }
@@ -343,7 +417,12 @@ export function createSpeechSession(options: SpeechSessionOptions): SpeechSessio
   return {
     ready,
     get state() { return snapshot() },
-    async setMicrophone(enabled) { active(); command({ type: 'set_microphone', enabled }); await waitCapture() },
+    async setMicrophone(enabled) {
+      if (enabled && finishTask) throw new SpeechSessionError('source_finish_pending')
+      active(); const state = command({ type: 'set_microphone', enabled })
+      if (enabled && state.sourceFinish.holdPublication) throw new SpeechSessionError('source_finish_pending')
+      await waitCapture()
+    },
     async setListening(enabled) { active(); command({ type: 'set_listening', enabled }); await waitPlayback() },
     async changeSubscription(selection) {
       active()
@@ -384,6 +463,29 @@ export function createSpeechSession(options: SpeechSessionOptions): SpeechSessio
       if (latest.recovery.status === 'retrying') throw new SpeechSessionError('caption_recovery_unavailable')
       if (latest.recovery.status === 'stale') throw new SpeechSessionError('caption_recovery_stale')
       return recoverySnapshot()
+    },
+    finishMicrophone() {
+      active()
+      if (!options.host.finishSource || !port.holdMicrophone || !port.microphonePublication)
+        return Promise.reject(new SpeechSessionError('source_finish_unavailable'))
+      if (finishTask) return finishTask
+      if (['completed', 'interrupted', 'no_source'].includes(latest.sourceFinish.status)) return Promise.resolve(finishSnapshot())
+      if (latest.sourceFinish.status === 'stale') return Promise.reject(new SpeechSessionError('source_finish_stale'))
+      // Publish task ownership before synchronous observers can re-enter.
+      finishTask = Promise.resolve().then(async () => {
+        await ready; active()
+        await waitCapture()
+        while (!ended && latest.sourceFinish.holdPublication && latest.sourceFinish.status !== 'unavailable')
+          await new Promise<void>(resolve => { const wake = () => { finishWaiters.delete(wake); resolve() }; finishWaiters.add(wake) })
+        active()
+        if (latest.sourceFinish.status === 'unavailable') throw new SpeechSessionError('source_finish_unavailable')
+        if (latest.sourceFinish.status === 'stale') throw new SpeechSessionError('source_finish_stale')
+        await waitCapture(); active()
+        return finishSnapshot()
+      }).finally(() => { finishTask = undefined })
+      const result = finishTask
+      try { command({ type: 'begin_source_finish' }) } catch { /* command closes and retires the pending waiter. */ }
+      return result
     },
     close,
   }

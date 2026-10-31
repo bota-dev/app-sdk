@@ -96,6 +96,7 @@ export function createLiveKitNativeMedia(callbacks: SpeechMediaCallbacks, depend
   })
   let closed = false, joined = false, processor = '', captureVersion = 0
   let microphone: LocalAudioTrack | undefined
+  let holdingMicrophone = false, microphoneSid: string | undefined
   let acquisition: { promise: Promise<unknown>; claim: number } | undefined
   let closing: Promise<void> | undefined
   let ownsAudio = false
@@ -278,6 +279,17 @@ export function createLiveKitNativeMedia(callbacks: SpeechMediaCallbacks, depend
       } finally { signal.removeEventListener('abort', abort) }
     },
     silencePlayback, muteMicrophone,
+    holdMicrophone() {
+      if (closed) throw new SpeechSessionError('closed')
+      holdingMicrophone = true
+      if (microphone) microphone.mediaStreamTrack.enabled = false
+    },
+    microphonePublication() {
+      if (closed) throw new SpeechSessionError('closed')
+      if (!microphone) return null
+      if (!microphoneSid) throw new SpeechSessionError('media_failed')
+      return microphoneSid
+    },
     async clearPlayback(signal) {
       check(signal); silencePlayback()
       if (!received.size) return
@@ -303,11 +315,12 @@ export function createLiveKitNativeMedia(callbacks: SpeechMediaCallbacks, depend
       check(signal)
       if (!enabled) {
         muteMicrophone()
+        holdingMicrophone = false; microphoneSid = undefined
         const old = microphone; microphone = undefined
         if (old) { stopTrack(old); await room.localParticipant.unpublishTrack(old, true) }
         return
       }
-      if (microphone) { microphone.mediaStreamTrack.enabled = true; return }
+      if (microphone) { microphone.mediaStreamTrack.enabled = !holdingMicrophone; return }
       const version = captureVersion
       const pending = acquisition ?? { promise: acquire(), claim: version }
       acquisition = pending; pending.claim = version
@@ -325,14 +338,17 @@ export function createLiveKitNativeMedia(callbacks: SpeechMediaCallbacks, depend
         return
       }
       microphone = local
+      local.mediaStreamTrack.enabled = !holdingMicrophone
       try {
         publishing = room.localParticipant.publishTrack(local, { source: Track.Source.Microphone, name: 'bota-original' })
-        try { await publishing } finally { publishing = undefined }
+        let publication: unknown
+        try { publication = await publishing } finally { publishing = undefined }
         if (closed || signal.aborted || version !== captureVersion) {
           local.mediaStreamTrack.enabled = false; stopTrack(local)
           await room.localParticipant.unpublishTrack(local, true)
           if (microphone === local) microphone = undefined
-        }
+        } else microphoneSid = typeof publication === 'object' && publication !== null &&
+          typeof (publication as { trackSid?: unknown }).trackSid === 'string' ? (publication as { trackSid: string }).trackSid : undefined
       } catch { stopTrack(local); if (microphone === local) microphone = undefined; throw new SpeechSessionError('media_failed') }
     },
     async resumeAudio() { if (closed || !joined) throw new SpeechSessionError('closed') },

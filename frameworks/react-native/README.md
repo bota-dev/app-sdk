@@ -476,6 +476,36 @@ silence/mute on request, discard old buffers before acknowledging a clear, and
 fence late callbacks after cancellation. It cannot infer playback permission
 from a room or track name.
 
+`finishMicrophone()` uses the same shared Rust policy and IO orchestration as Web.
+It immediately silences new input, keeps the exact publication for the server's
+accepted tail and preserves listening. Await its terminal result before starting
+another microphone publication. Ordinary mute/unpublish and `close()` remain
+interruption paths. The optional native LiveKit adapter supplies `holdMicrophone`
+and `microphonePublication`, including a late microphone acquisition or publish
+acknowledgement; finishing capture does not stop its shared audio session.
+
+Supply `host.finishSource(request, signal)` through the customer's authenticated
+proxy. Resolve the actual signed-in publisher's unique registered source by
+session, member/worker generations and `trackSid` when `sourceId`/`sourceEpoch`
+are null. A source not registered yet is temporarily unavailable. POST the exact
+source to `/v1/speech-sessions/:id/participants/:participantId/sources/:sourceId/finish`
+with `member_generation`, `worker_generation`, `source_epoch` and `track_sid`;
+return the response JSON unchanged. Later requests pin source ID/epoch, so neither
+the proxy nor the app may substitute the latest source. Map errors with exported
+`SpeechSourceFinishError` (`unauthorized`, `stale_source`, `unavailable`). Honor
+cancellation and retain project keys exclusively in the proxy.
+
+`state.sourceFinish` keeps source processing separate from listening and archive
+completion. Rust validates source/worker identity, transitions and boundary
+counters, polls at one-second intervals and bounds processing to 90 seconds;
+individual proxy requests time out after five seconds. Duplicate calls share one
+operation. `no_source` does not claim ASR completion. An unavailable result keeps
+the publication muted and its identity pinned for explicit reconciliation through
+`finishMicrophone()` or terminal `close()`. A stale source cannot be silently
+replaced, and authorization loss closes the owner. `completed` is server processing
+only, not evidence that all listeners heard their translation or the archive is
+complete. Unsupported ports/proxies reject before changing capture.
+
 Optional `readCaptions(request, signal)` uses the customer's authenticated backend
 proxy to read confirmed captions for the current member and subscription. The
 proxy authorizes the signed-in listener, forwards the cursor and requested limit,

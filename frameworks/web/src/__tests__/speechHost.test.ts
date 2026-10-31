@@ -2,8 +2,8 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import init, { WebSpeechClient } from '../generated/bota_device_sdk_core.js'
-import { createSpeechSession, SpeechCaptionReadError } from '../../../shared/speechHost.ts'
-import type { SpeechMediaCallbacks, SpeechMediaPort, SpeechSubscription, SpeechUpdate } from '../../../shared/speechHost.ts'
+import { createSpeechSession, SpeechCaptionReadError, SpeechSourceFinishError } from '../../../shared/speechHost.ts'
+import type { SpeechMediaCallbacks, SpeechMediaPort, SpeechSubscription, SpeechUpdate, SpeechFinishRequest } from '../../../shared/speechHost.ts'
 
 const fixture = JSON.parse(await readFile(new URL('../../../../protocol/speech-session/client-v1.json', import.meta.url), 'utf8'))
 await init({ module_or_path: await readFile(new URL('../generated/bota_device_sdk_core_bg.wasm', import.meta.url)) })
@@ -285,4 +285,84 @@ test('typed caption failures preserve capture except after explicit authorizatio
       assert.equal(f.errors.at(-1), reason === 'unauthorized' ? 'authorization_unavailable' : reason === 'stale_subscription' ? 'caption_recovery_stale' : 'caption_recovery_unavailable')
     } finally { await client.close() }
   }
+})
+
+const flushFinish = async () => { for (let i = 0; i < 60; i++) await Promise.resolve() }
+function finishBody(state: 'requested' | 'draining' | 'completed' | 'interrupted') {
+  const boundary = state === 'draining' || state === 'completed'
+  return { source: { id: '44444444-4444-4444-8444-444444444444', epoch: 1,
+    participant_id: fixture.grant.participant_id, member_generation: fixture.grant.member_generation,
+    track_sid: 'TR_original', state: state === 'completed' ? 'ended' : state === 'interrupted' ? 'interrupted' : 'active',
+    finish: { state, worker_generation: fixture.grant.worker_generation, sequence: boundary ? '2' : null, samples: boundary ? '3200' : null } } }
+}
+test('shared source finish mutes immediately, pins host retries and preserves independent listening', async () => {
+  const f = setup(), requests: SpeechFinishRequest[] = []
+  f.port.holdMicrophone = () => f.port.muteMicrophone()
+  f.port.microphonePublication = () => 'TR_original'
+  const client = createSpeechSession({ ...f.options, host: { ...f.options.host, finishSource: async request => {
+    requests.push(request); return finishBody(requests.length === 1 ? 'requested' : requests.length === 2 ? 'draining' : 'completed')
+  } } })
+  try {
+    await client.ready; await client.setMicrophone(true); await client.setListening(true)
+    f.event(applied()); f.event(audio()); await client.setListening(true)
+    const finishing = client.finishMicrophone()
+    assert.equal(client.finishMicrophone(), finishing)
+    assert.equal(f.microphone, false); assert.deepEqual(f.tracks, ['TR_zh'])
+    await assert.rejects(client.setMicrophone(true), /source_finish_pending/)
+    await flushFinish(); assert.equal(client.state.sourceFinish.status, 'requested')
+    assert.equal(requests[0]!.sourceId, null)
+    f.advance(1000); await flushFinish(); assert.equal(client.state.sourceFinish.status, 'draining')
+    assert.equal(requests[1]!.sourceId, '44444444-4444-4444-8444-444444444444')
+    f.advance(1000); assert.equal((await finishing).status, 'completed')
+    assert.equal((await client.finishMicrophone()).status, 'completed'); assert.equal(requests.length, 3)
+    assert.equal(client.state.canPlay, true); assert.equal(f.closed, 0)
+    await client.setMicrophone(true); assert.equal(f.microphone, true); assert.equal(client.state.sourceFinish.status, 'idle')
+  } finally { await client.close() }
+})
+
+test('source finish survives a subscription change and a transient host failure', async () => {
+  const f = setup(), requests: SpeechFinishRequest[] = [], delayed = deferred<unknown>()
+  f.port.holdMicrophone = () => f.port.muteMicrophone(); f.port.microphonePublication = () => 'TR_original'
+  const client = createSpeechSession({ ...f.options, host: { ...f.options.host, finishSource: async request => {
+    requests.push(request)
+    if (requests.length === 1) throw new SpeechSourceFinishError('unavailable')
+    return delayed.promise
+  } } })
+  try {
+    await client.ready; await client.setMicrophone(true)
+    const finishing = client.finishMicrophone(); await flushFinish()
+    assert.equal(client.state.sourceFinish.status, 'retrying'); assert.equal(f.microphone, false)
+    f.advance(1000); await flushFinish()
+    const changing = client.changeSubscription({ targetLanguage: 'ja', mode: 'translated', sourceParticipantIds: fixture.configuration.subscription.sourceParticipantIds })
+    f.resolveSubscription(2, 'ja'); await changing
+    assert.equal(client.state.sourceFinish.request?.requestId, requests[1]!.requestId)
+    delayed.resolve(finishBody('completed')); assert.equal((await finishing).status, 'completed')
+    assert.equal(f.closed, 0)
+  } finally { await client.close() }
+})
+
+test('close aborts a pending finish and ignores its late response', async () => {
+  const f = setup(), delayed = deferred<unknown>(); let pending: AbortSignal | undefined
+  f.port.holdMicrophone = () => f.port.muteMicrophone(); f.port.microphonePublication = () => 'TR_original'
+  const client = createSpeechSession({ ...f.options, host: { ...f.options.host, finishSource: async (_request, signal) => {
+    pending = signal; return delayed.promise
+  } } })
+  await client.ready; await client.setMicrophone(true)
+  const rejected = assert.rejects(client.finishMicrophone(), /closed/)
+  await flushFinish(); await client.close(); await rejected
+  assert.equal(pending?.aborted, true)
+  delayed.resolve(finishBody('completed')); await flushFinish()
+  assert.equal(client.state.sourceFinish.status, 'closed'); assert.equal(client.state.canCapture, false)
+})
+
+test('finish without a published source reports no_source and unsupported ports preserve current capture', async () => {
+  const f = setup(); let requests = 0
+  const unsupported = createSpeechSession(f.options)
+  await unsupported.ready; await unsupported.setMicrophone(true)
+  await assert.rejects(unsupported.finishMicrophone(), /source_finish_unavailable/)
+  assert.equal(f.microphone, true); await unsupported.close()
+  const empty = setup({ holdMicrophone() {}, microphonePublication: () => null })
+  const client = createSpeechSession({ ...empty.options, host: { ...empty.options.host, finishSource: async () => { requests++; return finishBody('completed') } } })
+  try { await client.ready; assert.equal((await client.finishMicrophone()).status, 'no_source'); assert.equal(requests, 0) }
+  finally { await client.close() }
 })

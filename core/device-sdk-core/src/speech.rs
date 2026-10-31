@@ -12,8 +12,13 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use zeroize::Zeroize;
 mod captions;
+mod finish;
 pub use captions::{
     SpeechCaptionFailure, SpeechCaptionRecovery, SpeechCaptionRequest, SpeechCaptionUpdate,
+};
+pub use finish::{
+    SpeechFinishBoundary, SpeechFinishFailure, SpeechFinishRequest, SpeechFinishedSource,
+    SpeechSourceFinish,
 };
 
 const MAX_JSON: usize = 32 * 1024;
@@ -184,6 +189,18 @@ fn grant(context: &SpeechContext, raw: &str, now: u64) -> Result<(GrantIdentity,
     deny_unknown_fields
 )]
 pub enum SpeechCommand {
+    BeginSourceFinish,
+    SourcePublication {
+        track_sid: Option<String>,
+    },
+    SourceFinishResult {
+        request_id: u32,
+        body: Value,
+    },
+    SourceFinishFailure {
+        request_id: u32,
+        reason: SpeechFinishFailure,
+    },
     EnableCaptionRecovery,
     RecoverCaptions,
     CaptionPage {
@@ -235,6 +252,7 @@ pub struct SpeechTrack {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SpeechUpdate {
+    pub source_finish: SpeechSourceFinish,
     pub recovery: SpeechCaptionRecovery,
     pub captions: Vec<SpeechCaptionUpdate>,
     pub connected: bool,
@@ -252,6 +270,7 @@ pub struct SpeechUpdate {
 }
 
 pub struct SpeechClient {
+    finish: finish::Finish,
     recovery: captions::Recovery,
     context: SpeechContext,
     grant: GrantIdentity,
@@ -324,6 +343,7 @@ impl SpeechClient {
         subscription.validate()?;
         let (grant, expires) = grant(&context, grant_json, now)?;
         Ok(Self {
+            finish: finish::Finish::default(),
             recovery: captions::Recovery::default(),
             context,
             grant,
@@ -360,11 +380,13 @@ impl SpeechClient {
         self.listening = false;
         self.sources.clear();
         self.recovery.close();
+        self.finish.close();
         self.early_applied = None;
         Ok(())
     }
     fn update(&self, event: Option<Value>, gap: bool) -> SpeechUpdate {
         SpeechUpdate {
+            source_finish: self.finish.snapshot(),
             recovery: self.recovery.snapshot(),
             captions: Vec::new(),
             connected: self.connected,
@@ -372,6 +394,7 @@ impl SpeechClient {
             can_capture: self.connected
                 && !self.closed
                 && self.context.can_publish
+                && !self.finish.held()
                 && self.microphone,
             can_play: self.connected
                 && !self.closed
@@ -421,6 +444,22 @@ impl SpeechClient {
         let mut caption_updates = Vec::new();
         let mut gap = false;
         match command {
+            SpeechCommand::BeginSourceFinish => {
+                if !self.context.can_publish {
+                    return Err(invalid());
+                }
+                self.microphone = false;
+                self.finish.begin(self.now);
+            }
+            SpeechCommand::SourcePublication { track_sid } => self.finish.publication(track_sid)?,
+            SpeechCommand::SourceFinishResult { request_id, body } => {
+                self.finish.result(request_id, body, self.now)?
+            }
+            SpeechCommand::SourceFinishFailure { request_id, reason } => {
+                if self.finish.failed(request_id, reason, self.now) {
+                    self.stop()?;
+                }
+            }
             SpeechCommand::EnableCaptionRecovery => self.recovery.enable(),
             SpeechCommand::RecoverCaptions => self.recovery.retry(),
             SpeechCommand::CaptionPage { request_id, page } => {
@@ -457,7 +496,12 @@ impl SpeechClient {
                 if enabled && !self.context.can_publish {
                     return Err(invalid());
                 }
-                self.microphone = enabled;
+                if !enabled || !self.finish.held() {
+                    if enabled {
+                        self.finish.reset();
+                    }
+                    self.microphone = enabled;
+                }
             }
             SpeechCommand::SetListening { enabled } => {
                 if enabled && !self.context.can_subscribe {
@@ -586,6 +630,12 @@ impl SpeechClient {
             &self.context,
             &self.subscription,
             self.connected && !self.closed && !self.changing,
+            self.now,
+        )?;
+        self.finish.poll(
+            &self.context,
+            self.grant.worker,
+            self.connected && !self.closed,
             self.now,
         )?;
         let mut update = self.update(event, gap);

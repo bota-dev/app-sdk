@@ -27,7 +27,7 @@ function fake() {
   class FakeRoom extends EventEmitter {
     name = grant.room
     canPlaybackAudio = true
-    localParticipant = { identity: grant.identity, publishTrack: async () => { published++ }, unpublishTrack: async () => {} }
+    localParticipant = { identity: grant.identity, publishTrack: async () => { published++; return { trackSid: 'TR_original' } }, unpublishTrack: async () => {} }
     remoteParticipants = new Map([[participant.identity, participant]])
     handler: ((...args: unknown[]) => void) | undefined
     async connect(_url: string, _token: string, options: { autoSubscribe: boolean; maxRetries: number }) {
@@ -59,6 +59,37 @@ function fake() {
     unsubscribe() { publication.track = undefined; room.emit(RoomEvent.TrackUnsubscribed, remote, publication, participant) },
   }
 }
+
+test('source finish holds a late microphone acquisition muted until normal source retirement', async () => {
+  const f = fake(), acquired = deferred<typeof f.local>(), signal = new AbortController().signal
+  f.deps.createMicrophone = async () => acquired.promise
+  let removed = 0
+  f.room.localParticipant.unpublishTrack = async () => { removed++ }
+  const port = createLiveKitWebMedia(f.callbacks, f.deps)
+  await port.connect(grant, signal)
+  const capture = port.setMicrophone(true, signal)
+  port.holdMicrophone!()
+  acquired.resolve(f.local); await capture
+  assert.equal(f.local.mediaStreamTrack.enabled, false)
+  assert.equal(port.microphonePublication!(), 'TR_original')
+  assert.equal(removed, 0); assert.equal(f.stopped, 0); assert.equal(f.disconnects, 0)
+  await port.setMicrophone(false, signal)
+  assert.equal(removed, 1); assert.equal(port.microphonePublication!(), null)
+  await port.close()
+})
+
+test('source finish preserves a publication whose acknowledgement arrives after local stop', async () => {
+  const f = fake(), published = deferred<{ trackSid: string }>(), signal = new AbortController().signal
+  f.room.localParticipant.publishTrack = async () => published.promise
+  const port = createLiveKitWebMedia(f.callbacks, f.deps)
+  await port.connect(grant, signal)
+  const capture = port.setMicrophone(true, signal)
+  await Promise.resolve(); await Promise.resolve()
+  port.holdMicrophone!(); assert.equal(f.local.mediaStreamTrack.enabled, false)
+  published.resolve({ trackSid: 'TR_original' }); await capture
+  assert.equal(port.microphonePublication!(), 'TR_original'); assert.equal(f.stopped, 0)
+  await port.close()
+})
 
 test('LiveKit playback admits exact processor and approved SID, including late subscription callbacks', async () => {
   const f = fake(), signal = new AbortController().signal
