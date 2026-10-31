@@ -3,6 +3,54 @@ import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
+function deferred() {
+  let resolve;
+  const promise = new Promise(yes => { resolve = yes; });
+  return { promise, resolve };
+}
+
+test('generated Rust recovers scoped captions without WebAssembly or playback effects', { timeout: 5_000 }, async () => {
+  const previous = globalThis.WebAssembly;
+  const arrived = deferred(), response = deferred();
+  const captions = [], states = [];
+  let request, session, capture = false;
+  try {
+    globalThis.WebAssembly = undefined;
+    const { createNativeSpeechSession } = require('../lib/commonjs/speech.js');
+    session = createNativeSpeechSession({
+      configuration: { ...fixture.configuration, context: { ...fixture.configuration.context, retention: 'text_only' } },
+      grant: { ...fixture.grant, expires_at: new Date(Date.now() + 60_000).toISOString() },
+      host: { renewGrant: async () => { throw Error('unused'); }, changeSubscription: async () => { throw Error('unused'); },
+        readCaptions: async value => { request = value; arrived.resolve(); return response.promise; } },
+      mediaFactory: () => ({ async connect() {}, silencePlayback() {}, muteMicrophone() { capture = false; },
+        async clearPlayback() {}, async setPlayback(tracks) { assert.deepEqual(tracks, []); },
+        async setMicrophone(enabled) { capture = enabled; }, async close() {} }),
+      onCaption: caption => captions.push(caption), onState: state => states.push(state),
+    });
+    await session.ready; await arrived.promise; await session.setMicrophone(true);
+    assert.equal(request.limit, 8);
+    const pending = session.recoverCaptions();
+    const source = '44444444-4444-4444-8444-444444444444';
+    response.resolve({ protocol_version: 1, session_id: request.sessionId, participant_id: request.participantId,
+      member_generation: request.memberGeneration, subscription_revision: request.subscriptionRevision,
+      history: 'retained', has_more: false, next_cursor: 'cursor_1', records: [{ sequence: '1', record: {
+        protocolVersion: 1, projectId: request.projectId, sessionId: request.sessionId, retention: 'text_only',
+        sourceId: source, sourceEpoch: 1, sourceParticipantId: fixture.configuration.subscription.sourceParticipantIds[0],
+        sourceMemberGeneration: 1, unitId: `${source}:1:1:1`, sourceFirstSeq: 1, sourceLastSeq: 1,
+        startMs: 0, endMs: 100, sourceLanguage: 'en', text: 'Native recovered caption.',
+      } }] });
+    await pending;
+    assert.equal(capture, true);
+    assert.equal(captions.length, 1);
+    assert.equal(captions[0].origin, 'recovered');
+    assert.equal(captions[0].final, true);
+    assert.match(captions[0].key, /^[a-f0-9]{64}$/);
+    assert.ok(!JSON.stringify(states).includes('Native recovered caption.'));
+    assert.ok(!JSON.stringify(session.state).includes('Native recovered caption.'));
+  } finally { await session?.close(); globalThis.WebAssembly = previous; }
+  assert.equal(capture, false);
+});
+
 const require = createRequire(import.meta.url);
 const fixture = JSON.parse(readFileSync(new URL('../../../protocol/speech-session/client-v1.json', import.meta.url), 'utf8'));
 

@@ -3,8 +3,9 @@ import { createSpeechSession } from './speechHost';
 import type { SpeechSession, SpeechSessionOptions, SpeechUpdate } from './speechHost';
 
 export type { SpeechConfiguration, SpeechSubscription, SpeechSelection, SpeechGrant, SpeechTrack, SpeechUpdate,
-  SpeechMediaCallbacks, SpeechMediaPort, SpeechHostCallbacks, SpeechSession } from './speechHost';
-export { SpeechSessionError } from './speechHost';
+  SpeechMediaCallbacks, SpeechMediaPort, SpeechHostCallbacks, SpeechSession,
+  SpeechCaptionRequest, SpeechCaptionRecovery, SpeechCaptionUpdate } from './speechHost';
+export { SpeechSessionError, SpeechCaptionReadError } from './speechHost';
 
 export type NativeSpeechSessionOptions = Omit<SpeechSessionOptions, 'policyFactory' | 'clock'>;
 

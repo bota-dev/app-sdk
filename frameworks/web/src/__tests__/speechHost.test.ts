@@ -174,3 +174,77 @@ test('closing in a state observer prevents content delivery after teardown', asy
   assert.equal(f.closed, 1)
   await client.close()
 })
+
+function recoveryPage(request: { sessionId: string; participantId: string; memberGeneration: number; subscriptionRevision: number }, text = 'Recovered fixture.') {
+  const source = '44444444-4444-4444-8444-444444444444'
+  return { protocol_version: 1, session_id: request.sessionId, participant_id: request.participantId,
+    member_generation: request.memberGeneration, subscription_revision: request.subscriptionRevision,
+    history: 'retained', records: [{ sequence: '1', record: {
+      protocolVersion: 1, projectId: fixture.configuration.context.projectId, sessionId: request.sessionId, retention: 'text_only',
+      sourceId: source, sourceEpoch: 1, sourceParticipantId: fixture.configuration.subscription.sourceParticipantIds[0], sourceMemberGeneration: 1,
+      unitId: `${source}:1:1:1`, sourceFirstSeq: 1, sourceLastSeq: 1, startMs: 0, endMs: 100, sourceLanguage: 'en', text,
+    } }], has_more: false, next_cursor: 'cursor_1' }
+}
+
+test('caption recovery joins host IO and never puts text into state or media playback', async () => {
+  const f = setup(), arrived = deferred(), response = deferred<unknown>()
+  let request: Parameters<typeof recoveryPage>[0] | undefined
+  let calls = 0
+  const captions: unknown[] = []
+  const client = createSpeechSession({ ...f.options,
+    configuration: { ...f.options.configuration, context: { ...f.options.configuration.context, retention: 'text_only' } },
+    host: { ...f.options.host, readCaptions: async value => { request = value; calls++; arrived.resolve(); return response.promise } },
+    onCaption: value => captions.push(value),
+  })
+  try {
+    assert.equal(typeof client.recoverCaptions, 'function')
+    await client.ready; await arrived.promise; await client.setMicrophone(true)
+    const recovering = client.recoverCaptions()
+    response.resolve(recoveryPage(request!)); await recovering
+    assert.equal(calls, 1); assert.equal(captions.length, 1); assert.equal(f.microphone, true)
+    assert.deepEqual(f.tracks, []); assert.equal(client.state.recovery.cursor, 'cursor_1')
+    assert.ok(!JSON.stringify(client.state).includes('Recovered fixture.'))
+    assert.ok(!JSON.stringify(f.states).includes('Recovered fixture.'))
+  } finally { await client.close() }
+})
+
+test('subscription change aborts recovery and a late old page cannot update the new view', { timeout: 5_000 }, async () => {
+  const f = setup(), arrived = deferred(), response = deferred<unknown>(), nextArrived = deferred(), nextResponse = deferred<unknown>()
+  let signal: AbortSignal | undefined, request: Parameters<typeof recoveryPage>[0] | undefined
+  let nextRequest: Parameters<typeof recoveryPage>[0] | undefined
+  const captions: unknown[] = []
+  const client = createSpeechSession({ ...f.options,
+    configuration: { ...f.options.configuration, context: { ...f.options.configuration.context, retention: 'text_only' } },
+    host: { ...f.options.host, readCaptions: async (value, abort) => {
+      if (value.subscriptionRevision === 1) { request = value; signal = abort; arrived.resolve(); return response.promise }
+      nextRequest = value; nextArrived.resolve(); return nextResponse.promise
+    } },
+    onCaption: value => captions.push(value),
+  })
+  try {
+    assert.equal(typeof client.recoverCaptions, 'function')
+    await client.ready; await arrived.promise; await client.setMicrophone(true)
+    const recovering = client.recoverCaptions(), rejected = assert.rejects(recovering, /superseded/)
+    const changing = client.changeSubscription({ ...fixture.configuration.subscription, targetLanguage: 'ja' })
+    assert.equal(signal?.aborted, true)
+    response.resolve(recoveryPage(request!, 'Old language.'))
+    f.resolveSubscription(2, 'ja'); await changing; await nextArrived.promise; await rejected
+    assert.deepEqual(captions, [])
+    assert.equal(f.microphone, true)
+    const resumed = client.recoverCaptions()
+    nextResponse.resolve(recoveryPage(nextRequest!, 'Current source.')); await resumed
+    assert.equal(captions.length, 1)
+    assert.equal(f.microphone, true)
+    assert.deepEqual(f.errors, [])
+  } finally { await client.close() }
+})
+
+test('live-only caption recovery is explicitly unavailable without a host read', async () => {
+  const f = setup(); let calls = 0
+  const client = createSpeechSession({ ...f.options, host: { ...f.options.host, readCaptions: async () => { calls++; throw Error('should not read') } } })
+  try {
+    await client.ready
+    assert.equal((await client.recoverCaptions()).status, 'unavailable')
+    assert.equal(calls, 0)
+  } finally { await client.close() }
+})

@@ -3,8 +3,9 @@ import { createSpeechSession, SpeechSessionError } from './speechHost.ts'
 import type { SpeechSession, SpeechSessionOptions, SpeechUpdate } from './speechHost.ts'
 
 export type { SpeechConfiguration, SpeechSubscription, SpeechSelection, SpeechGrant, SpeechTrack, SpeechUpdate,
-  SpeechMediaCallbacks, SpeechMediaPort, SpeechHostCallbacks, SpeechSession } from './speechHost.ts'
-export { SpeechSessionError } from './speechHost.ts'
+  SpeechMediaCallbacks, SpeechMediaPort, SpeechHostCallbacks, SpeechSession,
+  SpeechCaptionRequest, SpeechCaptionRecovery, SpeechCaptionUpdate } from './speechHost.ts'
+export { SpeechSessionError, SpeechCaptionReadError } from './speechHost.ts'
 
 export type WebSpeechSessionOptions = Omit<SpeechSessionOptions, 'policyFactory' | 'clock'> & {
   /** Supply bytes/module when the host owns WASM loading; otherwise use the bundled URL. */

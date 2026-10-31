@@ -468,13 +468,33 @@ short-lived grant, `changeSubscription` and `renewGrant` callbacks, and a
 
 The media port owns native capture, RTC, playback and audio-session integration;
 raw microphone/playback samples do not cross the generated-core boundary.
-Only metadata and control commands reach Rust. `setMicrophone`, `setListening`,
+Only bounded captions, metadata and control commands reach Rust. `setMicrophone`, `setListening`,
 `changeSubscription`, `resumeAudio` and terminal `close` have the same host
 orchestration as the Web entry. Await `ready` before interacting and await
 `close` when leaving, logging out or changing tenant. A port must synchronously
 silence/mute on request, discard old buffers before acknowledging a clear, and
 fence late callbacks after cancellation. It cannot infer playback permission
 from a room or track name.
+
+Optional `readCaptions(request, signal)` uses the customer's authenticated backend
+proxy to read confirmed captions for the current member and subscription. The
+proxy authorizes the signed-in listener, forwards the cursor and requested limit,
+and returns the response JSON unchanged. Map authorization denial, stale
+subscription/cursor and temporary failures using exported `SpeechCaptionReadError`
+codes `unauthorized`, `stale_subscription` and `unavailable`. Honor cancellation;
+never put project keys in the app. The shared policy requests eight records per
+page, backfills at 250 ms intervals, polls an exhausted cursor every two seconds
+and retries temporary failures after five seconds. `recoverCaptions()` joins one
+pending page or requests an immediate retry, independently of capture/playback.
+
+`onCaption` carries both live and recovered updates with a stable `key`. Upsert by
+that key and never replace confirmed text with an interim record. The core stores
+only 1,024 recent identity hashes; the app owns the idempotent text view, including
+deduplication after a fresh authorized owner re-reads history. Do not append the
+same text from `onEvent`. State snapshots exclude caption content. A language
+change cancels the old request and resets the cursor; stale replies are ignored.
+Live-only sessions never read retained history and report `unavailable`; their
+visible text remains volatile. Recovery never requests TTS or replays audio.
 
 The facade is a source candidate. The native LiveKit media adapter, canonical
 generated-runtime verification, packaged consumer adoption, platform audio

@@ -659,6 +659,7 @@ const speech = await createWebSpeechSession({
   host: {
     changeSubscription: (selection, signal) => host.changeSpeechSubscription(selection, signal),
     renewGrant: signal => host.renewSpeechGrant(signal),
+    readCaptions: (request, signal) => host.readSpeechCaptions(request, signal),
   },
   mediaFactory: callbacks => createLiveKitWebMedia(callbacks, {
     roomFactory: options => new Room(options),
@@ -666,6 +667,7 @@ const speech = await createWebSpeechSession({
     silenceVendorLogs: () => setLogLevel(LogLevel.silent),
   }),
   onEvent: event => showSpeechEvent(event),
+  onCaption: caption => upsertCaption(caption.key, caption),
   onError: error => showSpeechStatus(error.code),
 })
 await speech.ready
@@ -695,6 +697,34 @@ actual old-buffer clearing must also complete. Sender completion does not cut of
 the listener's trailing audio. `close()` is terminal; reconnect requires a new
 authorized session owner. Errors expose fixed codes, not vendor responses or
 credentials. The SDK retains no transcript history.
+
+`readCaptions` is optional and calls the customer's authenticated backend proxy,
+which forwards the current session/member/subscription and opaque cursor to the
+caption endpoint. Return its JSON body unchanged; map denied authorization to
+`SpeechCaptionReadError('unauthorized')`, an obsolete subscription/cursor to
+`SpeechCaptionReadError('stale_subscription')`, and temporary failures to
+`SpeechCaptionReadError('unavailable')`. Keep project keys on that backend.
+The proxy must also authorize the actual signed-in listener; client-supplied IDs
+are not authorization. Abort the request when its signal is cancelled.
+
+Shared Rust validates each entire page before emitting `onCaption` updates. It
+requests eight records at a time, waits 250 ms between backfill pages, polls an
+exhausted cursor every two seconds, and backs off five seconds after temporary
+failure. `recoverCaptions()` joins the current page or requests an immediate retry;
+it does not wait for the entire meeting history. Polling and caption recovery do
+not synthesize or play audio. Temporary read failures leave capture running;
+explicit authorization denial closes the owner. A stale subscription stops old
+playback until the host supplies a newly authorized selection.
+
+Use `onCaption` for both live and recovered text and upsert by its stable `key`,
+keeping confirmed text final. The SDK retains only 1,024 recent identity hashes,
+not complete text history; apps must keep their own idempotent view and never
+replace a final record with an interim one after eviction or reconnect. Do not
+append the same caption again from `onEvent`. State snapshots exclude content.
+Language changes cancel the old read and discard its cursor; late responses are
+ignored. A fresh authorized owner starts recovery from the beginning, and the
+stable keys allow the app to merge that history. Live-only sessions report
+`unavailable` without invoking the recovery callback; keep their UI text volatile.
 
 Web media still follows LiveKit Cloud's region routing; the public JS client has
 no adapter-level switch to disable initial regional fallback. Qualify the Cloud

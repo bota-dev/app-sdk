@@ -11,6 +11,10 @@ use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use zeroize::Zeroize;
+mod captions;
+pub use captions::{
+    SpeechCaptionFailure, SpeechCaptionRecovery, SpeechCaptionRequest, SpeechCaptionUpdate,
+};
 
 const MAX_JSON: usize = 32 * 1024;
 const MAX_SOURCES: usize = 1024;
@@ -180,6 +184,16 @@ fn grant(context: &SpeechContext, raw: &str, now: u64) -> Result<(GrantIdentity,
     deny_unknown_fields
 )]
 pub enum SpeechCommand {
+    EnableCaptionRecovery,
+    RecoverCaptions,
+    CaptionPage {
+        request_id: u32,
+        page: Value,
+    },
+    CaptionFailure {
+        request_id: u32,
+        reason: SpeechCaptionFailure,
+    },
     Connected,
     Closed,
     Tick,
@@ -221,6 +235,8 @@ pub struct SpeechTrack {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SpeechUpdate {
+    pub recovery: SpeechCaptionRecovery,
+    pub captions: Vec<SpeechCaptionUpdate>,
     pub connected: bool,
     pub disconnect: bool,
     pub can_capture: bool,
@@ -236,6 +252,7 @@ pub struct SpeechUpdate {
 }
 
 pub struct SpeechClient {
+    recovery: captions::Recovery,
     context: SpeechContext,
     grant: GrantIdentity,
     expires: u64,
@@ -273,17 +290,21 @@ impl SpeechClient {
     /// One bounded JSON projection for both generated JS and browser WASM.
     /// Values crossing this boundary are checked to fit exact JS integers.
     pub fn dispatch_json(&mut self, command_json: &str, now: u64) -> Result<String> {
-        if command_json.len() > MAX_JSON {
+        if command_json.len() > captions::MAX_PAGE_JSON {
             self.stop()?;
             return Err(bound());
         }
-        let command = match serde_json::from_str(command_json) {
+        let command: SpeechCommand = match serde_json::from_str(command_json) {
             Ok(command) => command,
             Err(_) => {
                 self.stop()?;
                 return Err(invalid());
             }
         };
+        if command_json.len() > MAX_JSON && !matches!(command, SpeechCommand::CaptionPage { .. }) {
+            self.stop()?;
+            return Err(bound());
+        }
         serde_json::to_string(&self.dispatch(command, now)?).map_err(|_| invalid())
     }
     pub fn new(
@@ -303,6 +324,7 @@ impl SpeechClient {
         subscription.validate()?;
         let (grant, expires) = grant(&context, grant_json, now)?;
         Ok(Self {
+            recovery: captions::Recovery::default(),
             context,
             grant,
             expires,
@@ -337,11 +359,14 @@ impl SpeechClient {
         self.microphone = false;
         self.listening = false;
         self.sources.clear();
+        self.recovery.close();
         self.early_applied = None;
         Ok(())
     }
     fn update(&self, event: Option<Value>, gap: bool) -> SpeechUpdate {
         SpeechUpdate {
+            recovery: self.recovery.snapshot(),
+            captions: Vec::new(),
             connected: self.connected,
             disconnect: self.closed,
             can_capture: self.connected
@@ -393,8 +418,34 @@ impl SpeechClient {
     }
     fn apply(&mut self, command: SpeechCommand) -> Result<SpeechUpdate> {
         let mut event = None;
+        let mut caption_updates = Vec::new();
         let mut gap = false;
         match command {
+            SpeechCommand::EnableCaptionRecovery => self.recovery.enable(),
+            SpeechCommand::RecoverCaptions => self.recovery.retry(),
+            SpeechCommand::CaptionPage { request_id, page } => {
+                caption_updates = self.recovery.page(
+                    request_id,
+                    page,
+                    &self.context,
+                    &self.subscription,
+                    self.now,
+                )?;
+            }
+            SpeechCommand::CaptionFailure { request_id, reason } => {
+                if self.recovery.failed(request_id, &reason, self.now) {
+                    match reason {
+                        SpeechCaptionFailure::Unauthorized => self.stop()?,
+                        SpeechCaptionFailure::StaleSubscription => {
+                            self.changing = true;
+                            self.applied = false;
+                            self.early_applied = None;
+                            self.clear()?;
+                        }
+                        SpeechCaptionFailure::Unavailable => {}
+                    }
+                }
+            }
             SpeechCommand::Connected => {
                 self.connected = true;
             }
@@ -418,6 +469,7 @@ impl SpeechClient {
                 }
             }
             SpeechCommand::BeginChange => {
+                self.recovery.reset();
                 self.change_id = self.change_id.checked_add(1).ok_or_else(bound)?;
                 self.changing = true;
                 self.clear()?;
@@ -508,15 +560,37 @@ impl SpeechClient {
                     gap = sequence != self.sequence + 1;
                     if gap {
                         self.clear()?;
+                        self.recovery.hint();
                     }
                     self.sequence = sequence;
                     if self.accept_content(&value)? {
-                        event = Some(value);
+                        if value["type"] == "caption" {
+                            if let Some(update) = self.recovery.upsert(
+                                value["record"].clone(),
+                                value["final"].as_bool().ok_or_else(invalid)?,
+                                "live",
+                                self.subscription.revision,
+                                None,
+                            )? {
+                                caption_updates.push(update);
+                                event = Some(value);
+                            }
+                        } else {
+                            event = Some(value);
+                        }
                     }
                 }
             }
         }
-        Ok(self.update(event, gap))
+        self.recovery.poll(
+            &self.context,
+            &self.subscription,
+            self.connected && !self.closed && !self.changing,
+            self.now,
+        )?;
+        let mut update = self.update(event, gap);
+        update.captions = caption_updates;
+        Ok(update)
     }
     fn envelope(&self, v: &Value) -> bool {
         v.get("protocolVersion") == Some(&json!(1))
@@ -567,26 +641,9 @@ impl SpeechClient {
                     return Err(invalid());
                 }
                 let record = v.get("record").ok_or_else(invalid)?;
-                only(
-                    record,
-                    "protocolVersion projectId sessionId retention sourceId sourceEpoch sourceParticipantId sourceMemberGeneration unitId sourceFirstSeq sourceLastSeq startMs endMs sourceLanguage targetLanguage text",
-                )?;
+                captions::validate_record(&self.context, record)?;
                 for field in "protocolVersion projectId sessionId retention sourceId sourceEpoch sourceParticipantId sourceMemberGeneration".split(' ') {
                     if record.get(field)!=v.get(field) { return Err(invalid()); }
-                }
-                if !identifier(string(record, "unitId")?, 512)
-                    || string(record, "text")?.len() > 16384
-                    || !matches!(string(record, "sourceLanguage")?, "en" | "zh" | "multi")
-                    || number(record, "sourceFirstSeq")? == 0
-                    || number(record, "sourceLastSeq")? < number(record, "sourceFirstSeq")?
-                    || scalar(record, "endMs")? < scalar(record, "startMs")?
-                {
-                    return Err(invalid());
-                }
-                if let Some(target) = record.get("targetLanguage")
-                    && target.as_str().is_none_or(|t| !language(t))
-                {
-                    return Err(invalid());
                 }
             }
             "status" => {
@@ -652,6 +709,9 @@ impl SpeechClient {
     fn accept_content(&mut self, v: &Value) -> Result<bool> {
         let source = string(v, "sourceId")?;
         let participant = string(v, "sourceParticipantId")?;
+        if participant == self.context.participant_id {
+            return Ok(false);
+        }
         if !self
             .subscription
             .source_participant_ids
