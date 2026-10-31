@@ -25,6 +25,11 @@
       "types": "./lib/typescript/speech.d.ts",
       "react-native": "./src/speech.ts",
       "default": "./lib/commonjs/speech.js"
+    },
+    "./speech/livekit": {
+      "types": "./lib/typescript/speechLiveKit.d.ts",
+      "react-native": "./src/speechLiveKit.ts",
+      "default": "./lib/commonjs/speechLiveKit.js"
     }
   },
   "files": [

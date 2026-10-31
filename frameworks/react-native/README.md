@@ -496,9 +496,78 @@ change cancels the old request and resets the cursor; stale replies are ignored.
 Live-only sessions never read retained history and report `unavailable`; their
 visible text remains volatile. Recovery never requests TTS or replays audio.
 
-The facade is a source candidate. The native LiveKit media adapter, canonical
-generated-runtime verification, packaged consumer adoption, platform audio
-sessions and physical duplex qualification remain separate completion work.
+The facade and optional native LiveKit media adapter are source candidates.
+Packaged App adoption, native dependency builds, platform audio sessions and
+physical duplex qualification remain separate completion work.
 Do not advertise this as an available published SDK or a qualified mobile
 interpreter. Existing recording/upload ownership and receipt-based cleanup
 remain unchanged.
+
+#### Native LiveKit media candidate
+
+The separate `@bota.dev/react-native-app-sdk/speech/livekit` entry exports
+`createLiveKitNativeMedia`. The host installs and initializes LiveKit's native
+dependencies; the Bota package does not autoinstall another WebRTC runtime.
+The public API contract was checked against `@livekit/react-native` 3.1.0,
+`@livekit/react-native-webrtc` 150.1.1 and `livekit-client` 2.23.0. Those version
+numbers identify the candidate, not a qualified native binary or device matrix.
+Follow the [vendor's native setup](https://docs.livekit.io/transport/sdk-platforms/react-native/)
+for iOS/Android linking and microphone permissions, and call `registerGlobals()`
+once during host initialization before constructing any LiveKit rooms.
+
+```ts
+import { AudioSession, registerGlobals, setLogLevel } from '@livekit/react-native'
+import { Room, createLocalAudioTrack, LogLevel } from 'livekit-client'
+import { createNativeSpeechSession } from '@bota.dev/react-native-app-sdk/speech'
+import { createLiveKitNativeMedia } from '@bota.dev/react-native-app-sdk/speech/livekit'
+
+// Once during app initialization, with the host's audio-session ownership policy.
+registerGlobals()
+const speech = createNativeSpeechSession({
+  configuration,
+  grant,
+  host: authorizedSpeechCallbacks,
+  mediaFactory: callbacks => createLiveKitNativeMedia(callbacks, {
+    roomFactory: options => new Room(options),
+    createMicrophone: options => createLocalAudioTrack(options),
+    silenceVendorLogs: () => setLogLevel(LogLevel.silent),
+    audioSession: AudioSession,
+    audioSessionOwnership: 'exclusive',
+    restoreRemoteTrackVolume: hostKnownPreviousDefaultVolume,
+    defaultOutput: 'earpiece',
+  }),
+  onCaption: caption => upsertCaption(caption.key, caption),
+  onError: error => showSpeechStatus(error.code),
+})
+await speech.ready
+await speech.setMicrophone(true)
+await speech.setListening(true)
+// Await this on leave/logout/tenant change and when the host retires foreground ownership.
+await speech.close()
+```
+
+This adapter requires the host to reserve the native audio session exclusively;
+it cannot run alongside another room/player that independently changes LiveKit's
+global defaults. Pass the actual singleton `AudioSession`, not a fresh wrapper.
+The host supplies its known prior incoming-track volume because LiveKit does not
+expose a public getter. New incoming tracks default to zero volume before room
+connection, and only approved processor/track identities are unmuted. Bluetooth
+and wired headsets precede the selected speaker/earpiece fallback. Permission
+to publish still does not start the microphone until `setMicrophone(true)`.
+
+Listening changes mute and unsubscribe old tracks without stopping capture or
+the native audio session. Buffer-clear acknowledgement waits for the exact
+old track's unsubscribe. Cleanup joins late audio-session start, room connection,
+microphone acquisition and publication before releasing global ownership. Failed
+cleanup leaves native state uncertain and refuses a new owner on that runtime;
+do not treat a cleanup error as proof that all physical audio has stopped.
+Disconnect/reconnecting events retire the owner instead of silently reusing old
+authority. The host must manage interruption/background policy and must not retry
+uncertain native cleanup by constructing another wrapper. `resumeAudio()` has no
+browser autoplay action on this connected native adapter.
+
+LiveKit Cloud region routing has the same qualification constraint as the Web
+candidate. Native linkage, focus interruptions, Bluetooth changes, physical buffer
+tails, AEC/double-talk and end-to-end latency still need acceptance. Authorized
+external tracks and coexistence with an existing meeting's audio session remain
+separate integration work; this microphone adapter does not complete that story.
