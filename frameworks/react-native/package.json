@@ -20,7 +20,12 @@
       "default": "./lib/commonjs/runtime.js"
     },
     "./package.json": "./package.json",
-    "./native-io": "./native-io/react-native.config.cjs"
+    "./native-io": "./native-io/react-native.config.cjs",
+    "./speech": {
+      "types": "./lib/typescript/speech.d.ts",
+      "react-native": "./src/speech.ts",
+      "default": "./lib/commonjs/speech.js"
+    }
   },
   "files": [
     "BotaDeviceSDK.podspec",
@@ -37,7 +42,7 @@
     "native-io/"
   ],
   "scripts": {
-    "build": "node scripts/prepare-local-wifi-native.mjs --check && bob build",
+    "build": "node ../../tools/speech/sync-host.mjs && node scripts/prepare-local-wifi-native.mjs --check && bob build",
     "clean": "rm -rf lib generated/build",
     "codegen": "node scripts/verify-codegen.mjs --write",
     "codegen:check": "node scripts/verify-codegen.mjs",

@@ -17,6 +17,7 @@ const MAX_LOG_PENDING_BYTES: usize = 64 * 1024;
 
 #[derive(Default)]
 pub(crate) struct CodecState {
+    speech: crate::speech::SpeechClients,
     local_wifi: crate::local_wifi::LocalWifiCodecs,
     logs: BTreeMap<String, LogState>,
     diagnostics: BTreeMap<String, DeviceDiagnosticsDecoder>,
@@ -249,6 +250,9 @@ struct ReceiverEvent {
 impl CodecState {
     #[inline(never)]
     pub(crate) fn execute(&mut self, name: &str, value: Value) -> Result<Vec<u8>, DeviceSdkError> {
+        if name == "speechSession" {
+            return self.speech.call(value);
+        }
         if name == "localWifiTransfer" {
             return self.local_wifi.call(value);
         }

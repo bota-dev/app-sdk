@@ -634,6 +634,75 @@ Browser capabilities are reported independently by
 before device mutation with a stable SDK error. Web Bluetooth permission alone
 is never treated as device identity or backend authorization.
 
+## Optional speech sessions (unreleased source preview)
+
+The separate `@bota.dev/web-app-sdk/speech` entry accepts host-authorized session
+configuration and short-lived media grants. It does not use the Bluetooth
+connection, upload journal, or Bota project API keys. It runs the shared Rust
+speech policy through WASM. No published package or live RTC qualification is
+implied by this source preview.
+
+The host backend owns session admission, subscription updates and grant renewal.
+Map its responses to `SpeechConfiguration`, `SpeechSubscription` and
+`SpeechGrant`; do not infer those permissions in the browser. The synthetic
+[protocol fixture](../../protocol/speech-session/client-v1.json) documents the
+candidate shape without real credentials.
+
+```ts
+import { Room, createLocalAudioTrack, setLogLevel, LogLevel } from 'livekit-client'
+import { createWebSpeechSession } from '@bota.dev/web-app-sdk/speech'
+import { createLiveKitWebMedia } from '@bota.dev/web-app-sdk/speech/livekit'
+
+const speech = await createWebSpeechSession({
+  configuration, // Authorized host snapshot, including this listener's subscription.
+  grant,         // Short-lived member grant from the host backend.
+  host: {
+    changeSubscription: (selection, signal) => host.changeSpeechSubscription(selection, signal),
+    renewGrant: signal => host.renewSpeechGrant(signal),
+  },
+  mediaFactory: callbacks => createLiveKitWebMedia(callbacks, {
+    roomFactory: options => new Room(options),
+    createMicrophone: options => createLocalAudioTrack(options),
+    silenceVendorLogs: () => setLogLevel(LogLevel.silent),
+  }),
+  onEvent: event => showSpeechEvent(event),
+  onError: error => showSpeechStatus(error.code),
+})
+await speech.ready
+await speech.setMicrophone(true)
+await speech.setListening(true)
+// Invoke resumeAudio directly from the user's gesture when autoplay is blocked.
+await speech.resumeAudio()
+// A language change keeps capture active and fences old playback.
+await speech.changeSubscription({ targetLanguage: 'ja', mode: 'translated', sourceParticipantIds })
+// On leave, logout, or tenant change, await terminal cleanup.
+await speech.close()
+```
+
+The candidate adapter is exercised against LiveKit client `2.23.0`. Supply its
+public factories from the host's installed runtime; supplier declaration files
+are not part of the Bota public type surface. LiveKit's current declarations
+have strict exact-optional incompatibilities, so the host must separately qualify
+its vendor import/build configuration. The example disables vendor logs in the
+shared JavaScript realm; integrate that with the host's logging policy.
+
+The first adapter captures the browser microphone only. Authorized external
+participant tracks and native device audio remain unfinished integrations.
+Microphone capture starts only on an explicit call; listening, microphone mute
+and subscription changes are independent. A successful subscription callback
+acknowledges desired state, not audible playback: the worker-applied revision and
+actual old-buffer clearing must also complete. Sender completion does not cut off
+the listener's trailing audio. `close()` is terminal; reconnect requires a new
+authorized session owner. Errors expose fixed codes, not vendor responses or
+credentials. The SDK retains no transcript history.
+
+Web media still follows LiveKit Cloud's region routing; the public JS client has
+no adapter-level switch to disable initial regional fallback. Qualify the Cloud
+project's permitted regions before enabling a cohort. Browser autoplay, AEC,
+device changes, network loss, TURN, archive correlation and real-provider latency
+need separate runtime qualification. This module does not establish original
+audio archival or device-speaker support.
+
 ## Physical acceptance
 
 Automated Chromium uses deterministic fake Bluetooth and storage boundaries;

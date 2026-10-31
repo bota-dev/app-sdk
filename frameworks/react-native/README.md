@@ -457,3 +457,28 @@ The actual Android App candidate builds with this configuration; its generated
 schema contains only the WiFi IO module. Profile-2 control and App source are
 implemented; public release adoption, iOS target compilation and external
 firmware acceptance remain pending. See [installation and limitations](../../docs/parity/local-wifi.md#standalone-native-packaging).
+
+### Optional speech sessions (unreleased source preview)
+
+`@bota.dev/react-native-app-sdk/speech` exports `createNativeSpeechSession`.
+It executes the shared Rust speech policy as generated JavaScript, separately
+from the device/BLE workflow. The host supplies an authorized configuration,
+short-lived grant, `changeSubscription` and `renewGrant` callbacks, and a
+`SpeechMediaPort` factory. Project/provider secrets never enter this module.
+
+The media port owns native capture, RTC, playback and audio-session integration;
+raw microphone/playback samples do not cross the generated-core boundary.
+Only metadata and control commands reach Rust. `setMicrophone`, `setListening`,
+`changeSubscription`, `resumeAudio` and terminal `close` have the same host
+orchestration as the Web entry. Await `ready` before interacting and await
+`close` when leaving, logging out or changing tenant. A port must synchronously
+silence/mute on request, discard old buffers before acknowledging a clear, and
+fence late callbacks after cancellation. It cannot infer playback permission
+from a room or track name.
+
+The facade is a source candidate. The native LiveKit media adapter, canonical
+generated-runtime verification, packaged consumer adoption, platform audio
+sessions and physical duplex qualification remain separate completion work.
+Do not advertise this as an available published SDK or a qualified mobile
+interpreter. Existing recording/upload ownership and receipt-based cleanup
+remain unchanged.

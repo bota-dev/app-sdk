@@ -18,6 +18,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./speech": {
+      "types": "./dist/speech.d.ts",
+      "import": "./dist/speech.js"
+    },
+    "./speech/livekit": {
+      "types": "./dist/speechLiveKit.d.ts",
+      "import": "./dist/speechLiveKit.js"
     }
   },
   "types": "./dist/index.d.ts",
@@ -41,6 +49,7 @@
     "@types/node": "22.20.3",
     "@types/web-bluetooth": "0.0.21",
     "fake-indexeddb": "6.2.5",
+    "livekit-client": "2.23.0",
     "typescript": "6.0.3"
   }
 }

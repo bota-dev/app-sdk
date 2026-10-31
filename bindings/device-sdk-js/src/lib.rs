@@ -15,6 +15,7 @@ mod local_wifi;
 mod native_v2;
 mod planners;
 mod recording_upload;
+mod speech;
 mod v2;
 
 use engine::{Engine, error_bytes, invalid};
