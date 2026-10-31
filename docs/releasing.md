@@ -312,9 +312,10 @@ historical-tag protections remain mandatory. The wait never republishes bytes.
 The CocoaPods migration stores its public index under `Specs/` in the same
 [`bota-dev/app-sdk`](https://github.com/bota-dev/app-sdk) repository as the SDK.
 Its canonical source is `https://github.com/bota-dev/app-sdk.git`; publication
-uses this repository's job token. Bootstrap integration,
-exact-main consumer qualification and Slack publication activation are pending.
-These source changes do not publish a new package version.
+uses this repository's job token. The bootstrap index and clean Apple/Flutter
+consumers have qualified the default `main` source. Requalify the exact merged
+SDK revision before publication activation; these checks do not publish a new
+package version.
 
 After activation, the tag workflow registers a real production deployment
 request with Bota Releases and waits for Slack approval of the preserved SDK
@@ -353,14 +354,13 @@ no credential. Use HTTPS and a per-command credential helper; do not provision
 a cross-repository PAT or deploy key, persist a general user credential, or add
 a publisher credential to a consumer's `Podfile`.
 
-The SDK policy and Bota Releases SDK unit are disabled and the Slack activation
-variable is not enabled. Actions pull-request creation is also disabled pending
-reviewed setup. New-version publication through this route is not activated.
-Merge and qualify the bootstrap/release/service changes, review the required
-Actions PR setting, and verify an actual signed Slack request/approval flow
-before enabling publication. Preserve the historical `release-approval` gate
-and historical tagged workflows. Available metadata or a passing branch consumer
-does not establish service activation or a completed new release.
+The SDK source policy is enabled and Actions pull-request creation is permitted
+with default workflow permissions kept read-only. Complete the
+[staged activation requirements](#staged-signed-slack-sdk-approval-activation)
+before enabling repository publication variables. Preserve the historical
+`release-approval` gate and historical tagged workflows. Source policy, available
+metadata or a passing branch consumer does not establish service activation or
+a completed new release.
 Public installations require no writer credential. The same
 approved-release, preserved-artifact and checksum gates remain mandatory; a new
 Trunk registration is not part of the new publication route. Customer setup and
@@ -562,13 +562,11 @@ Configure two GitHub environments for `bota-dev/app-sdk`:
 The new route uses the existing Bota Releases service's SDK-only `sdk-tag-wait`
 mode. It creates the production deployment request from the exact original tag
 run after CI-artifact promotion, waits for the real Slack decision, and verifies
-the signed execution binding before publication. This activation change enables
-the SDK source policy in `release/slack-production-policy.json`; repository
-activation remains off and the installed service's SDK unit remains disabled.
-Actions PR creation is permitted with default workflow permissions kept read-only.
-The service support is installed and verified, but the SDK-only read-token client
-and enabled SDK unit still require a new reviewed immutable ZIP and installation.
-The staged source policy alone cannot start publication or authorize a new release.
+the signed execution binding before publication. The SDK source policy in
+`release/slack-production-policy.json` is enabled; Actions PR creation is permitted
+with default workflow permissions kept read-only. The source policy alone cannot
+start publication or authorize a new release. Live service installation and
+repository activation must satisfy the requirements below.
 
 Before activation, require independent source review, exact main CI/License/
 Scan and clean default-main Apple/Flutter consumers. Review the required Actions
