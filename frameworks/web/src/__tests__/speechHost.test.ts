@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import init, { WebSpeechClient } from '../generated/bota_device_sdk_core.js'
-import { createSpeechSession } from '../../../shared/speechHost.ts'
+import { createSpeechSession, SpeechCaptionReadError } from '../../../shared/speechHost.ts'
 import type { SpeechMediaCallbacks, SpeechMediaPort, SpeechSubscription, SpeechUpdate } from '../../../shared/speechHost.ts'
 
 const fixture = JSON.parse(await readFile(new URL('../../../../protocol/speech-session/client-v1.json', import.meta.url), 'utf8'))
@@ -247,4 +247,42 @@ test('live-only caption recovery is explicitly unavailable without a host read',
     assert.equal((await client.recoverCaptions()).status, 'unavailable')
     assert.equal(calls, 0)
   } finally { await client.close() }
+})
+
+test('caption observers cannot receive a page after a state observer closes the owner', async () => {
+  const f = setup(), arrived = deferred(), response = deferred<unknown>()
+  let request: Parameters<typeof recoveryPage>[0] | undefined
+  const captions: unknown[] = []
+  const client = createSpeechSession({ ...f.options,
+    configuration: { ...f.options.configuration, context: { ...f.options.configuration.context, retention: 'text_only' } },
+    host: { ...f.options.host, readCaptions: async value => { request = value; arrived.resolve(); return response.promise } },
+    onState: state => { if (state.recovery.status === 'ready') void client.close() },
+    onCaption: caption => captions.push(caption),
+  })
+  try {
+    await client.ready; await arrived.promise; await client.setMicrophone(true)
+    const joined = assert.rejects(client.recoverCaptions(), /closed/)
+    response.resolve(recoveryPage(request!)); await joined; await client.close()
+    assert.deepEqual(captions, []); assert.equal(f.microphone, false)
+  } finally { await client.close() }
+})
+
+test('typed caption failures preserve capture except after explicit authorization denial', async () => {
+  for (const reason of ['unavailable', 'stale_subscription', 'unauthorized'] as const) {
+    const f = setup(), arrived = deferred(), release = deferred()
+    const client = createSpeechSession({ ...f.options,
+      configuration: { ...f.options.configuration, context: { ...f.options.configuration.context, retention: 'text_only' } },
+      host: { ...f.options.host, readCaptions: async () => {
+        arrived.resolve(); await release.promise; throw new SpeechCaptionReadError(reason)
+      } },
+    })
+    try {
+      await client.ready; await arrived.promise; await client.setMicrophone(true)
+      const joined = assert.rejects(client.recoverCaptions(), reason === 'unauthorized' ? /closed/ : reason === 'stale_subscription' ? /caption_recovery_stale/ : /caption_recovery_unavailable/)
+      release.resolve(); await joined
+      assert.equal(f.microphone, reason !== 'unauthorized')
+      assert.equal(client.state.disconnect, reason === 'unauthorized')
+      assert.equal(f.errors.at(-1), reason === 'unauthorized' ? 'authorization_unavailable' : reason === 'stale_subscription' ? 'caption_recovery_stale' : 'caption_recovery_unavailable')
+    } finally { await client.close() }
+  }
 })
