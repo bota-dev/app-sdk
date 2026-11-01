@@ -993,6 +993,11 @@ and lifecycle; Flutter must delegate these to native facades through Pigeon.
 The confirmed first speech delivery covers every supported family in the
 [platform matrix](README.md#supported-platforms). Native policy bindings alone
 do not expose a complete speech facade or establish published media support.
+Android additionally has a source-preview `SpeechSession` orchestrator with
+typed metadata, independent capture/playback owners, authenticated host callbacks,
+caption recovery, source finish and bounded terminal cleanup. It executes the
+same policy through JNI; the concrete native RTC adapter remains pending.
+See [Android speech ownership and verification](docs/parity/android-speech-session.md).
 This is an explicit metadata-only exception to the original workflow ABI's
 no-JSON design: speech already consumes authenticated HTTP/event bodies with
 nested caption pages and one shared validation schema. Reusing that bounded
