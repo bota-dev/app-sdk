@@ -81,6 +81,9 @@ The port must keep new receive tracks silent until the SDK passes their exact
 identity to `setPlayback`. Disabling, closing or holding input synchronously
 fences both existing and pending capture acquisition. Cancellation alone is not
 proof that a native acquisition stopped.
+An input hold remains latched through late `setInput(true)` invocations; only a
+fully settled `setInput(false)` clears it. See the [Apple counterpart](apple-speech-session.md)
+for the Swift facade and its native-task cancellation contract.
 
 ```mermaid
 sequenceDiagram

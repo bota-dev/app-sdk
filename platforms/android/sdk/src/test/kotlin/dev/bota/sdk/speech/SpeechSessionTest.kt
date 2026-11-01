@@ -41,8 +41,8 @@ class SpeechSessionTest {
         override suspend fun setPlayback(tracks: List<SpeechTrack>) { calls += "play"; audible = tracks }
         override suspend fun setInput(enabled: Boolean) {
             calls += "input:$enabled"
-            if (enabled) held = false
             capture(enabled)
+            if (!enabled) held = false
             muted = !enabled || held || closed
         }
         override fun holdInput() { calls += "hold"; held = true; muted = true }

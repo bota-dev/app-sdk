@@ -15,6 +15,8 @@ public interface SpeechMediaCallbacks {
  * preserve unrelated host audio. A failure to clean up must throw.
  *
  * Synchronous mute/silence/hold apply to both current and pending acquisitions.
+ * setInput(true) must not clear a hold, even when its invocation starts late.
+ * Clear the hold only after setInput(false) fully stops that publication.
  * connect must not start capture. Newly acquired receive tracks must remain inaudible until setPlayback admits
  * their exact identity. No default subscription may bypass shared Rust policy.
  */

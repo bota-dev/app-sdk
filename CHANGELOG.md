@@ -13,11 +13,12 @@ tracked separately.
 
 ## Unreleased
 
-- Add an Android speech control facade backed by the shared Rust/JNI policy,
+- Add Apple and Android speech control facades backed by the shared Rust C ABI/JNI policy,
   with independent input/listening, language changes, caption recovery, source
   finish and bounded cancellation/cleanup. This source preview requires a
   qualified native media adapter; full RTC, App and Flutter integration remain
-  pending. See the [integration contract](docs/parity/android-speech-session.md).
+  pending. See the [Apple](docs/parity/apple-speech-session.md) and
+  [Android](docs/parity/android-speech-session.md) integration contracts.
 
 - Add optional authorized external audio input to Web and React Native speech
   adapters, with `setInput` / `finishInput` aliases. Web preserves host mute through
