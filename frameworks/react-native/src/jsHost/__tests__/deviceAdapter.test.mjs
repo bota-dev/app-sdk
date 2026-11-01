@@ -1396,6 +1396,36 @@ test('fresh post-reboot identity mismatch cannot emit complete or retain the rep
   await f.adapter.destroy();
 });
 
+for (const slowPhase of ['download', 'transfer']) {
+  test(`long ${slowPhase} does not consume the generated post-verification recovery budget`, { timeout: 5000 }, async t => {
+    const clockDescriptor = Object.getOwnPropertyDescriptor(performance, 'now');
+    const realNow = performance.now.bind(performance);
+    let elapsed = 0;
+    Object.defineProperty(performance, 'now', { configurable: true, value: () => realNow() + elapsed });
+    t.after(() => { if (clockDescriptor) Object.defineProperty(performance, 'now', clockDescriptor); else delete performance.now; });
+    const f = otaFixture({ samePeripheral: true, async connect() { await new Promise(resolve => setTimeout(resolve, 10)); } });
+    t.after(async () => { await f.adapter.destroy(); f.core.dispose(); });
+    const phases = [];
+    f.adapter.onFirmwareUpdateProgress(value => phases.push(value.phase));
+    if (slowPhase === 'download') {
+      const download = f.ports.network.download;
+      f.ports.network.download = async (...args) => { elapsed = 369_147; return download(...args); };
+    } else {
+      const write = f.ports.ble.write;
+      f.ports.ble.write = async (address, bytes, ...rest) => {
+        if (address.characteristicUuid === f.metadata.CHAR_RECORDING_TRANSFER) elapsed = 369_147;
+        return write(address, bytes, ...rest);
+      };
+    }
+    await f.adapter.configure({ logLevel: 'none' });
+    const device = await f.adapter.connectSelected({ id: 'original', rssi: -50, discoveredAtMs: 0 });
+    await f.adapter.updateFirmware(device, f.image);
+    assert.equal(phases.at(-1), 'complete');
+    assert.equal(firmwareDataWrites(f).length, 1, 'recovery must not retransmit the image');
+    assert.equal(f.unregisters.length, 1);
+  });
+}
+
 test('shortened recovery deadline retains ownership until ignored connection cancellation and cleanup settle', { timeout: 5000 }, async () => {
   let entered, release;
   const connecting = new Promise(resolve => { entered = resolve; });

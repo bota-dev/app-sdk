@@ -432,6 +432,19 @@ to the legacy full-adapter fallback only. Completion requires fresh exact serial
 and installed-version readback. Transfer or CRC failure cannot enter reboot
 recovery; an ACK does not prove the installed version.
 
+The generated JS host starts its one monotonic recovery deadline at the first
+`rebooting` or `reconnecting` core notification, after successful verification.
+Download and transfer duration do not consume this deadline. Repeated progress,
+reconnect attempts and final identity/version adoption share the remaining time;
+none starts another window. The legacy full-native bridge fallback retains its
+separate delayed-event policy.
+
+Long-download and long-transfer regressions advance the pre-verification clock
+by 369 seconds, then require verified completion without retransmitting DATA.
+The shortened-deadline, joined-cancellation and wrong-identity/version checks
+continue to bound recovery. These are controlled-host checks; package delivery,
+publication and a physical recovery boot remain separate acceptance gates.
+
 ### Generated firmware progress compatibility
 
 The JS host explicitly translates all seven Rust firmware phases to the public
