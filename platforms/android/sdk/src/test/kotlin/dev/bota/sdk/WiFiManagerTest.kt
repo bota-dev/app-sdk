@@ -20,51 +20,22 @@ import org.junit.Test
 
 class WiFiManagerTest {
     @Test
-    fun configureWritesGrantBeforeSubscriptionAndCredentialsAfterSubscription() = runTest {
-        val fixture = WiFiRuntimeFixture(
-            notifications = mapOf(BotaBluetoothUUIDs.WifiStatus to listOf(byteArrayOf(0x00))),
-        )
+    fun legacyConfigureAndDisconnectRejectBeforeAnyBluetoothWrite() = runTest {
+        val fixture = WiFiRuntimeFixture()
         val manager = WiFiManager()
         fixture.connect()
         manager.attach(fixture.runtime)
 
-        val result = manager.configure(fixture.device, "Bota", "secret", "grant.test")
-
-        assertEquals(WiFiConfigResult.Success, result)
-        assertEquals(
-            listOf(
-                WiFiAction.Write(BotaBluetoothUUIDs.WifiGrant, "grant.test".encodeToByteArray().toList()),
-                WiFiAction.Subscribe(BotaBluetoothUUIDs.WifiStatus),
-                WiFiAction.Write(
-                    BotaBluetoothUUIDs.WifiCredential,
-                    (byteArrayOf(0x04) + "Bota".encodeToByteArray() + byteArrayOf(0x06) + "secret".encodeToByteArray()).toList(),
-                ),
-                WiFiAction.Unsubscribe(BotaBluetoothUUIDs.WifiStatus),
-            ),
-            fixture.actions,
-        )
-    }
-
-    @Test
-    fun disconnectSubscribesBeforeWritingForgetPacket() = runTest {
-        val fixture = WiFiRuntimeFixture(
-            notifications = mapOf(BotaBluetoothUUIDs.WifiStatus to listOf(byteArrayOf(0x00))),
-        )
-        val manager = WiFiManager()
-        fixture.connect()
-        manager.attach(fixture.runtime)
-
-        val result = manager.disconnect(fixture.device)
-
-        assertEquals(WiFiConfigResult.Success, result)
-        assertEquals(
-            listOf(
-                WiFiAction.Subscribe(BotaBluetoothUUIDs.WifiStatus),
-                WiFiAction.Write(BotaBluetoothUUIDs.WifiCredential, listOf(0)),
-                WiFiAction.Unsubscribe(BotaBluetoothUUIDs.WifiStatus),
-            ),
-            fixture.actions,
-        )
+        val configureError = runCatching {
+            manager.configure(fixture.device, "Bota", "secret", "grant.test")
+        }.exceptionOrNull() as BotaSDKError.Core
+        assertEquals(BotaErrorCode.UnsupportedOperation, configureError.code)
+        assertEquals(BotaOperation.Provision, configureError.operation)
+        val disconnectError = runCatching {
+            manager.disconnect(fixture.device)
+        }.exceptionOrNull() as BotaSDKError.Core
+        assertEquals(BotaErrorCode.UnsupportedOperation, disconnectError.code)
+        assertEquals(emptyList<WiFiAction>(), fixture.actions)
     }
 
     @Test
@@ -187,13 +158,13 @@ private class WiFiRuntimeFixture(
             }
         },
         createWiFiGrantPacket = String::encodeToByteArray,
-        createWiFiCredentialPacket = { ssid, password ->
-            if (ssid.isEmpty() && password.isEmpty()) {
-                byteArrayOf(0)
-            } else {
-                byteArrayOf(ssid.encodeToByteArray().size.toByte()) + ssid.encodeToByteArray() +
-                    byteArrayOf(password.encodeToByteArray().size.toByte()) + password.encodeToByteArray()
-            }
+        createWiFiCredentialPacket = { _, _ ->
+            // Mirrors the shared-core FFI error; managers must not write before encoding succeeds.
+            throw BotaSDKError.Core(
+                BotaErrorCode.UnsupportedOperation, BotaOperation.Provision,
+                retryable = false, protocolStatus = null,
+                detail = "Legacy WiFi encoding is disabled",
+            )
         },
         createWiFiScanCommand = { byteArrayOf(1) },
     )
