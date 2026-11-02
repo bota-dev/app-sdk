@@ -2,7 +2,7 @@
   "manifestVersion": 2,
   "sdkFamily": "bota-app-sdk",
   "sdkVersion": "2.0.0-beta.23",
-  "sourceRevision": "01a7dfcbad2b34bdc241df26d7b6fef048b2038c",
+  "sourceRevision": "2916a4defff7f117cf386ab7103299ca69c6a299",
   "protocolFixtureDigest": "e3803e1e7774b9a7513d1c8059a7ea6ee30bf37d91a8b6662bf2f6fb06dd9639",
   "firmwareCompatibility": {
     "minimum": "1.0.17",
@@ -73,9 +73,9 @@
       "name": "bota_app_sdk-2.0.0-beta.23.tar.gz",
       "ecosystem": "pub",
       "version": "2.0.0-beta.23",
-      "checksumSha256": "1c88115507b66dc595f292aebb763fac3898a7ee143c07bd27096321beca0b3d",
-      "sourceRevision": "01a7dfcbad2b34bdc241df26d7b6fef048b2038c",
-      "normalizedArchiveSha256": "b7ca935979abd7512f2ceb4559a4c8001d0d8bce4b5e0faa3d36e7b47f53b108",
+      "checksumSha256": "eedbfcd2ae67ebf8853c9288af062dc859a16bc1dbb142ced46f5083eec06c2d",
+      "sourceRevision": "2916a4defff7f117cf386ab7103299ca69c6a299",
+      "normalizedArchiveSha256": "52bbcd1c6d1ded35fe8d4b0f4439c4a9ab1d0aae32041f5dd10e3dc928ee10c1",
       "generator": {
         "name": "pigeon",
         "version": "28.0.0"
@@ -148,8 +148,8 @@
         },
         {
           "path": "android/src/main/kotlin/dev/bota/sdk/flutter/BotaSpeechAdapter.kt",
-          "byteLength": 12341,
-          "sha256": "4ed27e32540e605b0f039e4091c7430a28ecb0b0a549d020e752e118d3c902b2"
+          "byteLength": 12328,
+          "sha256": "0e9a60ee93f8420af022f50e9e551ec694d64d6965c3dd7e98e7694efb72d846"
         },
         {
           "path": "android/src/main/kotlin/dev/bota/sdk/flutter/NativeLeaseCoordinator.kt",
