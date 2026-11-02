@@ -637,8 +637,9 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     );
   }
 
-  async disconnectWiFi(deviceId: string, grant?: WiFiConfigGrant): Promise<WiFiConfigResult> {
-    return this.client.wifi.disconnect(this.requireConnected(deviceId), grant);
+  /** @deprecated Use configureSecureWiFi with empty credentials and a disconnect grant. */
+  async disconnectWiFi(deviceId: string): Promise<WiFiConfigResult> {
+    return this.client.wifi.disconnect(this.requireConnected(deviceId));
   }
 
   async getWiFiStatus(deviceId: string): Promise<WiFiStatusInfo> {
