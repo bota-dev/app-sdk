@@ -34,7 +34,7 @@ enum Request {
         bytes: Vec<u8>,
     },
     Create {
-        grant: Grant,
+        grant: Box<Grant>,
         ssid: String,
         password: String,
         nonce: String,
