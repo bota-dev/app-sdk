@@ -3,7 +3,7 @@
 Status: unreleased Phase 3 source preview. The first delivery still includes
 Apple, Android, Flutter, React Native and Web. The optional Android LiveKit
 microphone adapter now connects this facade to native media in source. External
-host input, Flutter integration, application adoption and the Phase 3
+host input, Flutter media adoption, application adoption and the Phase 3
 qualification gates remain incomplete.
 
 ## Requirement and ownership
@@ -222,7 +222,7 @@ separate qualification work.
 | RTC-X03: last-word finish and caption recovery | Exact held publication, concurrent finish ownership, terminal distinctions, unchanged page validation and retired request IDs | Controlled-port lifecycle verified; actual RTP/ASR tails and network recovery pending |
 | RTC-M04: existing meeting integration | Public typed media/host ports; optional native LiveKit microphone module; audio excluded from JNI | External input, shared host audio and consuming-app integration incomplete |
 | RTC-X03: normal output tails | Device playback-head drain with bounded timeout and stale-selection retirement | Controlled drain behavior verified; audible cloud/physical tails pending |
-| All-platform G3/G6 | Android facade and optional microphone media candidate in source | Apple RTC, Flutter and per-platform package/App/physical qualification remain open |
+| All-platform G3/G6 | Native facade/media candidates and the [Flutter native bridge](flutter-speech-session.md) | Actual per-platform package/App/physical qualification remains open |
 
 `SpeechSessionTest` runs deterministic JVM regressions against the actual
 Rust C ABI and JNI library. The host JNI builder includes the shipping speech

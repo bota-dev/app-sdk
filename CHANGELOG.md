@@ -13,6 +13,12 @@ tracked separately.
 
 ## Unreleased
 
+- Add a Flutter speech control source preview backed by per-engine native
+  sessions, with typed captions/state, independent capture/listening, language
+  changes, source finish and recovery. Bounded delivery and engine teardown
+  retain native cleanup; audio and credentials stay outside Pigeon/Dart.
+  Actual package/App/media qualification and publication remain pending.
+
 - Add an optional Apple LiveKit microphone media package with independent input
   and listening, bounded native playback, source-finish holds and joined cleanup.
   Host checks run the shipping Rust/Swift policy with the actual adapter and
@@ -28,7 +34,7 @@ tracked separately.
 - Add Apple and Android speech control facades backed by the shared Rust C ABI/JNI policy,
   with independent input/listening, language changes, caption recovery, source
   finish and bounded cancellation/cleanup. This source preview requires a
-  qualified native media adapter; full RTC, App and Flutter integration remain
+  qualified native media adapter; full RTC, App and Flutter media adoption remain
   pending. See the [Apple](docs/parity/apple-speech-session.md) and
   [Android](docs/parity/android-speech-session.md) integration contracts.
 

@@ -3,7 +3,7 @@
 Status: unreleased Phase 3 source preview for the existing iOS 15+ / macOS 13+
 matrix. `SpeechSession` executes the shared Rust policy through the separate
 native C ABI. An optional LiveKit microphone adapter now connects the facade
-to native capture and bounded playback. External native input, Flutter, consuming applications and
+to native capture and bounded playback. External native input, Flutter media adoption, consuming applications and
 physical audio qualification remain incomplete. All five SDK families remain
 in the first delivery and the original G1–G6 gates remain open where unproved.
 
@@ -152,7 +152,7 @@ acceptance work. No component check establishes G3/G6 completion.
 | RTC-X03: tail completion and caption recovery | Held exact publication, concurrent finish, absent source, cursor/Unicode checks, retired/malformed page rejection | Real RTP/ASR tails, weak-network recovery and original-archive alignment |
 | RTC-M04: host meeting reuse | Typed ports and optional native LiveKit microphone adapter; raw audio stays outside C ABI | External-source adapter, shared host ownership coordinator and App integration |
 | RTC-X03: output tail and buffer retirement | Bounded native queue, played-completion drain, cancelled clear and retired reservation checks | Audible tails, native clock behavior and physical latency |
-| G3 / G6 across all five families | Apple control and microphone media source with controlled-port checks | Full package/App/device qualification, Flutter and external native media work |
+| G3 / G6 across all five families | Apple control and microphone media source, plus the [Flutter native bridge](flutter-speech-session.md) | Full package/App/device qualification and external native media work |
 
 `SpeechSessionChecks.swift` contains one set of behavior checks. The normal Apple
 package runs them through `SpeechSessionTests` under XCTest. For a Mac with only
@@ -182,3 +182,9 @@ compiler modes. Owned Apple targets explicitly use Swift 6, and the build helper
 fails on any iOS compiler warning in the owned facade/adapter sources. Vendor
 diagnostics remain visible; no vendor source or warning is suppressed. This
 correction requires its own fresh CI result.
+
+The Apple package/consumer lane in run `41445677447` passes at `55a545df`,
+including the optional module's XCTest checks and generic iOS build. License
+run `41445676767` also passes. Those results qualify that source lane; later
+Flutter changes still require their own exact-revision CI, and physical audio
+acceptance remains open.

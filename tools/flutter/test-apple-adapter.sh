@@ -2,6 +2,20 @@
 
 set -euo pipefail
 
+unit_only=false
+reuse_xcframework=false
+for option in "$@"; do
+  case "$option" in
+    --unit-only) unit_only=true ;;
+    --reuse-xcframework) reuse_xcframework=true ;;
+    *) echo "Unknown Apple adapter test option: $option" >&2; exit 1 ;;
+  esac
+done
+if $reuse_xcframework && ! $unit_only; then
+  echo "--reuse-xcframework requires --unit-only and a freshly built local artifact" >&2
+  exit 1
+fi
+
 workspace_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 plugin_root="$workspace_root/frameworks/flutter/bota_app_sdk"
 required_cocoapods_version="1.16.2"
@@ -35,7 +49,11 @@ if [[ -z "$pod_binary" ]]; then
 fi
 export PATH="$(dirname "$pod_binary"):$PATH"
 
-"$workspace_root/tools/apple/build-xcframework.sh"
+if $reuse_xcframework; then
+  test -f "$workspace_root/platforms/apple/Artifacts/BotaDeviceSDKCore.xcframework/Info.plist"
+else
+  "$workspace_root/tools/apple/build-xcframework.sh"
+fi
 
 mkdir -p \
   "$consumer_root/Sources/BotaFlutterSdk" \
@@ -150,6 +168,10 @@ EOF
 swift test \
   --package-path "$consumer_root" \
   --scratch-path "$workspace_root/target/flutter-apple-swiftpm"
+
+if $unit_only; then
+  exit 0
+fi
 
 create_flutter_consumer() {
   local destination="$1"
