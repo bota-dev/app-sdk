@@ -12,7 +12,9 @@ remain required. Device acceptance and application delivery remain separate.
 captions, recovery and source finish through native `SpeechSession` owners on
 iOS/Android. A native App factory must supply scoped authorization, HTTP callbacks
 and media integration before `start`; no audio or credentials cross Pigeon/Dart.
-Await `destroy` before discarding the client. This API is absent from published
+Repeated `BotaSpeechClient()` calls share the same engine-isolate owner. Use
+`close` between sessions; await terminal `destroy` when retiring that owner.
+This API is absent from published
 packages and still needs actual Flutter/media/device qualification. See the
 [source integration contract](https://github.com/bota-dev/app-sdk/blob/feat/realtime-speech-phase3/docs/parity/flutter-speech-session.md).
 

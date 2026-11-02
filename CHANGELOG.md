@@ -17,6 +17,8 @@ tracked separately.
   sessions, with typed captions/state, independent capture/listening, language
   changes, source finish and recovery. Bounded delivery and engine teardown
   retain native cleanup; audio and credentials stay outside Pigeon/Dart.
+  Repeated public-client construction shares the engine-isolate owner and
+  cannot replace active callbacks or reopen a destroyed client.
   Actual package/App/media qualification and publication remain pending.
 
 - Add an optional Apple LiveKit microphone media package with independent input

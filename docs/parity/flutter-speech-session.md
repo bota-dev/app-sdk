@@ -9,8 +9,13 @@ Realtime Speech Design, under Phase 3 evidence and unresolved release choices.
 
 ## Integration contract
 
-Create one `BotaSpeechClient` per Flutter engine. It owns one active speech
-session at a time, independently of `BotaDeviceClient` and Bluetooth workflows.
+`BotaSpeechClient()` returns the same client in the engine's Dart isolate, even
+after terminal destruction. Repeated construction cannot replace its event
+handler or create a second lifecycle owner. Use `close` to replace a session;
+reserve `destroy` for retiring the engine's speech client. The explicit
+`forTesting` constructor supplies an isolated host/channel seam for tests only.
+The client owns one active speech session at a time, independently of
+`BotaDeviceClient` and Bluetooth workflows.
 The native App installs `BotaFlutterSdkPlugin.setSpeechFactory` before the first
 speech session. The factory receives the requested backend session ID and the
 bridge observer, and must promptly return a fresh native `SpeechSession` using
@@ -121,6 +126,11 @@ the codec renumbering that adding a Pigeon enum would cause. A fixed legacy-wire
 regression protects this compatibility boundary. Android lint retains the
 qualified Flutter AGP pin and excludes only its upgrade recommendation alongside
 the existing newer-version advisory; correctness checks remain enabled.
+
+The generated-channel regression also constructs the public client twice while
+a session is active, verifies caption delivery to the original observer, and
+rejects reconstruction after terminal destruction. It fails against the prior
+constructor, which replaced the active engine callback handler.
 
 The host helper substitutes only Flutter's platform-channel API for compilation;
 it does not emulate an actual Flutter engine or device. The generated Pigeon

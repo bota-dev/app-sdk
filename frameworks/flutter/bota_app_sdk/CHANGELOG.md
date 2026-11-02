@@ -4,6 +4,8 @@
   independent input/listening, source finish and caption recovery.
 - Bound native event delivery and retire sessions on engine teardown; retain
   stable cleanup failures and keep credentials/audio outside Pigeon/Dart.
+- Share the public speech client within each engine isolate so repeated
+  construction preserves active callbacks and terminal destruction.
 - Require native host integration. Published package, actual media and physical
   Flutter App qualification remain separate.
 

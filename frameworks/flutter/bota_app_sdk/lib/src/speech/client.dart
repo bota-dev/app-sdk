@@ -9,7 +9,17 @@ import 'models.dart';
 /// factory before [start]. No credential, audio buffer or native handle enters Dart.
 /// Close each session and await [destroy] before discarding the engine.
 final class BotaSpeechClient implements BotaSpeechFlutterApi {
-  BotaSpeechClient({
+  factory BotaSpeechClient() => _defaultInstance;
+
+  /// Isolated host/channel seam for tests; application code uses the shared owner.
+  BotaSpeechClient.forTesting({
+    required BotaSpeechHostApi hostApi,
+    BinaryMessenger? binaryMessenger,
+  }) : this._(hostApi: hostApi, binaryMessenger: binaryMessenger);
+
+  static final BotaSpeechClient _defaultInstance = BotaSpeechClient._();
+
+  BotaSpeechClient._({
     BotaSpeechHostApi? hostApi,
     BinaryMessenger? binaryMessenger,
   }) : _host = hostApi ?? BotaSpeechHostApi(binaryMessenger: binaryMessenger),

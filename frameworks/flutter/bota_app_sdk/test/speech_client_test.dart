@@ -80,6 +80,9 @@ void main() {
         'host-session',
         observer: BotaSpeechObserver(onCaption: captions.add),
       );
+      // A second App component must share this engine's callback owner.
+      final sameEngine = BotaSpeechClient();
+      expect(identical(sameEngine, client), isTrue);
       final acknowledged = Completer<Object?>();
       ServicesBinding.instance.channelBuffers.push(
         'dev.flutter.pigeon.bota_flutter_sdk.BotaSpeechFlutterApi.onEvent',
@@ -104,13 +107,20 @@ void main() {
       expect(finished.source!.epoch, '18446744073709551615');
       expect(finished.source!.sequence, '18446744073709551614');
       expect((await session.recoverCaptions()).status, 'unavailable');
-      await client.destroy();
+      await sameEngine.destroy();
+      expect(identical(BotaSpeechClient(), client), isTrue);
+      await expectLater(
+        BotaSpeechClient().start('replacement'),
+        throwsA(
+          isA<BotaSpeechException>().having((e) => e.code, 'code', 'closed'),
+        ),
+      );
     },
   );
 
   test('close retires a pending start and joins native cleanup', () async {
     final host = FakeSpeechHost();
-    final client = BotaSpeechClient(hostApi: host);
+    final client = BotaSpeechClient.forTesting(hostApi: host);
     var states = 0;
     final starting = client.start(
       'host-session',
@@ -143,7 +153,7 @@ void main() {
     () async {
       final host = FakeSpeechHost()..starting.complete(state());
       final captions = <BotaSpeechCaption>[];
-      final client = BotaSpeechClient(hostApi: host);
+      final client = BotaSpeechClient.forTesting(hostApi: host);
       final session = await client.start(
         'host-session',
         observer: BotaSpeechObserver(onCaption: captions.add),
@@ -179,7 +189,7 @@ void main() {
 
   test('destroy is terminal, shared and preserves cleanup failure', () async {
     final host = FakeSpeechHost()..starting.complete(state());
-    final client = BotaSpeechClient(hostApi: host);
+    final client = BotaSpeechClient.forTesting(hostApi: host);
     await client.start('host-session');
     final first = client.destroy();
     final second = client.destroy();
@@ -213,7 +223,7 @@ void main() {
       final host = FakeSpeechHost()
         ..starting.complete(state())
         ..closing.complete();
-      final client = BotaSpeechClient(hostApi: host);
+      final client = BotaSpeechClient.forTesting(hostApi: host);
       await client.start('first');
       final retired = host.connectionId!;
       await client.close();
@@ -250,7 +260,7 @@ void main() {
 
   test('bridge failures redact arbitrary native error details', () async {
     final host = FakeSpeechHost();
-    final client = BotaSpeechClient(hostApi: host);
+    final client = BotaSpeechClient.forTesting(hostApi: host);
     final starting = client.start('host-session');
     final failed = expectLater(
       starting,
