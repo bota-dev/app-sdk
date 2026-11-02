@@ -118,7 +118,13 @@ Xcode adapter suite discovers those same checks through XCTest.
 The normal Flutter consumer gate now runs both native adapter suites against
 the exact fresh XCFramework/AAR built in that invocation, before building the
 ordinary iOS/Android Apps. It does not rebuild or substitute a published native
-package for those source checks.
+package for those source checks. The Android guard uses runner-provided `grep`;
+an actual adapter-script run with no `rg` on `PATH` reproduces the preceding
+failure and passes after the correction, retaining the version-mismatch refusal.
+SwiftPM-only checks do not require CocoaPods: the CocoaPods/Ruby guard applies
+when the helper proceeds to its separate application consumers. CI run
+`41450687512` exposed the previous premature guard before XCTest could start;
+new hosted XCTest and consumer evidence is still required.
 
 The CI-only `release/candidates/2.0.0-beta.23.json` inventory is generated from
 the 67 committed package files with pinned Node.js 22.23.2 and the canonical

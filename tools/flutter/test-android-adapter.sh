@@ -82,7 +82,7 @@ if "$android_root/gradlew" -p "$consumer_root" :bota_app_sdk:tasks --quiet \
   echo "mismatched botaAndroidSdkVersion unexpectedly succeeded" >&2
   exit 1
 fi
-if ! rg -F -q "botaAndroidSdkVersion must match sdk-version.toml ($sdk_version)" "$mismatch_log"; then
+if ! grep -F -q "botaAndroidSdkVersion must match sdk-version.toml ($sdk_version)" "$mismatch_log"; then
   cat "$mismatch_log" >&2
   exit 1
 fi
