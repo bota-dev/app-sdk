@@ -127,7 +127,6 @@ internal class BotaAndroidSpeechAdapter(
         val slot = current
         if (slot != null && slot.id == connectionId) beginClose(slot).await()
         else closed?.takeIf { it.id == connectionId }?.task?.await()
-        Unit
     }
     override suspend fun destroy(): Unit = withContext(dispatcher) { retire().await() }
 

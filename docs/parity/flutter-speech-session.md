@@ -123,8 +123,13 @@ an actual adapter-script run with no `rg` on `PATH` reproduces the preceding
 failure and passes after the correction, retaining the version-mismatch refusal.
 SwiftPM-only checks do not require CocoaPods: the CocoaPods/Ruby guard applies
 when the helper proceeds to its separate application consumers. CI run
-`41450687512` exposed the previous premature guard before XCTest could start;
-new hosted XCTest and consumer evidence is still required.
+`41450687512` exposed the previous premature guard before XCTest could start.
+Successor run `41454045309` passes all 42 Apple adapter XCTest checks, including
+the seven speech checks, the Android adapter checks, and the iOS release App
+build. Its Android release App then rejects a redundant `Unit` expression under
+the generated host's Kotlin 2.4 compiler with warnings-as-errors. The source
+correction removes that expression, retaining both warnings-as-errors and the
+standalone Kotlin 2.1.20 check. Complete final-source CI remains required.
 
 The CI-only `release/candidates/2.0.0-beta.23.json` inventory is generated from
 the 67 committed package files with pinned Node.js 22.23.2 and the canonical
