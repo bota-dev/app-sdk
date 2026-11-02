@@ -16,5 +16,6 @@ let package = Package(
             .product(name: "LiveKit", package: "client-sdk-swift"),
         ]),
         .testTarget(name: "BotaSpeechLiveKitTests", dependencies: ["BotaSpeechLiveKit"]),
-    ]
+    ],
+    swiftLanguageModes: [.v6]
 )

@@ -173,3 +173,12 @@ Xcode's dependency warning suppression combined with warnings-as-errors. The
 iOS command now explicitly sets `SWIFT_SUPPRESS_WARNINGS=NO` while preserving
 strict concurrency and warnings-as-errors. The corrected revision needs fresh
 CI; the preceding macOS success does not establish an iOS build or audio result.
+
+The follow-up run `41440415636` again passed the adapter's XCTest checks but
+exposed a second iOS build configuration issue: command-line complete-concurrency
+and warnings-as-errors overrides also applied to LiveKit's generated Swift 5
+UniFFI callback tables. The generic iOS check now preserves dependency-declared
+compiler modes. Owned Apple targets explicitly use Swift 6, and the build helper
+fails on any iOS compiler warning in the owned facade/adapter sources. Vendor
+diagnostics remain visible; no vendor source or warning is suppressed. This
+correction requires its own fresh CI result.
