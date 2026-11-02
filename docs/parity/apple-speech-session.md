@@ -2,8 +2,8 @@
 
 Status: unreleased Phase 3 source preview for the existing iOS 15+ / macOS 13+
 matrix. `SpeechSession` executes the shared Rust policy through the separate
-native C ABI. This completes the Apple control facade's source integration;
-the concrete native RTC adapter, Flutter bridge, consuming applications and
+native C ABI. An optional LiveKit microphone adapter now connects the facade
+to native capture and bounded playback. External native input, Flutter, consuming applications and
 physical audio qualification remain incomplete. All five SDK families remain
 in the first delivery and the original G1–G6 gates remain open where unproved.
 
@@ -81,6 +81,68 @@ policy owns polling, the source-finish deadline and grant expiry. Normal backend
 response bodies reach Rust unchanged; malformed or unauthorized responses cannot
 be reinterpreted as successful local state.
 
+## Optional LiveKit microphone adapter
+
+The source package `platforms/apple-speech-livekit` exports `BotaSpeechLiveKit`.
+It pins LiveKit Swift 2.18.0 and its resolved dependency revisions. It is not in
+the existing published SwiftPM/CocoaPods packages or release inventory. Its
+transitive native binaries, SPDX/notices and public distribution still need the
+normal release review. The local package dependency on the Apple facade is a
+source-preview integration, not a published installation coordinate.
+
+```swift
+import BotaSpeechLiveKit
+
+let session = try SpeechSession(configuration: configuration, grant: participantGrant,
+    mediaFactory: { try LiveKitSpeechMedia.create(callbacks: $0) },
+    host: authenticatedSpeechHost, observer: observer)
+try await session.ready()
+try await session.setInput(true)
+try await session.setListening(true)
+// On leaving, await session.close() before releasing the App's audio reservation.
+```
+
+The App must obtain microphone permission and reserve exclusive use of LiveKit's
+process-wide audio engine. Configure a content-free LiveKit logger before its
+first use; the factory also requests one. An active, prewarmed or manually
+rendered engine is rejected. The adapter saves and gates the mixer gains before
+connecting: built-in playout, app audio and sound-player capture stay silent,
+and microphone gain opens only for an admitted input owner. This microphone
+candidate does not share an existing meeting's audio engine.
+
+Only the exact processor and Rust-admitted track SIDs reach copied native PCM.
+`AVAudioPlayerNode` and `AVAudioEngine` handle playback; no samples cross the
+Rust ABI. Each frame is at most 100 ms, total outstanding audio at most 200 ms,
+and no more than 64 frame reservations or 16 tracks are retained. These are
+application queue limits, not a measured bound on hardware output latency.
+Retiring a track releases its pending reservations without depending on an OS
+completion callback. Silence mutes players immediately; clear joins node/engine
+stop and reset before acknowledging the shared policy's clear generation.
+
+Normal unpublication waits for `.dataPlayedBack` completions, with a one-second
+deadline. A language change or clear retires that wait. Stalled/invalid playback
+reports a stable error while capture remains independently controlled. Source
+finish keeps the exact original publication silent until the backend settles.
+Close joins late acquisition/publication and vendor readers/subscriptions,
+disposes input and output, and restores mixer gains only after successful
+cleanup and a stopped vendor engine. Uncertain cleanup retains exclusive
+ownership. Automatic RTC reconnect is disabled; reconnect needs fresh authority.
+Text streams are limited to the current processor, eight concurrent readers,
+32 KiB per message and five seconds.
+
+`bash tools/speech/test-apple-livekit.sh --host` compiles the real vendor SDK and
+unchanged shipping Swift speech facade against the actual Rust library, then
+runs the same behavior checks used by XCTest. It works with macOS Command Line
+Tools and does not emulate XCTest. With Xcode and the normal generated
+XCFramework, run `npm run test:apple:speech-livekit`. CI additionally compiles
+the optional package for iOS. A composed test exercises the public
+`SpeechSession` through Rust and this adapter with controlled RTC/device ports.
+
+Start physical qualification with headphones. Audible tails, permission and
+interruption handling, Bluetooth/background routes, AEC/speaker double-talk,
+external-source ownership and actual App/backend sessions remain separate
+acceptance work. No component check establishes G3/G6 completion.
+
 ## Requirement conformance and verification
 
 | Requirement | Source evidence and local verification | Remaining acceptance |
@@ -88,8 +150,9 @@ be reinterpreted as successful local state.
 | RTC-O03 / RTC-M02–03: simultaneous input/listening and individual language changes | Separate IO owners, both HTTP/event orders, delayed buffer clear and superseded HTTP checks through actual Rust | Concrete RTC and physical audio routes/AEC/double-talk |
 | RTC-X02: scoped current authority | Shared grant/event validation; authorization-revocation and expiry checks | Actual backend/provider revocation and network behavior |
 | RTC-X03: tail completion and caption recovery | Held exact publication, concurrent finish, absent source, cursor/Unicode checks, retired/malformed page rejection | Real RTP/ASR tails, weak-network recovery and original-archive alignment |
-| RTC-M04: host meeting reuse | Typed metadata/host/media ports; raw audio stays outside C ABI | Native media adapter, host ownership coordinator and App integration |
-| G3 / G6 across all five families | Apple control source and controlled-port checks | Full package/App/device qualification, Flutter and remaining native media work |
+| RTC-M04: host meeting reuse | Typed ports and optional native LiveKit microphone adapter; raw audio stays outside C ABI | External-source adapter, shared host ownership coordinator and App integration |
+| RTC-X03: output tail and buffer retirement | Bounded native queue, played-completion drain, cancelled clear and retired reservation checks | Audible tails, native clock behavior and physical latency |
+| G3 / G6 across all five families | Apple control and microphone media source with controlled-port checks | Full package/App/device qualification, Flutter and external native media work |
 
 `SpeechSessionChecks.swift` contains one set of behavior checks. The normal Apple
 package runs them through `SpeechSessionTests` under XCTest. For a Mac with only

@@ -30,6 +30,7 @@
     "sync:apple-fixtures": "node tools/apple/sync-protocol-fixtures.mjs --check && node tools/apple/sync-workflow-fixtures.mjs --check",
     "test:android:foundation": "tools/android/test-foundation.sh",
     "test:android:speech-livekit": "bash tools/speech/test-android-livekit.sh",
+    "test:apple:speech-livekit": "bash tools/speech/test-apple-livekit.sh",
     "test:fixtures": "node --test tools/baseline/*.test.mjs",
     "test:release": "node --test tools/release/*.test.mjs tools/android/*.test.mjs tools/flutter/verify-publication.test.mjs tools/flutter/select-manifest-template.test.mjs tools/flutter/verify-cocoapods-consumer.test.mjs",
     "test:react-native": "node --test tools/react-native/*.test.mjs",

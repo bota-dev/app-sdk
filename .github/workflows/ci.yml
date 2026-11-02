@@ -535,6 +535,22 @@ jobs:
       - name: Test Apple package and XCFramework
         run: tools/apple/test-package.sh -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
 
+      - name: Verify optional Apple LiveKit speech adapter
+        timeout-minutes: 20
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+        run: bash tools/speech/test-apple-livekit.sh -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
+
+      - name: Compile optional Apple speech adapter for iOS
+        timeout-minutes: 20
+        working-directory: platforms/apple-speech-livekit
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+        run: |
+          xcodebuild -scheme BotaSpeechLiveKit -destination 'generic/platform=iOS' \
+            -derivedDataPath ../../target/apple-speech-ios CODE_SIGNING_ALLOWED=NO \
+            SWIFT_STRICT_CONCURRENCY=complete SWIFT_TREAT_WARNINGS_AS_ERRORS=YES build
+
       - name: Test independent Watch HTTP controls and source consumer
         run: bash tools/apple/test-watch-control.sh
 

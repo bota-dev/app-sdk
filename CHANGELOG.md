@@ -13,6 +13,12 @@ tracked separately.
 
 ## Unreleased
 
+- Add an optional Apple LiveKit microphone media package with independent input
+  and listening, bounded native playback, source-finish holds and joined cleanup.
+  Host checks run the shipping Rust/Swift policy with the actual adapter and
+  controlled RTC/device ports. Packaging, external input and physical audio
+  acceptance remain separate from this unpublished source preview.
+
 - Add an optional Android LiveKit microphone media module with independently
   controlled capture/listening, authorized PCM playback, bounded buffering,
   source-finish publication holds and joined resource cleanup. The module is a
