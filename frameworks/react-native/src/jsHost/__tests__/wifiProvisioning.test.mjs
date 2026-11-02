@@ -25,3 +25,53 @@ test('old capabilities, changed nonce and legacy grants fail before encrypted fr
   assert.throws(()=>core.codec('wifiProvisioning',{Create:{...create.Create,grant:{...grant,grantBlob:'jwt'}}}));
  } finally {core.dispose();}
 });
+
+const { JsDeviceControls } = loadSource('deviceControls.ts');
+function host(mode = 'success') {
+ const core=createGeneratedJsCore(), meta=core.codec('protocolMetadata',{}), writes=[], listeners=new Set();
+ const device={id:'peripheral',serialNumber:r.serial_number,mtu:185};
+ let generation='1', removed=0;
+ const controller=new AbortController();
+ const context={operation:'DeviceControl',operationId:'test',requestId:'0',cancellationId:'01'.repeat(16),generation:'1',signal:controller.signal};
+ const ble={
+  async read(address) {
+   if(address.characteristicUuid===meta.CHAR_SERIAL_NUMBER)return Buffer.from(r.serial_number);
+   if(address.characteristicUuid===meta.CHAR_AUTH_NONCE)return Buffer.from(mode==='nonce'?'01'.repeat(16):r.auth_nonce,'hex');
+   return mode==='legacy'?new Uint8Array():Uint8Array.from([0xb2,2,7,0,253,1,126,0]);
+  },
+  async subscribe(_address,callback) {listeners.add(callback);return {async remove(){removed++;listeners.delete(callback);}};},
+  async write(address,value) {
+   writes.push({characteristic:address.characteristicUuid,bytes:Buffer.from(value)});
+   if(mode==='reconnect')generation='2';
+   if(mode==='cancel')controller.abort();
+   if(address.characteristicUuid===meta.CHAR_WIFI_CREDENTIAL) {
+    const receipt=Buffer.from(v.successHex,'hex');if(mode==='tamper')receipt[28]^=1;
+    // A connected notification containing an SSID cannot acknowledge setup.
+    for(const callback of listeners){callback(Buffer.from([2,1,65]));callback(receipt);}
+   }
+  },
+ };
+ const controls=new JsDeviceControls({core,ports:{ble,persistence:{namespace:'workspace'}},
+  connection:()=>({device,generation}),gatt:(_ctx,body)=>body(),emit(){}});
+ return {core,controls,context,device,writes,meta,removed:()=>removed};
+}
+test('actual generated core and BLE host send only ciphertext and wait for authenticated receipt',async()=>{
+ const f=host();try {
+  const result=await f.controls.execute('configureSecureWiFi',[f.device,create.Create.ssid,create.Create.password,JSON.stringify(grant)],f.context);
+  assert.equal(result.success,true);assert.equal(f.writes.length,4);assert.equal(f.removed(),1);
+  assert.equal(f.writes.at(-1).bytes.toString('hex'),v.credentialHex);
+  assert.equal(Buffer.concat(f.writes.slice(0,3).map(w=>w.bytes.subarray(6))).toString('base64'),r.envelope_base64);
+  for(const write of f.writes) {
+   assert.equal(write.bytes.includes(Buffer.from(create.Create.ssid)),false);
+   assert.equal(write.bytes.includes(Buffer.from(create.Create.password)),false);
+  }
+ } finally {await f.controls.close();f.core.dispose();}
+});
+for(const mode of ['legacy','nonce','reconnect','cancel','tamper'])test(`secure host refuses ${mode} without plaintext fallback`,async()=>{
+ const f=host(mode);try {
+  await assert.rejects(f.controls.execute('configureSecureWiFi',[f.device,create.Create.ssid,create.Create.password,JSON.stringify(grant)],f.context));
+  if(['legacy','nonce'].includes(mode))assert.equal(f.writes.length,0);
+  if(['reconnect','cancel'].includes(mode))assert.equal(f.writes.length,1);
+  if(mode==='tamper')assert.equal(f.writes.length,4);
+ } finally {await f.controls.close();f.core.dispose();}
+});
