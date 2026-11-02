@@ -1,6 +1,7 @@
 schemaVersion: 1
 protocolRevision: firmware-8b175a89374c
 contractRevisions:
+  WIFI_PROVISIONING_CONTRACT_REVISION: wifi-config-v2-2026-11-02
   LOCAL_WIFI_CONTRACT_REVISION: local-wifi-v2-2026-10-29
   RECORDING_MARKERS_CONTRACT_REVISION: recording-markers-v1-candidate-2026-10-09
   ENCRYPTED_UPLOAD_V2_CONTRACT_REVISION: encrypted-upload-v2-contract-v1
@@ -508,6 +509,11 @@ byteStrings:
   UPLOAD_CONTEXT_RESULT_MAGIC: 424f544143545852
 
 asciiStrings:
+  WIFI_PROVISIONING_MAGIC: BOTAWFP2
+  WIFI_PROVISIONING_AAD: bota/wifi-config/v2
+  WIFI_PROVISIONING_APP_INFO: bota/wifi-config/v2/app
+  WIFI_PROVISIONING_DEVICE_INFO: bota/wifi-config/v2/device
+  WIFI_PROVISIONING_HPKE_INFO: bota-wifi-config-v2
   LOCAL_WIFI_CONTROL_AAD: bota/local-wifi/control/v1
   LOCAL_WIFI_CONTROL_APP_INFO: bota/local-wifi/control/v1/app
   LOCAL_WIFI_CONTROL_DEVICE_INFO: bota/local-wifi/control/v1/device

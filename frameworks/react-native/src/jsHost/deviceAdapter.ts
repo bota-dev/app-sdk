@@ -76,7 +76,7 @@ const controls = [
   'deliverCertificate', 'deliverBackendPublicKey', 'writeGrant', 'syncTime',
   'requestStartRecording', 'requestStopRecording', 'readRecordingState',
   'readFindChallenge', 'readFindBindingChallenge', 'confirmFindBinding', 'readFindCapabilities', 'readFindStatus', 'requestFindDevice',
-  'startRecordingStateUpdates', 'stopRecordingStateUpdates', 'configureWiFi', 'disconnectWiFi',
+  'startRecordingStateUpdates', 'stopRecordingStateUpdates', 'configureSecureWiFi', 'configureWiFi', 'disconnectWiFi',
   'readConnectionSettings', 'writeConnectionSettings', 'readWiFiStatus', 'scanWiFiNetworks',
   'startStatusUpdates', 'stopStatusUpdates', 'startWiFiStatusUpdates', 'stopWiFiStatusUpdates',
   'startDeviceLogs', 'stopDeviceLogs',

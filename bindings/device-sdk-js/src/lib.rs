@@ -16,6 +16,7 @@ mod native_v2;
 mod planners;
 mod recording_upload;
 mod v2;
+mod wifi_provisioning;
 
 use engine::{Engine, error_bytes, invalid};
 use std::{cell::RefCell, collections::BTreeMap};

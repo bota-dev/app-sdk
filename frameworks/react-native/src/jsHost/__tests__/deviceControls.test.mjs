@@ -49,6 +49,12 @@ function fixture(overrides = {}, scope = {}, gatt = (_context, body) => body()) 
       case 'decodeRecordingControlNotification': return input.bytes[0] === 1 ? null
         : { success: input.bytes[0] !== 9, ...(input.bytes[0] === 9 ? { error: 'invalid_grant' } : {}) };
       case 'decodeWiFiConfigResult': return { success: true };
+      case 'wifiProvisioning':
+        if (input.Capability || input.Free) return null;
+        if (input.Create) return { id: 1, chunks: [[111]], credentials: [113] };
+        if (input.Result) return { success: true };
+        throw Error('unknown secure WiFi operation');
+      case 'decodeWiFiStatusEvent':
       case 'decodeWiFiStatus': return { status: 'connected', ssid: 'rust-wifi' };
       case 'decodeWiFiScanUpdate': return input.bytes[0] === 1 ? { kind: 'pending' }
         : { kind: 'done', result: { networks: [{ ssid: 'rust-wifi', quality: 80, isCurrent: true, isOpen: false }] } };
@@ -83,7 +89,7 @@ function fixture(overrides = {}, scope = {}, gatt = (_context, body) => body()) 
     async write(address, bytes, withResponse) {
       calls.push(['write', address.characteristicUuid, [...bytes], withResponse]);
       if (['RECORDING_CONTROL', 'WIFI_CREDENTIAL'].includes(address.characteristicUuid)) {
-        subscribers.get(address.characteristicUuid === 'RECORDING_CONTROL' ? 'RECORDING_STATUS' : 'WIFI_CREDENTIAL')?.(Uint8Array.of(0));
+        subscribers.get(address.characteristicUuid === 'RECORDING_CONTROL' ? 'RECORDING_STATUS' : 'WIFI_STATUS')?.(address.characteristicUuid === 'RECORDING_CONTROL' ? Uint8Array.of(0) : Uint8Array.of(0xb2,2));
       }
       if (address.characteristicUuid === 'FIND_CONTROL') subscribers.get('FIND_STATUS')?.(Uint8Array.of(0));
       if (address.characteristicUuid === 'WIFI_SCAN') subscribers.get('WIFI_SCAN')?.(Uint8Array.of(0));
@@ -214,9 +220,9 @@ test('a replacement connection fences queued writes even when its peripheral and
 test('WiFi requires configuration authorization and subscribes before ordered grant/credentials', async () => {
   const f = fixture();
   await assert.rejects(f.controls.execute('configureWiFi', [device, 'ssid', 'password'], f.context), { code: 'invalid_input' });
-  assert.deepEqual(await f.controls.execute('configureWiFi', [device, 'ssid', 'password', 'wifi-grant'], f.context), { success: true });
+  assert.deepEqual(await f.controls.execute('configureWiFi', [device, 'ssid', 'password', JSON.stringify({ format: 'bota-wifi-config-v2', expiresAt: '2099-01-01T00:00:00Z' })], f.context), { success: true });
   assert.deepEqual(f.calls.filter(call => ['subscribe', 'write', 'remove'].includes(call[0])).map(call => call.slice(0, 2)),
-    [['subscribe', 'WIFI_CREDENTIAL'], ['write', 'WIFI_GRANT'], ['write', 'WIFI_CREDENTIAL'], ['remove', 'WIFI_CREDENTIAL']]);
+    [['subscribe', 'WIFI_STATUS'], ['write', 'WIFI_GRANT'], ['write', 'WIFI_CREDENTIAL'], ['remove', 'WIFI_STATUS']]);
   assert.deepEqual(await f.controls.execute('scanWiFiNetworks', [device], f.context),
     { networks: [{ ssid: 'rust-wifi', quality: 80, isCurrent: true, isOpen: false }] });
   await f.controls.close();
