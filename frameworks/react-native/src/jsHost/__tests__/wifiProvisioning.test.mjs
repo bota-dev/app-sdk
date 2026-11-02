@@ -26,6 +26,32 @@ test('old capabilities, changed nonce and legacy grants fail before encrypted fr
  } finally {core.dispose();}
 });
 
+test('both directions depend on every operation-key byte and the complete grant', () => {
+ const variants = Array.from({length:32}, (_, index) => {
+  const key = Buffer.from(grant.keyBase64, 'base64');
+  key[index] ^= 1;
+  return {...grant, keyBase64:key.toString('base64')};
+ });
+ // The SDK treats the signed envelope as salt; firmware authenticates it.
+ // Its final signature byte must still affect both directional keys.
+ const envelope = Buffer.from(grant.grantBlob, 'base64');
+ envelope[envelope.length - 1] ^= 1;
+ variants.push({...grant, grantBlob:envelope.toString('base64')});
+ for (const [index, changedGrant] of variants.entries()) {
+  const core = createGeneratedJsCore();
+  try {
+   const prepared = core.codec('wifiProvisioning', {Create:{...create.Create, grant:changedGrant}});
+   assert.notEqual(Buffer.from(prepared.credentials).toString('hex'), v.credentialHex, `key/grant variant ${index}`);
+   assert.throws(() => core.codec('wifiProvisioning', {Result:{id:prepared.id, bytes:[...Buffer.from(v.successHex, 'hex')]}}));
+  } finally {core.dispose();}
+ }
+ const core = createGeneratedJsCore();
+ try {
+  assert.throws(() => core.codec('wifiProvisioning', {Create:{...create.Create,
+   grant:{...grant, keyBase64:Buffer.alloc(32).toString('base64')}}}));
+ } finally {core.dispose();}
+});
+
 const { JsDeviceControls } = loadSource('deviceControls.ts');
 function host(mode = 'success') {
  const core=createGeneratedJsCore(), meta=core.codec('protocolMetadata',{}), writes=[], listeners=new Set();

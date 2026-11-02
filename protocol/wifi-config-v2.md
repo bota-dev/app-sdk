@@ -126,6 +126,9 @@ refusal, storage faults, protected-store reboot and PMK cleanup. Host results
 do not establish vendor stack key-size enforcement, physical storage or phone
 pairing behavior.
 
+The [static-analysis review](../docs/security/2026-11-03-secure-wifi-sast.md)
+records key-provenance regression evidence and the scoped scanner dispositions.
+
 Publish compatible SDK, backend and firmware together, then update the App's
 registry lock and build a new App. The App feature-detects
 `DeviceManager.configureSecureWiFi`; its old pinned SDK fails safely until
