@@ -276,28 +276,11 @@ test('WiFi codecs match committed fixture packets and reject malformed input', a
     () => bridge.encodeWiFiGrant('grant.test', 9),
     coreError('payload_too_large', 'encode'),
   )
-  assert.equal(
-    hexString(bridge.encodeWiFiCredentials(
-      String((credentials.input as JsonRecord).ssid),
-      String((credentials.input as JsonRecord).password),
-    )),
-    fixtureHex(credentials, 'expectedHex'),
-  )
-  assert.equal(
-    hexString(bridge.encodeWiFiCredentials(
-      String((disconnect.input as JsonRecord).ssid),
-      String((disconnect.input as JsonRecord).password),
-    )),
-    fixtureHex(disconnect, 'expectedHex'),
-  )
-  assertCoreBridgeError(
-    () => bridge.encodeWiFiCredentials('Bota\0Guest', 'secret'),
-    coreError('invalid_input', 'encode'),
-  )
-  assertCoreBridgeError(
-    () => bridge.encodeWiFiCredentials('', 'secret'),
-    coreError('invalid_input', 'encode'),
-  )
+  for (const input of [credentials.input, disconnect.input, {ssid:'Bota\0Guest',password:'secret'}, {ssid:'',password:'secret'}]) {
+    const value = input as JsonRecord
+    assertCoreBridgeError(() => bridge.encodeWiFiCredentials(String(value.ssid), String(value.password)),
+      coreError('unsupported_operation', 'provision'))
+  }
   assert.equal(
     hexString(bridge.encodeWiFiScanCommand()),
     fixtureHex(scan, 'expectedHex'),
