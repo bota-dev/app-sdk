@@ -120,6 +120,12 @@ the exact fresh XCFramework/AAR built in that invocation, before building the
 ordinary iOS/Android Apps. It does not rebuild or substitute a published native
 package for those source checks.
 
+The CI-only `release/candidates/2.0.0-beta.23.json` inventory is generated from
+the 67 committed package files with pinned Node.js 22.23.2 and the canonical
+archive/manifest tools. Local archive readback verifies every file hash. The
+historical release example and other platform artifacts remain unchanged;
+the full hosted consumer gate must reproduce this candidate before acceptance.
+
 Existing Pigeon device-message type tags remain unchanged. The speech mode uses
 a validated string inside its new DTO and maps to native/Dart enums, avoiding
 the codec renumbering that adding a Pigeon enum would cause. A fixed legacy-wire
