@@ -68,23 +68,44 @@ public class LiveKitSpeechMedia internal constructor(
                             if (synchronized(lock) { !closed && version == playbackVersion }) callbacks.trackRemoved(sid)
                         }
                     } catch (_: TimeoutCancellationException) {
-                        if (!closed) { silencePlayback(); callbacks.playbackBlocked() }
+                        reportPlaybackBlocked()
                     } catch (_: CancellationException) {
                         // Session retirement owns cleanup.
                     } catch (_: Exception) {
-                        if (!closed) { silencePlayback(); callbacks.playbackBlocked() }
+                        reportPlaybackBlocked()
                     }
                 }
             }
             override fun disconnected() {
-                silencePlayback(); muteInput()
-                if (synchronized(lock) { !closed }) callbacks.disconnected()
+                reportMediaFailure { callbacks.disconnected() }
             }
             override fun failed() {
-                silencePlayback(); muteInput()
-                if (synchronized(lock) { !closed }) callbacks.failed()
+                reportMediaFailure { callbacks.failed() }
             }
         }
+    }
+
+    private fun reportMediaFailure(report: () -> Unit) {
+        var failed = false
+        try { silencePlayback() } catch (_: Exception) { failed = true }
+        try { muteInput() } catch (_: Exception) { failed = true }
+        val notify = synchronized(lock) {
+            cleanupFailed = cleanupFailed || failed
+            !closed
+        }
+        // Cleanup failure must not prevent the policy owner from retiring the session.
+        if (notify) report()
+    }
+
+    private fun reportPlaybackBlocked() {
+        if (closed) return
+        try { silencePlayback() }
+        catch (_: Exception) {
+            synchronized(lock) { cleanupFailed = true }
+            reportMediaFailure { callbacks.failed() }
+            return
+        }
+        if (!closed) callbacks.playbackBlocked()
     }
 
     /** Own native work independently of a cancelled public waiter so close can join late acquisitions. */

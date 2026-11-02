@@ -114,19 +114,11 @@ internal class VendorRtcRoom(context: Context, private val scope: CoroutineScope
             if (retired || sender != processor || sid !in allowed || track !is RemoteAudioTrack) return
             if (sinks[sid]?.track === track) return
             remove(sid)
-            val sink = AudioTrackSink { data, bits, rate, channels, frames, _ ->
-                if (!retired && sid in allowed && sender == processor) {
-                    val size = frames.toLong() * channels * 2
-                    if (bits != 16 || channels !in 1..2 || rate !in setOf(8000, 16000, 24000, 32000, 44100, 48000) ||
-                        frames <= 0 || frames > rate / 10 || size > data.remaining()) {
-                        listener?.failed()
-                    } else {
-                        val copy = ByteArray(size.toInt())
-                        data.duplicate().get(copy)
-                        listener?.frame(sender, sid, PcmFrame(copy, rate, channels))
-                    }
-                }
-            }
+            lateinit var sink: VendorPcmSink
+            sink = VendorPcmSink(scope,
+                accepts = { !retired && sid in allowed && sender == processor && sinks[sid]?.sink === sink },
+                frame = { listener?.frame(sender, sid, it) },
+                failed = { listener?.failed() })
             sinks[sid] = Sink(track, sink)
             track.addSink(sink)
             if (retired || sid !in allowed) remove(sid)

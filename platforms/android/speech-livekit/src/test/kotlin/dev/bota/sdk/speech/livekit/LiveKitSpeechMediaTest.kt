@@ -44,11 +44,12 @@ class LiveKitSpeechMediaTest {
         var acquire: suspend () -> RtcInput = { input }
         var publish: suspend () -> Unit = {}
         var connect: suspend () -> Unit = {}
+        var subscribeFails = false
         override suspend fun connect(grant: SpeechGrant) { calls += "connect"; identity = grant.identity; name = grant.room; connect() }
         override suspend fun createInput(): RtcInput = acquire()
         override suspend fun publish(input: RtcInput) { publish() }
         override fun unpublish(input: RtcInput) { calls += "unpublish" }
-        override fun subscribe(sids: Set<String>) { calls += "subscribe:${sids.sorted()}" }
+        override fun subscribe(sids: Set<String>) { calls += "subscribe:${sids.sorted()}"; check(!subscribeFails) }
         override fun muteInput() { calls += "mute"; input.enabled = false }
         override fun disconnect() { calls += "disconnect" }
         override suspend fun release() { calls += "release" }
@@ -214,13 +215,27 @@ class LiveKitSpeechMediaTest {
         val room = Room(); val output = Output(); val callbacks = Callbacks()
         output.draining = { CompletableDeferred<Unit>().await() }
         val media = LiveKitSpeechMedia(room, output, callbacks, backgroundScope)
-        media.connect(grant); media.setPlayback(listOf(track))
+        media.connect(grant); media.setInput(true); media.setPlayback(listOf(track))
         room.listener!!.removed("TR_output"); runCurrent()
         advanceTimeBy(1_000); runCurrent()
         assertTrue(callbacks.removed.isEmpty())
         assertEquals(1, callbacks.blocked)
         assertTrue(output.allowed.isEmpty())
+        assertTrue(room.input.enabled)
         media.close()
+    }
+
+    @Test fun failedSilenceStillMutesCaptureAndNotifiesTheSessionOwner() = runTest {
+        val room = Room(); val callbacks = Callbacks()
+        val media = LiveKitSpeechMedia(room, Output(), callbacks, backgroundScope)
+        media.connect(grant); media.setInput(true)
+        room.subscribeFails = true
+        room.listener!!.failed()
+        assertEquals(1, callbacks.failures)
+        assertFalse(room.input.enabled)
+        room.subscribeFails = false
+        assertEquals(SpeechErrorCode.CLEANUP_FAILED,
+            (runCatching { media.close() }.exceptionOrNull() as SpeechSessionException).code)
     }
 
     @Test fun publicSessionExecutesActualRustPolicyThroughTheMediaAdapter() = runBlocking {

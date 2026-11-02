@@ -153,6 +153,11 @@ This module is not included in the existing published base AAR or release
 inventory. Its LiveKit 2.29.0 dependency and transitive graph are locked and
 SHA-256 verified; JitPack resolution is restricted to the exact upstream
 AudioSwitch revision. Do not advertise a published installation coordinate yet.
+The optional transitive graph still needs release SPDX/notices and a completed
+redistribution review, including the relocated API terms of
+`android-jain-sip-ri:1.3.0-91` tracked in
+[LiveKit issue 1048](https://github.com/livekit/client-sdk-android/issues/1048).
+The existing base-SDK Maven license gate does not establish that review.
 
 ```kotlin
 val session = SpeechSession.create(configuration, participantGrant,
@@ -177,6 +182,10 @@ source finish resolves.
 The PCM queue is bounded to 200 ms, each device buffer to at most 200 ms, and a
 stalled writer to one second. Queue overflow, invalid PCM and stalled output
 report blocked playback rather than increasing latency without a bound.
+Invalid vendor frames trigger retirement off the native audio callback thread,
+so removing the sink cannot wait on its own callback. Only the exact current sink
+may report this failure. Cleanup failures still notify the session owner and
+attempt capture muting; close retains the cleanup failure.
 Silence immediately retires queued frames and mutes active players. Clear joins
 native pause, flush and release before acknowledging completion. A later selection
 cannot reuse a silenced player's queued samples, even when the SID is unchanged.
