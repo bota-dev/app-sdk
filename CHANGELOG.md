@@ -13,6 +13,12 @@ tracked separately.
 
 ## Unreleased
 
+- Add an optional Android LiveKit microphone media module with independently
+  controlled capture/listening, authorized PCM playback, bounded buffering,
+  source-finish publication holds and joined resource cleanup. The module is a
+  source candidate; external host capture, App/device acceptance and publication
+  remain pending.
+
 - Add Apple and Android speech control facades backed by the shared Rust C ABI/JNI policy,
   with independent input/listening, language changes, caption recovery, source
   finish and bounded cancellation/cleanup. This source preview requires a

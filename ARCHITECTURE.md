@@ -996,7 +996,11 @@ do not expose a complete speech facade or establish published media support.
 Apple and Android additionally have source-preview `SpeechSession` orchestrators with
 typed metadata, independent capture/playback owners, authenticated host callbacks,
 caption recovery, source finish and bounded terminal cleanup. It executes the
-same policy through the C ABI / JNI; concrete native RTC adapters remain pending.
+same policy through the C ABI / JNI. The optional Android `speech-livekit` source
+module connects microphone capture and authorized remote PCM to native playback,
+with muted built-in playout, bounded buffers and joined cleanup. Apple RTC,
+external native input, Flutter media integration and physical qualification
+remain pending.
 See [Apple speech ownership](docs/parity/apple-speech-session.md) and
 [Android speech ownership](docs/parity/android-speech-session.md).
 This is an explicit metadata-only exception to the original workflow ABI's

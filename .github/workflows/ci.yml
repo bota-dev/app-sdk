@@ -292,9 +292,15 @@ jobs:
         run: cargo install wasm-bindgen-cli --version 0.2.128 --locked
 
       - name: Install Web gate dependencies and pinned Chromium browser
+        timeout-minutes: 15
         run: |
           npx --yes "npm@$NPM_CLI_VERSION" ci
           npx --yes "npm@$NPM_CLI_VERSION" ci --prefix tests/consumers/web-vite
+          sudo tee /etc/apt/apt.conf.d/99-bota-ci-timeouts >/dev/null <<'EOF'
+          Acquire::http::Timeout "30";
+          Acquire::https::Timeout "30";
+          Acquire::Retries "2";
+          EOF
           tests/consumers/web-vite/node_modules/.bin/playwright install --with-deps chromium
 
       - name: Verify Web package and packed consumer
@@ -399,15 +405,20 @@ jobs:
           tools/android/test-consumer.sh --compile-only \
             --repository target/android-m2
 
+      - name: Verify optional Android LiveKit speech adapter
+        timeout-minutes: 15
+        run: bash tools/speech/test-android-livekit.sh
+
       - name: Retain Android JVM failure reports
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: android-junit-failure-${{ github.sha }}-${{ github.run_attempt }}
-          path: platforms/android/sdk/build/test-results/testDebugUnitTest/*.xml
+          path: |
+            platforms/android/sdk/build/test-results/testDebugUnitTest/*.xml
+            platforms/android/speech-livekit/build/test-results/testDebugUnitTest/*.xml
           if-no-files-found: warn
           retention-days: 7
-
       - name: Inspect packaged native libraries
         run: tools/android/inspect-aar.sh "target/android-release/bota-app-sdk-$(sed -n 's/^version = "\([^"]*\)"$/\1/p' sdk-version.toml).aar"
 

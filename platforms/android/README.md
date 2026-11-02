@@ -46,8 +46,9 @@ Phase 3 source now includes the optional `dev.bota.sdk.speech.SpeechSession`
 control facade for independent capture/listening, language changes, caption
 recovery and source finish. It executes shared Rust policy through JNI and
 requires host-authenticated control callbacks and a qualified native media
-adapter. The concrete RTC adapter and consuming-app/physical acceptance are
-still pending; this is not a published speech capability. See the
+adapter. The optional source module `speech-livekit` supplies a LiveKit microphone
+adapter with native bounded playback. External host input, consuming-app/physical
+acceptance and publication are still pending. See the
 [ownership, integration and regression review](../../docs/parity/android-speech-session.md).
 
 Unreleased source adds `bota.clientPresence.nextReport(deviceId)` returning
