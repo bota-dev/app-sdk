@@ -366,4 +366,3 @@ async function promiseSettled(promise: Promise<unknown>): Promise<boolean> {
   await new Promise((resolve) => setTimeout(resolve, 0))
   return settled
 }
-
