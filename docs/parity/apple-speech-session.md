@@ -166,3 +166,10 @@ native task remains pending, and that close waits for cleanup after cancellation
 Local host checks and Swift 6 strict-concurrency compilation do not establish
 Xcode/XCFramework/package acceptance. The full Apple CI lane, exact final-commit
 checks, real RTC, application and device acceptance remain independently required.
+
+The November 2 source run `41418137825` passed the optional adapter's XCTest
+checks and all other functional lanes, but its generic iOS compile rejected
+Xcode's dependency warning suppression combined with warnings-as-errors. The
+iOS command now explicitly sets `SWIFT_SUPPRESS_WARNINGS=NO` while preserving
+strict concurrency and warnings-as-errors. The corrected revision needs fresh
+CI; the preceding macOS success does not establish an iOS build or audio result.

@@ -549,7 +549,8 @@ jobs:
         run: |
           xcodebuild -scheme BotaSpeechLiveKit -destination 'generic/platform=iOS' \
             -derivedDataPath ../../target/apple-speech-ios CODE_SIGNING_ALLOWED=NO \
-            SWIFT_STRICT_CONCURRENCY=complete SWIFT_TREAT_WARNINGS_AS_ERRORS=YES build
+            SWIFT_STRICT_CONCURRENCY=complete SWIFT_SUPPRESS_WARNINGS=NO \
+            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES build
 
       - name: Test independent Watch HTTP controls and source consumer
         run: bash tools/apple/test-watch-control.sh
