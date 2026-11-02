@@ -347,7 +347,7 @@ export type BotaDeviceSDKWiFiClient = {
     credentials: WiFiCredentials,
     grant: WiFiConfigGrant
   ): Promise<WiFiConfigResult>;
-  disconnect(device: ConnectedDevice): Promise<WiFiConfigResult>;
+  disconnect(device: ConnectedDevice, grant?: WiFiConfigGrant): Promise<WiFiConfigResult>;
   readStatus(device: ConnectedDevice): Promise<WiFiStatusInfo>;
   subscribeToStatus(
     device: ConnectedDevice,
@@ -1590,21 +1590,16 @@ export const createBotaDeviceSDK = (
   const wifi: BotaDeviceSDKWiFiClient = {
     async configure(device, credentials, grant) {
       return mapWiFiConfigResult(
-        await requireNativeModule().configureWiFi(
-          toNativeConnectedDevice(device),
-          credentials.ssid,
-          credentials.password,
-          grant.grantBlob
+        await requireNativeModule('configureSecureWiFi').configureSecureWiFi(
+          toNativeConnectedDevice(device), credentials.ssid, credentials.password,
+          JSON.stringify(grant)
         )
       );
     },
 
-    async disconnect(device) {
-      return mapWiFiConfigResult(
-        await requireNativeModule().disconnectWiFi(
-          toNativeConnectedDevice(device)
-        )
-      );
+    async disconnect(device, grant) {
+      if (!grant) throw new BotaRuntimeCompatibilityError('native_contract_unsupported', 'disconnectWiFi');
+      return wifi.configure(device, { ssid: '', password: '' }, grant);
     },
 
     async readStatus(device) {

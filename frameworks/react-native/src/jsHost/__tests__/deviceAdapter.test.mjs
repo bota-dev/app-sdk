@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
 import { loadSource } from './loadSource.mjs';
 
 const { createGeneratedJsCore } = loadSource('core.ts');
@@ -743,6 +744,11 @@ test('real generated connection workflow verifies physical serial and builds nat
 for (const platform of ['android', 'ios']) {
   test(`${platform} uses connected Note identity and refreshes WiFi capability after reconnect`, async () => {
     const f = fixture({ platform });
+    const vector = JSON.parse(readFileSync(new URL('../../../../../protocol/wifi-config-v2.vector.json', import.meta.url), 'utf8'));
+    const r = vector.response;
+    f.values.set(f.metadata.CHAR_SERIAL_NUMBER, Buffer.from(r.serial_number));
+    f.values.set(f.metadata.CHAR_AUTH_NONCE, Buffer.from(r.auth_nonce, 'hex'));
+    f.values.set(f.metadata.CHAR_WIFI_GRANT, Uint8Array.from([0xb2,2,7,0,253,1,126,0]));
     let wifiPresent = true;
     const probes = [];
     f.ports.ble.hasService = async (id, service) => { probes.push([id, service]); return wifiPresent; };
@@ -760,7 +766,7 @@ for (const platform of ['android', 'ios']) {
       await write(...args);
       if (args[0].characteristicUuid === f.metadata.CHAR_WIFI_CREDENTIAL) {
         assert.equal(f.calls.at(-2)[1].characteristicUuid, f.metadata.CHAR_WIFI_GRANT);
-        subscribers.get(f.metadata.CHAR_WIFI_CREDENTIAL)(Uint8Array.of(0));
+        subscribers.get(f.metadata.CHAR_WIFI_STATUS)(Buffer.from(vector.successHex, 'hex'));
       }
     };
     const { createBotaDeviceSDK } = loadSource('../client.ts');
@@ -774,12 +780,14 @@ for (const platform of ['android', 'ios']) {
         assert.equal(device.deviceType, 'bota_note');
         assert.equal(device.capabilities.wifiUpload, wifiPresent);
         assert.equal(device.capabilities.lteUpload, false);
-        assert.deepEqual(await client.wifi.configure(device, { ssid: 'fixture-wifi', password: 'fixture-password' },
-          { grantBlob: 'synthetic-grant', expiresAt: new Date(Date.now() + 60000) }), { success: true });
+        assert.deepEqual(await client.wifi.configure(device, { ssid: 'Audit-Network', password: 'Audit-Only-123' },
+          { grantBlob: r.envelope_base64, expiresAt: new Date(r.expires_at), format: r.format,
+            keyBase64: r.key_base64, requestId: r.request_id, authNonce: r.auth_nonce, action: r.action,
+            serialNumber: r.serial_number, bindingGeneration: r.binding_generation }), { success: true });
         await client.devices.disconnect();
       }
       wifiPresent = false;
-      const reconnected = await client.devices.reconnect('C8SU2XXWHI');
+      const reconnected = await client.devices.reconnect(r.serial_number);
       assert.equal(reconnected.deviceType, 'bota_note');
       assert.equal(reconnected.capabilities.wifiUpload, false, 'a prior connection cannot lend its WiFi capability');
       assert.deepEqual(probes, Array(4).fill(['selected', f.metadata.SERVICE_BOTA_WIFI_CONFIG]));

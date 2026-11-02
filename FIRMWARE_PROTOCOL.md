@@ -162,14 +162,14 @@ results are 0 success, 1 invalid token, 2 storage error, 3 chunk error and
 Time sync on `0002/0004` is eight bytes: Unix seconds u32LE, milliseconds
 within the second u16LE, then timezone offset in minutes i16LE.
 
-WiFi grant and credential handling uses `0006/0001` and `0006/0002`.
-The credential codec emits `ssid_length:u8 || ssid:UTF8 || password_length:u8 ||
-password:UTF8`, bounded to 32/64 bytes, with no embedded NUL. Disconnect is the
-single byte `00`; an empty SSID cannot carry a password. These codec bytes do
-not bypass device authorization. Scan starts with `01` on `0006/0004`.
-Connection status values are 0 idle, 1 connecting, 2 connected, 3 failed and
-4 disconnected. See [encoders](core/device-sdk-core/src/protocol/encode.rs) and
-[status/scan decoders](core/device-sdk-core/src/protocol/provisioning.rs).
+WiFi configuration uses mandatory [secure personal WiFi v2](protocol/wifi-config-v2.md)
+on `0006/0001` (capability and signed HPKE grant), `0006/0002` (one-use AEAD
+credentials), and `0006/0003` (authenticated result and ordinary status).
+The shared legacy plaintext credential encoder is disabled. Disconnect also
+requires fresh signed authority; there is no plaintext fallback. Success
+acknowledges encrypted persistence and connection scheduling, not DHCP.
+Scan starts with `01` on `0006/0004`. Ordinary connection status values remain
+0 idle, 1 connecting, 2 connected, 3 failed and 4 disconnected.
 
 `DEVICE_SETTINGS` (`0003/0006`) writes use a 12-byte version-2 packet:
 
