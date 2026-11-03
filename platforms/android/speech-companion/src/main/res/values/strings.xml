@@ -1,0 +1,24 @@
+<resources>
+    <string name="app_name">Bota Conversation</string>
+    <string name="brand">BOTA / CONVERSATION</string>
+    <string name="headline">Speak. Listen. Stay in the conversation.</string>
+    <string name="intro">Two speakers, separate languages. Use headphones for your first session.</string>
+    <string name="host">Session host</string>
+    <string name="default_host" translatable="false">http://127.0.0.1:4173</string>
+    <string name="code">Access code</string>
+    <string name="join">Join session</string>
+    <string name="joining">Joining…</string>
+    <string name="leave">Leave</string>
+    <string name="microphone">Microphone</string>
+    <string name="listening">Listening</string>
+    <string name="finish">Finish input</string>
+    <string name="resume">Resume audio</string>
+    <string name="recover">Recover captions</string>
+    <string name="conversation">Conversation</string>
+    <string name="language">Receiving language</string>
+    <string name="mode">Listening mode</string>
+    <string name="empty">Original speech and its translation will appear together here.</string>
+    <string name="pending">Live caption</string>
+    <string-array name="roles"><item>Speaker A</item><item>Speaker B</item></string-array>
+    <string-array name="modes"><item>Translated</item><item>Original</item><item>Captions only</item></string-array>
+</resources>

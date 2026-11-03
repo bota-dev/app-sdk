@@ -3,8 +3,71 @@
 Status: unreleased Phase 3 source preview. The first delivery still includes
 Apple, Android, Flutter, React Native and Web. The optional Android LiveKit
 adapter now connects this facade to microphone or authorized host PCM in source.
-Host conference integration, Flutter media adoption, application adoption and the Phase 3
+An optional native companion App now consumes it through the loopback operator
+host. Host conference integration, Flutter media adoption, production application adoption and the Phase 3
 qualification gates remain incomplete.
+
+## Native conversation companion
+
+`platforms/android/speech-companion` is an optional Android 26+ App. Its Activity
+uses a process-owned native controller, the shipping Rust/JNI `SpeechSession`
+and the optional LiveKit adapter. It provides A/B roles, paired original and
+translated captions, independent microphone/listening, language/mode selection,
+source finish, caption recovery and joined departure. It is outside the normal
+publication graph; enable it with `-PincludeSpeechCompanion=true`.
+
+Run `bash tools/speech/test-android-companion.sh` with the repository's pinned
+Rust/JDK/Android toolchains. This verifies the controller and HTTP transport,
+runs lint and builds an internal debug APK at
+`platforms/android/speech-companion/build/outputs/apk/debug/speech-companion-debug.apk`.
+Its checked dependency lock is strict; ordinary validation does not rewrite it.
+The APK includes the native policy/JNI and RTC libraries for ARM64, ARMv7,
+x86 and x86_64. Debug signing is for local testing, not public distribution.
+The optional adapter's existing redistribution/license review remains open.
+
+Start the [loopback operator host](../../frameworks/web/README.md#two-speaker-browser-companion)
+with two pre-admitted microphone roles, exclusive peer subscriptions and
+`text_only` or `live_only`. On an explicitly selected USB/emulator test device,
+forward its loopback port with `adb -s SERIAL reverse tcp:4173 tcp:4173`, install
+the internal APK and enter `http://127.0.0.1:4173`, the role and its access code.
+Use a distinct role in the peer Web/native companion. Remove the reverse mapping
+after the trial. Device installation, permission and an actual provider call are
+operator actions, not automatic effects of the build. Do not expose the proxy on
+a LAN address or put project/provider keys in the App.
+
+Joining keeps capture and listening off. Microphone permission is requested only
+when input is enabled; the resulting approval is bound to that exact session
+owner. Leaving, backgrounding or replacing the Activity clears the code and
+captions and joins native cleanup. A process-wide owner prevents Activity
+replacement from bypassing pending or failed cleanup. Captions stay in at most
+100 paired cards; a 32-event mailbox closes an overloaded owner. Old subscription
+revisions are retired before a language change and cannot repopulate the view.
+Final captions cannot regress to drafts. Finishing input keeps listening alive.
+
+The native HTTP client uses fixed loopback paths, role credentials, eight-second
+calls, no redirects, no connection retry, strict UTF-8 and at most 512 KiB per
+response. Its request cancellation closes the actual OkHttp call. Source finish
+preserves explicit unknown boundary fields and accepts 202 without interpreting
+it as completed; Rust evaluates the unchanged body. Codes and captions are not
+persisted or logged, and App backup/transfer is disabled. No original-audio
+capture/archive profile is introduced by this example.
+
+The local development check has 13 tests, including real loopback HTTP,
+native Rust/JNI controller composition and an actual Activity lifecycle check,
+plus lint and a debug APK build. Native
+IO uses a dedicated real executor so virtual caller time cannot outrun actual tasks.
+The separate adapter suite covers LiveKit/PCM ownership. Neither suite establishes
+an actual RTC/provider conversation, Bluetooth/AEC routing or physical acceptance.
+
+| Requirement | Implementation/evidence | Remaining acceptance |
+| --- | --- | --- |
+| RTC-O01–03 | Native role UI, paired captions and independent controls; composed controller checks | Authorized two-party media and provider delivery |
+| RTC-M04 | Native Activity, permission ownership, strict build and APK packaging | Physical routing, installation and released package |
+| RTC-X02–03 | Source finish, revision retirement, bounded HTTP and joined leave | Actual expiry/revocation, provider tails and weak networks |
+| RTC-O04 / RTC-X01 | Unsupported archival still fails before capture | Authorized encrypted capture branch, clocks/gaps and reconciliation |
+
+The internal Realtime Speech Design remains the single end-to-end completion
+checklist. This source App does not close an unverified G1–G6 gate.
 
 ## Requirement and ownership
 

@@ -22,3 +22,6 @@ rootProject.name = "bota-app-sdk-android"
 
 include(":sdk")
 include(":speech-livekit")
+if (providers.gradleProperty("includeSpeechCompanion").orNull == "true") {
+    include(":speech-companion")
+}

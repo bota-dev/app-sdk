@@ -97,7 +97,7 @@ final class CompanionModel: ObservableObject {
             try await session.ready()
             guard owner == generation else { return }
             connected = true; joining = false; state = session.state
-            notice = "Connected. Input and listening are off."
+            notice = "Connected. Choose when to speak and listen."
         } catch {
             if owner == generation { await leave(reason: "Could not join. Check the role, code and active session.") }
         }

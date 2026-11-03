@@ -13,6 +13,12 @@ tracked separately.
 
 ## Unreleased
 
+- Add an optional Android conversation companion with native Rust/JNI session
+  ownership, a bounded loopback HTTP host, A/B roles, paired captions and
+  independent input/listening. Its internal debug APK keeps consent and cleanup
+  in the App. Production host adoption, physical audio and redistribution
+  qualification remain separate.
+
 - Add a native Apple conversation companion source with A/B roles, paired
   captions, independent microphone/listening, explicit permission, source
   finish and joined cleanup. Its loopback host keeps project/provider keys
