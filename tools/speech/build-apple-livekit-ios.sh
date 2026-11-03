@@ -38,6 +38,7 @@ codesign --force --deep --sign - "$MAC_APP"
 codesign --verify --deep --strict "$MAC_APP"
 python3 - "$MAC_APP" "$ROOT/target/apple-speech-ios/Build/Products/Debug-iphoneos/SpeechCompanionApp.app" <<'PY'
 import plistlib
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -46,7 +47,15 @@ for path in map(Path, sys.argv[1:]):
     contents = path / "Contents" if (path / "Contents").is_dir() else path
     metadata = plistlib.loads((contents / "Info.plist").read_bytes())
     binary = (contents / "MacOS" if contents != path else contents) / metadata["CFBundleExecutable"]
-    frameworks = contents / "Frameworks"
+    def rpaths(image):
+        commands = subprocess.check_output(["otool", "-l", str(image)], text=True)
+        paths = re.findall(r"cmd LC_RPATH\s+cmdsize \d+\s+path (.*?) \(offset", commands)
+        return [Path(item.replace("@executable_path", str(binary.parent), 1)
+                         .replace("@loader_path", str(image.parent), 1)).resolve() for item in paths]
+
+    # Xcode's debug companion dylib can live beside the executable. Resolve
+    # declared loader paths instead of assuming every dependency is a framework.
+    inherited = rpaths(binary)
     pending, seen = [binary], set()
     while pending:
         current = pending.pop().resolve()
@@ -57,8 +66,11 @@ for path in map(Path, sys.argv[1:]):
         for line in links.splitlines()[1:]:
             dependency = line.strip().split(" ", 1)[0]
             if dependency.startswith("@rpath/") and not dependency.startswith("@rpath/libswift"):
-                embedded = frameworks / dependency.removeprefix("@rpath/")
-                if not embedded.is_file():
+                candidates = [directory / dependency.removeprefix("@rpath/")
+                              for directory in [*rpaths(current), *inherited]]
+                embedded = next((candidate for candidate in candidates
+                                 if candidate.is_file() and candidate.resolve().is_relative_to(path.resolve())), None)
+                if embedded is None:
                     raise SystemExit(f"Missing embedded App dependency: {dependency}")
                 pending.append(embedded)
     print(f"Verified embedded App dependencies: {path.name}, {len(seen)} native binaries")
