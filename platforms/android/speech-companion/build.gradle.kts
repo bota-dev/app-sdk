@@ -25,6 +25,9 @@ android {
     lint {
         warningsAsErrors = true
         disable += setOf("AndroidGradlePluginVersion", "GradleDependency", "NewerVersionAvailable")
+        // This internal consumer follows the SDK's fixed API 36 toolchain.
+        // Keep newer-target advice visible without claiming that platform's qualification.
+        informational += "OldTargetApi"
     }
 }
 kotlin { compilerOptions { allWarningsAsErrors.set(true); jvmTarget.set(JvmTarget.JVM_17) } }

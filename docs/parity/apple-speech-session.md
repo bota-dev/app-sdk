@@ -18,7 +18,8 @@ executable for compilation checks. Build the native XCFramework first with
 `tools/apple/build-xcframework.sh`, then open the project in Xcode and select
 `SpeechCompanionApp`. `bash tools/speech/build-apple-livekit-ios.sh` builds both
 consumer Apps, checks owned-source warnings, locally signs the macOS bundle and
-writes internal ZIPs under `target/apple-speech-companion`. The iOS ZIP is
+checks embedded dynamic dependencies before writing internal ZIPs under
+`target/apple-speech-companion`. The iOS ZIP is
 unsigned. These are source previews, outside the published release inventory.
 
 Configure and start the existing [loopback operator host](../../frameworks/web/README.md#two-speaker-browser-companion),

@@ -36,6 +36,33 @@ PY
 MAC_APP="$ROOT/target/apple-speech-macos/Build/Products/Debug/SpeechCompanionApp.app"
 codesign --force --deep --sign - "$MAC_APP"
 codesign --verify --deep --strict "$MAC_APP"
+python3 - "$MAC_APP" "$ROOT/target/apple-speech-ios/Build/Products/Debug-iphoneos/SpeechCompanionApp.app" <<'PY'
+import plistlib
+import subprocess
+import sys
+from pathlib import Path
+
+for path in map(Path, sys.argv[1:]):
+    contents = path / "Contents" if (path / "Contents").is_dir() else path
+    metadata = plistlib.loads((contents / "Info.plist").read_bytes())
+    binary = (contents / "MacOS" if contents != path else contents) / metadata["CFBundleExecutable"]
+    frameworks = contents / "Frameworks"
+    pending, seen = [binary], set()
+    while pending:
+        current = pending.pop().resolve()
+        if current in seen:
+            continue
+        seen.add(current)
+        links = subprocess.check_output(["otool", "-L", str(current)], text=True)
+        for line in links.splitlines()[1:]:
+            dependency = line.strip().split(" ", 1)[0]
+            if dependency.startswith("@rpath/") and not dependency.startswith("@rpath/libswift"):
+                embedded = frameworks / dependency.removeprefix("@rpath/")
+                if not embedded.is_file():
+                    raise SystemExit(f"Missing embedded App dependency: {dependency}")
+                pending.append(embedded)
+    print(f"Verified embedded App dependencies: {path.name}, {len(seen)} native binaries")
+PY
 mkdir -p "$ROOT/target/apple-speech-companion"
 ditto -c -k --keepParent "$MAC_APP" "$ROOT/target/apple-speech-companion/SpeechCompanion-macOS.zip"
 ditto -c -k --keepParent "$ROOT/target/apple-speech-ios/Build/Products/Debug-iphoneos/SpeechCompanionApp.app" \

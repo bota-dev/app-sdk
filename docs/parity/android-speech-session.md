@@ -24,6 +24,10 @@ Its checked dependency lock is strict; ordinary validation does not rewrite it.
 The APK includes the native policy/JNI and RTC libraries for ARM64, ARMv7,
 x86 and x86_64. Debug signing is for local testing, not public distribution.
 The optional adapter's existing redistribution/license review remains open.
+The source App compiles and targets API 36, matching the SDK's fixed toolchain.
+Lint retains `OldTargetApi` as an informational recommendation when a CI host
+knows a newer API. It does not change this internal consumer's target silently
+or establish qualification for a later platform or store submission.
 
 Start the [loopback operator host](../../frameworks/web/README.md#two-speaker-browser-companion)
 with two pre-admitted microphone roles, exclusive peer subscriptions and
