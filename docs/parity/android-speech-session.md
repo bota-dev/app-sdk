@@ -2,8 +2,8 @@
 
 Status: unreleased Phase 3 source preview. The first delivery still includes
 Apple, Android, Flutter, React Native and Web. The optional Android LiveKit
-microphone adapter now connects this facade to native media in source. External
-host input, Flutter media adoption, application adoption and the Phase 3
+adapter now connects this facade to microphone or authorized host PCM in source.
+Host conference integration, Flutter media adoption, application adoption and the Phase 3
 qualification gates remain incomplete.
 
 ## Requirement and ownership
@@ -58,10 +58,9 @@ session.close()
 ```
 
 The host identifier above is an application integration point. For the optional
-LiveKit microphone adapter, use the factory described below.
+LiveKit adapters, use the factories described below.
 `setMicrophone` / `finishMicrophone` are aliases for microphone-backed ports;
-`setInput` / `finishInput` also cover future authorized external audio sources.
-They do not establish that an external input bridge is already available.
+`setInput` / `finishInput` also cover the authorized external PCM branch below.
 
 Observers run synchronously on the invoking SDK thread, must not block and must
 dispatch UI or suspend calls to the application's scope. Observer exceptions
@@ -209,9 +208,69 @@ the Android CI lane runs the same gate. A composed check drives this adapter
 through the public `SpeechSession` and actual Rust/JNI policy with controlled
 RTC and output ports. These checks do not establish cloud RTC,
 AEC/double-talk, audible output-tail draining, Bluetooth routing, host conference
-coexistence, external capture, consuming-App or release acceptance. The first
+coexistence, actual host capture, consuming-App or release acceptance. The first
 physical path must use headphones; speaker/AEC and shared-host ownership remain
 separate qualification work.
+
+## Authorized external PCM input
+
+`LiveKitSpeechMedia.createExternal(context, callbacks, input)` accepts an
+`ExternalPcmInput(participantId, memberGeneration)`. The authenticated backend
+must admit this participant as immutable `source_kind=host_external`; the host
+must authorize one participant's original audio and forward its mute/end events.
+The adapter checks the participant and generation against the grant before RTC
+connection. Carrier metadata cannot prove the provenance of host-supplied audio.
+Do not supply generated translation, mixed conference audio or arbitrary system
+capture. Changing source kind requires revocation and a new participant UUID.
+
+```kotlin
+val input = ExternalPcmInput(participantGrant.participantId, participantGrant.memberGeneration)
+val session = SpeechSession.create(configuration, participantGrant,
+    mediaFactory = { callbacks -> LiveKitSpeechMedia.createExternal(context, callbacks, input) },
+    host = authenticatedSpeechHost, observer = captionObserver)
+session.ready.await()
+session.setInput(true)
+input.setMuted(false) // Only when the authorized host source is unmuted.
+// In the host's native audio callback: input.offer(pcm10ms)
+// On each host mute change: input.setMuted(hostMuted)
+// For normal completion: await session.finishInput(), then detach the host callback.
+// Unexpected source loss: input.end(). Leaving the session: await session.close().
+```
+
+Each `offer` copies exactly 960 bytes: 10 ms of 48 kHz mono signed PCM16,
+little-endian. The host performs any needed resampling and frame assembly. The
+borrowed buffer and its position remain unchanged; audio never crosses JNI,
+Pigeon or Dart. The input starts muted, accepts no frames before grant validation
+and capture enablement, and has a 20-frame / 200 ms queue. Muting either the host
+source or SDK input discards queued audio. No frames survive a hold or close.
+Overflow, a malformed frame, an unexpected RTC format or a frame older than
+200 ms terminates the branch and reports media failure asynchronously. An empty
+queue supplies silence. Arrival time is not represented as a capture timestamp
+or an original-archive alignment claim.
+
+The pinned LiveKit 2.29.0 Java ADM disables physical `AudioRecord` before connect,
+uses its no-device callback clock, and replaces the entire callback buffer with
+admitted PCM or silence. Any nonzero microphone byte count fails closed. Capture
+prewarming, hardware AEC/NS, local processing, automatic focus/routing and the
+communication-mode keepalive are disabled for this path. The microphone factory
+keeps its existing behavior. The host owns its conference route and audio focus;
+the Bota branch never stops or changes the original track. The existing native
+playback owner remains independently controlled and bounded.
+
+The input is single-owner and becomes terminal on session close or source loss.
+For normal last-word completion, use `SpeechSession.finishInput`; unexpected
+`input.end()` reports failure instead of manufacturing a successful source finish.
+Source finish holds the exact Bota publication while listening may continue.
+The adapter retains its exclusive Bota reservation after uncertain cleanup.
+
+Controlled tests cover borrowed-buffer copies, inactive input, independent host
+mute and SDK hold, overload/stale frames, invalid formats and microphone fallback,
+participant/generation mismatch before connect, duplicate attachment, source end
+and late callbacks after close. They compile against the pinned vendor APIs.
+Actual native callback cadence, host conference coexistence, device routing and
+cloud final-word behavior remain unqualified. Apple external input is still a
+code gap: the pinned public mixer injection API supplies no consumption/clear
+acknowledgement sufficient for the same bounded retirement contract.
 
 ## Verification and remaining acceptance
 
@@ -220,7 +279,7 @@ separate qualification work.
 | RTC-O03 / RTC-M02–03: independent speaking, listening and language changes | Separate capture/playback owners; Rust track admission; controlled-port duplex, both acknowledgement orders and stale-response tests | Control behavior verified locally; RTC/device behavior pending |
 | RTC-X02: scoped authority | Rust grant/event validation, expiry and fail-closed authorization loss; actual JNI tests for foreign senders and revoked/expired access | Local policy/host conformance; real service revocation pending |
 | RTC-X03: last-word finish and caption recovery | Exact held publication, concurrent finish ownership, terminal distinctions, unchanged page validation and retired request IDs | Controlled-port lifecycle verified; actual RTP/ASR tails and network recovery pending |
-| RTC-M04: existing meeting integration | Public typed media/host ports; optional native LiveKit microphone module; audio excluded from JNI | External input, shared host audio and consuming-app integration incomplete |
+| RTC-M04: existing meeting integration | Optional microphone and authorized external PCM factories; grant binding, native bounded input, mute/end/close tests; audio excluded from JNI | Android source branch implemented; actual host bridge, shared audio behavior and consuming-App qualification pending |
 | RTC-X03: normal output tails | Device playback-head drain with bounded timeout and stale-selection retirement | Controlled drain behavior verified; audible cloud/physical tails pending |
 | All-platform G3/G6 | Native facade/media candidates and the [Flutter native bridge](flutter-speech-session.md) | Actual per-platform package/App/physical qualification remains open |
 

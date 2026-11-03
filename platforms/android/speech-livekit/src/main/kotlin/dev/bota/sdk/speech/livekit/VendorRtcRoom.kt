@@ -1,12 +1,15 @@
 package dev.bota.sdk.speech.livekit
 
 import android.content.Context
+import android.media.AudioFormat
 import dev.bota.sdk.speech.SpeechGrant
 import io.livekit.android.AudioOptions
 import io.livekit.android.ConnectOptions
 import io.livekit.android.LiveKit
 import io.livekit.android.LiveKitOverrides
 import io.livekit.android.RoomOptions
+import io.livekit.android.audio.AudioBufferCallback
+import io.livekit.android.audio.NoAudioHandler
 import io.livekit.android.events.RoomEvent
 import io.livekit.android.events.collect
 import io.livekit.android.room.network.ReconnectContext
@@ -19,6 +22,7 @@ import io.livekit.android.room.track.RemoteTrackPublication
 import io.livekit.android.room.track.Track
 import io.livekit.android.util.LoggingLevel
 import java.util.concurrent.ConcurrentHashMap
+import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration
 import kotlinx.coroutines.CancellationException
@@ -30,9 +34,12 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import livekit.org.webrtc.AudioTrackSink
+import livekit.org.webrtc.audio.JavaAudioDeviceModule
 
 /** Uses public LiveKit 2.29.0 APIs only. Built-in playout is muted for the complete room lifetime. */
-internal class VendorRtcRoom(context: Context, private val scope: CoroutineScope) : RtcRoom {
+internal class VendorRtcRoom(context: Context, private val scope: CoroutineScope,
+    private val externalInput: ExternalPcmInput? = null,
+) : RtcRoom {
     @Volatile override var listener: RtcListener? = null
     @Volatile private var allowed = emptySet<String>()
     @Volatile private var processor = ""
@@ -46,7 +53,18 @@ internal class VendorRtcRoom(context: Context, private val scope: CoroutineScope
         LiveKit.enableWebRTCLogging = false
         LiveKit.create(context, RoomOptions(reconnectPolicy = object : ReconnectPolicy {
             override fun getNextRetryDelay(context: ReconnectContext): Duration? = null
-        }), LiveKitOverrides(audioOptions = AudioOptions(disableAudioPrewarming = true))).also {
+        }), LiveKitOverrides(audioOptions = if (externalInput == null) AudioOptions(disableAudioPrewarming = true) else AudioOptions(
+            audioHandler = NoAudioHandler(),
+            disableAudioPrewarming = true,
+            disableCommunicationModeWorkaround = true,
+            javaAudioDeviceModuleCustomizer = { builder ->
+                builder.setInputSampleRate(48000).setUseStereoInput(false)
+                    .setAudioFormat(AudioFormat.ENCODING_PCM_16BIT)
+                    .setUseHardwareAcousticEchoCanceler(false).setUseHardwareNoiseSuppressor(false)
+            },
+        ))).also {
+            // Disable physical AudioRecord before connection or track acquisition. Do not fall back.
+            if (externalInput != null) (it.lkObjects.audioDeviceModule as JavaAudioDeviceModule).setAudioRecordEnabled(false)
             it.setSpeakerMute(true)
             it.setMicrophoneMute(true)
         }
@@ -147,18 +165,35 @@ internal class VendorRtcRoom(context: Context, private val scope: CoroutineScope
     private inner class Input(val track: LocalAudioTrack) : RtcInput {
         override var enabled: Boolean
             get() = track.enabled
-            set(value) { room.setMicrophoneMute(!value); track.enabled = value }
+            set(value) {
+                externalInput?.capture(value)
+                room.setMicrophoneMute(externalInput != null || !value)
+                track.enabled = value
+            }
         override val sid: String? get() = room.localParticipant.trackPublications.values.firstOrNull { it.track === track }?.sid
-        override fun dispose() { track.stop(); track.dispose() }
+        override fun dispose() {
+            if (externalInput != null) { externalInput.capture(false); track.setAudioBufferCallback(null) }
+            track.stop(); track.dispose()
+        }
     }
-    override suspend fun createInput(): RtcInput = Input(room.localParticipant.createAudioTrack("bota-original",
-        LocalAudioTrackOptions(echoCancellation = true, noiseSuppression = true, autoGainControl = true))).also { it.enabled = false }
+    override suspend fun createInput(): RtcInput {
+        val external = externalInput
+        val track = room.localParticipant.createAudioTrack("bota-original", if (external == null)
+            LocalAudioTrackOptions(echoCancellation = true, noiseSuppression = true, autoGainControl = true)
+        else LocalAudioTrackOptions(echoCancellation = false, noiseSuppression = false, autoGainControl = false,
+            highPassFilter = false, typingNoiseDetection = false))
+        if (external != null) track.setAudioBufferCallback(object : AudioBufferCallback {
+            override fun onBuffer(buffer: ByteBuffer, audioFormat: Int, channelCount: Int, sampleRate: Int, bytesRead: Int, captureTimeNs: Long): Long =
+                external.render(buffer, audioFormat, channelCount, sampleRate, bytesRead)
+        })
+        return Input(track).also { it.enabled = false }
+    }
     override suspend fun publish(input: RtcInput) {
         check(room.localParticipant.publishAudioTrack((input as Input).track,
             AudioTrackPublishOptions(name = "bota-original", source = Track.Source.MICROPHONE, preconnect = false)))
     }
     override fun unpublish(input: RtcInput) { room.localParticipant.unpublishTrack((input as Input).track) }
-    override fun muteInput() { room.setMicrophoneMute(true) }
+    override fun muteInput() { externalInput?.capture(false); room.setMicrophoneMute(true) }
     override fun disconnect() { room.disconnect() }
     override suspend fun release() {
         listener = null

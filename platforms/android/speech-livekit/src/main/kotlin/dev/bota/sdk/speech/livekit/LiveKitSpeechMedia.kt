@@ -23,12 +23,13 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 
-/** Optional LiveKit Cloud microphone adapter. The host obtains grants and microphone permission. */
+/** Optional LiveKit Cloud adapter. The host obtains grants and owns its selected audio source. */
 public class LiveKitSpeechMedia internal constructor(
     private val room: RtcRoom,
     private val output: PcmOutput,
     private val callbacks: SpeechMediaCallbacks,
     scope: CoroutineScope,
+    private val externalInput: ExternalPcmInput? = null,
     private val onCleanClose: () -> Unit = {},
 ) : SpeechMediaPort {
     private val scope = CoroutineScope(scope.coroutineContext + SupervisorJob(scope.coroutineContext[Job]))
@@ -49,6 +50,7 @@ public class LiveKitSpeechMedia internal constructor(
     private var cleanupFailed = false
 
     init {
+        externalInput?.attach { scope.launch { if (!closed) reportMediaFailure { callbacks.failed() } } }
         room.listener = object : RtcListener {
             override fun text(sender: String, json: String) {
                 if (synchronized(lock) { !closed && sender == processor }) callbacks.text(sender, json)
@@ -145,6 +147,7 @@ public class LiveKitSpeechMedia internal constructor(
             attempted = true
             processor = grant.processorIdentity
         }
+        externalInput?.validate(grant)
         room.connect(grant)
         synchronized(lock) {
             checkOpen()
@@ -167,6 +170,7 @@ public class LiveKitSpeechMedia internal constructor(
     override fun muteInput() {
         synchronized(lock) {
             inputVersion++
+            externalInput?.capture(false)
             room.muteInput()
             input?.enabled = false
         }
@@ -178,6 +182,7 @@ public class LiveKitSpeechMedia internal constructor(
         synchronized(lock) {
             checkOpen()
             held = true
+            externalInput?.capture(false)
             room.muteInput()
             input?.enabled = false
         }
@@ -277,6 +282,7 @@ public class LiveKitSpeechMedia internal constructor(
         val task = synchronized(lock) {
             closing ?: run {
                 closed = true
+                externalInput?.retire()
                 connected = false
                 room.listener = null
                 val pending = operations.toList()
@@ -311,15 +317,30 @@ public class LiveKitSpeechMedia internal constructor(
         private val exclusiveOwner = AtomicBoolean()
         /** Reserve exclusive communication-audio ownership until close succeeds. */
         public fun create(context: Context, callbacks: SpeechMediaCallbacks): LiveKitSpeechMedia {
+            return createOwned(context, callbacks, null)
+        }
+
+        /**
+         * Publish one host-authorized original PCM branch without opening a microphone or changing
+         * host audio focus/routing. The host must provision source_kind=host_external and keep its
+         * conference audio session active. This does not qualify simultaneous host SDK/device use.
+         */
+        public fun createExternal(context: Context, callbacks: SpeechMediaCallbacks, input: ExternalPcmInput): LiveKitSpeechMedia {
+            input.requireAvailable()
+            return createOwned(context, callbacks, input)
+        }
+
+        private fun createOwned(context: Context, callbacks: SpeechMediaCallbacks, input: ExternalPcmInput?): LiveKitSpeechMedia {
             if (!exclusiveOwner.compareAndSet(false, true)) throw SpeechSessionException(SpeechErrorCode.MEDIA_FAILED)
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
             try {
                 val output = AndroidPcmOutput(scope, { scope.launch { callbacks.playbackBlocked() } })
-                return LiveKitSpeechMedia(VendorRtcRoom(context.applicationContext, scope), output, callbacks, scope) {
+                return LiveKitSpeechMedia(VendorRtcRoom(context.applicationContext, scope, input), output, callbacks, scope, input) {
                     exclusiveOwner.set(false)
                     scope.cancel()
                 }
             } catch (_: Exception) {
+                input?.retire()
                 scope.cancel()
                 // A partially constructed native room has uncertain ownership; retain the reservation.
                 throw SpeechSessionException(SpeechErrorCode.MEDIA_FAILED)

@@ -82,6 +82,26 @@ class LiveKitSpeechMediaTest {
         "2099-01-01T00:00:00Z", "session", "participant", 1, 1, "processor")
     private val track = SpeechTrack("TR_output", "source", 1, "speaker", "generated", "output")
 
+    @Test fun externalIdentityMismatchFailsBeforeRoomConnection() = runTest {
+        val room = Room(); val source = ExternalPcmInput("other", 1)
+        val media = LiveKitSpeechMedia(room, Output(), Callbacks(), backgroundScope, externalInput = source)
+        assertTrue(runCatching { media.connect(grant) }.isFailure)
+        assertFalse("connect" in room.calls)
+        media.close()
+    }
+
+    @Test fun externalEndReportsOnceAndCloseFencesLateFrames() = runTest {
+        val room = Room(); val callbacks = Callbacks(); val source = ExternalPcmInput("participant", 1)
+        val media = LiveKitSpeechMedia(room, Output(), callbacks, backgroundScope, externalInput = source)
+        media.connect(grant); media.setInput(true)
+        source.capture(true); source.setMuted(false)
+        source.end(); source.end(); runCurrent()
+        assertEquals(1, callbacks.failures); assertFalse(room.input.enabled)
+        media.close(); source.end(); runCurrent()
+        assertFalse(source.offer(java.nio.ByteBuffer.allocate(960)))
+        assertEquals(1, callbacks.failures)
+    }
+
     @Test fun connectDoesNotCaptureAndOnlyAdmitsCurrentProcessorAudio() = runTest {
         val room = Room(); val output = Output(); val callbacks = Callbacks()
         val media = LiveKitSpeechMedia(room, output, callbacks, backgroundScope)
