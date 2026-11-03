@@ -29,6 +29,7 @@
         A0000000000000000000000D = {
             isa = XCBuildConfiguration; name = Debug;
             buildSettings = {
+                ALWAYS_SEARCH_USER_PATHS = NO;
                 CODE_SIGN_STYLE = Automatic;
                 GENERATE_INFOPLIST_FILE = YES;
                 INFOPLIST_FILE = App/Info.plist;
@@ -36,11 +37,13 @@
                 INFOPLIST_KEY_UILaunchScreen_Generation = YES;
                 IPHONEOS_DEPLOYMENT_TARGET = 15.0;
                 MACOSX_DEPLOYMENT_TARGET = 13.0;
+                ONLY_ACTIVE_ARCH = YES;
                 LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../Frameworks";
                 PRODUCT_BUNDLE_IDENTIFIER = dev.bota.speech.companion;
                 PRODUCT_NAME = "$(TARGET_NAME)";
                 SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
                 SWIFT_VERSION = 6.0;
+                SWIFT_OPTIMIZATION_LEVEL = "-Onone";
                 SWIFT_STRICT_CONCURRENCY = complete;
                 SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
                 TARGETED_DEVICE_FAMILY = "1,2";
