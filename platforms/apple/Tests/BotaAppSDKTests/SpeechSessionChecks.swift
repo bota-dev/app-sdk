@@ -276,11 +276,15 @@ struct SpeechSessionChecks: Sendable {
         } }
         try await run(f) { session in
             try await session.ready(); _ = try await requests.wait { !$0.isEmpty }
-            let recovery = Task { try await session.recoverCaptions() }; gate.open()
-            let result = try await recovery.value
-            try speechCheckEqual(result.cursor, "cursor_1"); try speechCheckTrue(result.hasMore)
-            f.clock.update { $0 += 250 }; session.tick()
+            gate.open()
+            // Observe the automatic first page before explicitly requesting the
+            // next one. Creating a Task does not prove it joined the first read.
+            let first = try await f.state.wait { $0?.recovery.cursor == "cursor_1" }
+            try speechCheckTrue(first?.recovery.hasMore == true)
+            let result = try await session.recoverCaptions()
+            try speechCheckEqual(result.cursor, "cursor_2"); try speechCheckFalse(result.hasMore)
             let captions = try await f.captions.wait { $0.count == 2 }
+            try speechCheckEqual(requests.value.count, 2); try speechCheckEqual(requests.value.first?.cursor, nil)
             try speechCheckEqual(requests.value.last?.cursor, "cursor_1"); try speechCheckEqual(captions[0].record.text, "Hello 🌍\u{0}")
             try speechCheckTrue(captions.allSatisfy(\.isFinal)); try speechCheckFalse(String(describing: captions[0]).contains("Hello"))
         }
