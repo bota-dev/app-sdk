@@ -33,10 +33,10 @@ capture. Initial permission and audio-route ownership remain host responsibiliti
 
 The existing native contracts apply unchanged:
 [Apple](apple-speech-session.md) and [Android](android-speech-session.md).
-The optional LiveKit modules provide microphone candidates; Android also has an
-authorized native PCM input branch. Apple external input, actual host capture
-integration and simultaneous archival still need implementation. Flutter controls
-do not implement those media paths; PCM remains inside the native host.
+The optional LiveKit modules provide microphone and authorized native PCM input
+candidates on both Apple and Android. Actual host capture integration and
+simultaneous archival remain incomplete. Flutter controls do not implement those
+media paths; PCM remains inside the native host.
 
 ```dart
 final speech = BotaSpeechClient();

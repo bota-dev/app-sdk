@@ -268,9 +268,8 @@ mute and SDK hold, overload/stale frames, invalid formats and microphone fallbac
 participant/generation mismatch before connect, duplicate attachment, source end
 and late callbacks after close. They compile against the pinned vendor APIs.
 Actual native callback cadence, host conference coexistence, device routing and
-cloud final-word behavior remain unqualified. Apple external input is still a
-code gap: the pinned public mixer injection API supplies no consumption/clear
-acknowledgement sufficient for the same bounded retirement contract.
+cloud final-word behavior remain unqualified. The [Apple external PCM adapter](apple-speech-session.md#authorized-external-pcm-input)
+uses an owned native source node and requires exclusive use of the LiveKit engine.
 
 ## Verification and remaining acceptance
 

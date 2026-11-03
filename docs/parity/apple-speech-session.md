@@ -2,8 +2,8 @@
 
 Status: unreleased Phase 3 source preview for the existing iOS 15+ / macOS 13+
 matrix. `SpeechSession` executes the shared Rust policy through the separate
-native C ABI. An optional LiveKit microphone adapter now connects the facade
-to native capture and bounded playback. External native input, Flutter media adoption, consuming applications and
+native C ABI. Optional LiveKit microphone and authorized external PCM adapters
+connect the facade to native input and bounded playback. Host conference integration, Flutter media adoption, consuming applications and
 physical audio qualification remain incomplete. All five SDK families remain
 in the first delivery and the original G1–G6 gates remain open where unproved.
 
@@ -30,7 +30,7 @@ try await session.close()
 
 `makeQualifiedMediaPort` and `authenticatedSpeechHost` are integration points,
 not bundled RTC/HTTP clients. `setMicrophone` and `finishMicrophone` alias the
-input methods. External-source transport remains a separate adapter obligation.
+input methods. The optional authorized external PCM factory is described below.
 The `state` snapshot contains no caption text. `SpeechObserver` emits immutable
 state, caption upserts, validated protocol events and stable errors; callbacks
 must not block and UI work must be dispatched to the application's actor/task.
@@ -124,7 +124,8 @@ deadline. A language change or clear retires that wait. Stalled/invalid playback
 reports a stable error while capture remains independently controlled. Source
 finish keeps the exact original publication silent until the backend settles.
 Close joins late acquisition/publication and vendor readers/subscriptions,
-disposes input and output, and restores mixer gains only after successful
+disposes input and output, explicitly stops the recording started by LiveKit,
+and restores mixer gains only after successful
 cleanup and a stopped vendor engine. Uncertain cleanup retains exclusive
 ownership. Automatic RTC reconnect is disabled; reconnect needs fresh authority.
 Text streams are limited to the current processor, eight concurrent readers,
@@ -140,8 +141,73 @@ the optional package for iOS. A composed test exercises the public
 
 Start physical qualification with headphones. Audible tails, permission and
 interruption handling, Bluetooth/background routes, AEC/speaker double-talk,
-external-source ownership and actual App/backend sessions remain separate
+host-source ownership and actual App/backend sessions remain separate
 acceptance work. No component check establishes G3/G6 completion.
+
+## Authorized external PCM input
+
+`LiveKitSpeechMedia.createExternal(callbacks:input:)` accepts an
+`ExternalPCMInput(participantId:memberGeneration:)`. The backend must admit the
+participant as immutable `source_kind=host_external`; the host authorizes one
+participant's original audio and owns its format conversion, mute/end events,
+conference track and audio session. The factory validates participant/member
+generation against the grant before connecting. Neither carrier metadata nor
+the grant proves the contents of host-supplied samples. Generated translation,
+mixed conference audio and arbitrary system capture are outside this contract.
+
+```swift
+let input = try ExternalPCMInput(participantId: participantGrant.participantId,
+                                 memberGeneration: participantGrant.memberGeneration)
+let session = try SpeechSession(configuration: configuration, grant: participantGrant,
+    mediaFactory: { try LiveKitSpeechMedia.createExternal(callbacks: $0, input: input) },
+    host: authenticatedSpeechHost, observer: observer)
+try await session.ready()
+try await session.setInput(true)
+input.setMuted(false) // Only when the authorized host source is unmuted.
+// In the host's native audio callback: input.offer(pcm10ms)
+// Forward every host mute change with input.setMuted(hostMuted).
+// Normal completion: await session.finishInput(), then detach the host callback.
+// Unexpected source loss: input.end(). Leaving: await session.close().
+```
+
+Each offer copies 480 mono PCM16 samples at 48 kHz from an `AVAudioPCMBuffer`.
+The input starts muted and accepts no frames before grant validation and input
+enablement. At most 20 frames / 200 ms are retained. An `AVAudioSourceNode`
+converts those samples to normalized Float PCM as the no-device engine requests
+them, including partial-frame reads. Empty input supplies silence. Host mute,
+SDK hold and close clear both queued frames and any partly consumed frame.
+Malformed, overflowing or stale input fails the branch. Audio never crosses
+C ABI, Pigeon or Dart; arrival time is not an original-capture clock.
+
+The host must reserve the process-wide LiveKit engine and retain its standard
+audio observer chain. The factory rejects an active/prewarmed/manual engine,
+an existing capture processing delegate or an occupied mixer observer tail.
+It installs an owned source at that tail and enables manual rendering before
+any connection, avoiding physical microphone access and LiveKit AVAudioSession
+configuration. The original host audio route remains the host's responsibility.
+Simultaneous use of another LiveKit room is unsupported; use a separate host
+capture engine and qualify coexistence before adoption.
+
+Manual mode's main mixer carries outgoing input, so its gain remains one while
+microphone, app-audio and sound-player gains stay zero. Remote audio has no
+automatic device playout in this mode; only the independently admitted native
+playback owner can render it. The source generates frames on demand and does
+not enqueue audio into LiveKit's player/mixer injection API.
+
+Close retires input before joining native operations, stops the explicit native
+recording start, verifies the engine is stopped and its observer tail remains
+owned, then removes that tail and restores the prior mode/gains. Engine teardown
+resets input mixer gains, so those resets are not treated as ownership loss.
+Uncertain cleanup retains the exclusive reservation and stable close failure.
+Unexpected `input.end()` fails the session; only shared-policy `finishInput`
+can establish a normal source finish while listening continues.
+
+Controlled tests cover grant binding, copies, independent mute/hold, partial
+reads, capacity/age limits, invalid formats, source end and late callbacks.
+A native no-device test starts the actual pinned vendor engine, observes the
+synthetic samples at its source node and verifies complete stop/restoration.
+It does not connect RTC or prove encoded publication, cloud ASR/translation,
+host meeting coexistence, hardware routing or original archival alignment.
 
 ## Requirement conformance and verification
 
@@ -150,9 +216,9 @@ acceptance work. No component check establishes G3/G6 completion.
 | RTC-O03 / RTC-M02–03: simultaneous input/listening and individual language changes | Separate IO owners, both HTTP/event orders, delayed buffer clear and superseded HTTP checks through actual Rust | Concrete RTC and physical audio routes/AEC/double-talk |
 | RTC-X02: scoped current authority | Shared grant/event validation; authorization-revocation and expiry checks | Actual backend/provider revocation and network behavior |
 | RTC-X03: tail completion and caption recovery | Held exact publication, concurrent finish, absent source, cursor/Unicode checks, retired/malformed page rejection | Real RTP/ASR tails, weak-network recovery and original-archive alignment |
-| RTC-M04: host meeting reuse | Typed ports and optional native LiveKit microphone adapter; raw audio stays outside C ABI | External-source adapter, shared host ownership coordinator and App integration |
+| RTC-M04: host meeting reuse | Optional microphone and external PCM factories; binding, queue and lifecycle tests; actual no-device source-node check; raw audio stays outside C ABI | Host bridge/coordinator, actual RTC publication and App integration |
 | RTC-X03: output tail and buffer retirement | Bounded native queue, played-completion drain, cancelled clear and retired reservation checks | Audible tails, native clock behavior and physical latency |
-| G3 / G6 across all five families | Apple control and microphone media source, plus the [Flutter native bridge](flutter-speech-session.md) | Full package/App/device qualification and external native media work |
+| G3 / G6 across all five families | Apple control, microphone and external PCM source, plus the [Flutter native bridge](flutter-speech-session.md) | Full package/App/device and host conference qualification |
 
 `SpeechSessionChecks.swift` contains one set of behavior checks. The normal Apple
 package runs them through `SpeechSessionTests` under XCTest. For a Mac with only

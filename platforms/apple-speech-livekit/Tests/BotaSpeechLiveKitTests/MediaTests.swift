@@ -58,8 +58,9 @@ final class FakeRoom: RTCRoom, @unchecked Sendable {
     var releaseFails = false
     let released = Gate()
     let disconnected = Gate()
+    let connected = Gate()
     func observe(_ events: RTCEvents?) { self.events = events }
-    func connect(_ grant: SpeechGrant) async throws {}
+    func connect(_ grant: SpeechGrant) async throws { connected.open() }
     func createInput() async throws -> any RTCInput {
         acquiring.open()
         if let acquireGate { try await acquireGate.wait() }
@@ -115,7 +116,7 @@ final class MediaChecks: @unchecked Sendable {
 
     func testConnectionStartsNeitherCaptureNorPlayback() async throws {
         let room = FakeRoom(); let output = FakeOutput()
-        let media = LiveKitSpeechMedia(room: room, output: output, callbacks: Notices().callbacks)
+        let media = try LiveKitSpeechMedia(room: room, output: output, callbacks: Notices().callbacks)
         try await media.connect(grant: grant)
         try require(!room.captureEnabled); try require(output.selected.isEmpty)
         try await media.close()
@@ -124,7 +125,7 @@ final class MediaChecks: @unchecked Sendable {
     func testHoldSurvivesLateAcquisitionWithoutInterruptingListening() async throws {
         let room = FakeRoom(); let output = FakeOutput(); let acquired = Gate()
         room.acquireGate = acquired
-        let media = LiveKitSpeechMedia(room: room, output: output, callbacks: Notices().callbacks)
+        let media = try LiveKitSpeechMedia(room: room, output: output, callbacks: Notices().callbacks)
         try await media.connect(grant: grant); try await media.setPlayback(tracks: [track])
         let start = Task { try await media.setInput(enabled: true) }
         try await room.acquiring.wait(); try media.holdInput(); acquired.open(); try await start.value
@@ -135,7 +136,7 @@ final class MediaChecks: @unchecked Sendable {
 
     func testCloseJoinsAcquisitionEvenWhenItsPublicWaiterIsCancelled() async throws {
         let room = FakeRoom(); let acquired = Gate(); room.acquireGate = acquired
-        let media = LiveKitSpeechMedia(room: room, output: FakeOutput(), callbacks: Notices().callbacks)
+        let media = try LiveKitSpeechMedia(room: room, output: FakeOutput(), callbacks: Notices().callbacks)
         try await media.connect(grant: grant)
         let start = Task { try await media.setInput(enabled: true) }
         try await room.acquiring.wait(); start.cancel()
@@ -147,7 +148,7 @@ final class MediaChecks: @unchecked Sendable {
 
     func testClearWaitsForNativeFlushWhileCaptureContinues() async throws {
         let room = FakeRoom(); let output = FakeOutput(); let flushed = Gate(); output.clearGate = flushed
-        let media = LiveKitSpeechMedia(room: room, output: output, callbacks: Notices().callbacks)
+        let media = try LiveKitSpeechMedia(room: room, output: output, callbacks: Notices().callbacks)
         try await media.connect(grant: grant); try await media.setInput(enabled: true)
         try await media.setPlayback(tracks: [track])
         let clear = Task { try await media.clearPlayback() }
@@ -158,7 +159,7 @@ final class MediaChecks: @unchecked Sendable {
 
     func testFailedPublicationIsDisposedAndNotRetained() async throws {
         let room = FakeRoom(); room.publishFails = true
-        let media = LiveKitSpeechMedia(room: room, output: FakeOutput(), callbacks: Notices().callbacks)
+        let media = try LiveKitSpeechMedia(room: room, output: FakeOutput(), callbacks: Notices().callbacks)
         try await media.connect(grant: grant)
         var failed = false
         do { try await media.setInput(enabled: true) } catch { failed = true }
@@ -169,7 +170,7 @@ final class MediaChecks: @unchecked Sendable {
 
     func testCleanupFailureRemainsTheResultForEveryCloseCaller() async throws {
         let room = FakeRoom(); room.releaseFails = true
-        let media = LiveKitSpeechMedia(room: room, output: FakeOutput(), callbacks: Notices().callbacks)
+        let media = try LiveKitSpeechMedia(room: room, output: FakeOutput(), callbacks: Notices().callbacks)
         try await media.connect(grant: grant)
         for _ in 0..<2 {
             var result: SpeechError?
@@ -200,7 +201,7 @@ final class MediaChecks: @unchecked Sendable {
         }
         let room = FakeRoom(); let output = FakeOutput()
         let session = try SpeechSession(configuration: configuration, grant: grant,
-            mediaFactory: { LiveKitSpeechMedia(room: room, output: output, callbacks: $0) }, host: Host(grant: grant))
+            mediaFactory: { try LiveKitSpeechMedia(room: room, output: output, callbacks: $0) }, host: Host(grant: grant))
         do {
             try await session.ready(); try await session.setInput(true); try await session.setListening(true)
             try require(room.captureEnabled)
@@ -230,7 +231,7 @@ final class MediaChecks: @unchecked Sendable {
 
     func testLateUnownedInputCleanupRunsOnceAndRemainsFailed() async throws {
         let room = FakeRoom(); let acquired = Gate(); room.acquireGate = acquired; room.input.disposeFails = true
-        let media = LiveKitSpeechMedia(room: room, output: FakeOutput(), callbacks: Notices().callbacks)
+        let media = try LiveKitSpeechMedia(room: room, output: FakeOutput(), callbacks: Notices().callbacks)
         try await media.connect(grant: grant)
         let start = Task { try await media.setInput(enabled: true) }
         try await room.acquiring.wait()
@@ -246,7 +247,7 @@ final class MediaChecks: @unchecked Sendable {
     func testUnpublicationWaitsForTheNativePlaybackTail() async throws {
         let room = FakeRoom(); let output = FakeOutput(); let notices = Notices(); let tail = Gate()
         output.drainGate = tail
-        let media = LiveKitSpeechMedia(room: room, output: output, callbacks: notices.callbacks)
+        let media = try LiveKitSpeechMedia(room: room, output: output, callbacks: notices.callbacks)
         try await media.connect(grant: grant); try await media.setPlayback(tracks: [track])
         room.events!.removed("TR_output"); try await output.draining.wait()
         try require(!notices.removed.isOpen); try require(output.selected == ["TR_output"])
@@ -256,7 +257,7 @@ final class MediaChecks: @unchecked Sendable {
     func testRetiredTailCannotRemoveANewerSelection() async throws {
         let room = FakeRoom(); let output = FakeOutput(); let notices = Notices(); let tail = Gate()
         output.drainGate = tail
-        let media = LiveKitSpeechMedia(room: room, output: output, callbacks: notices.callbacks)
+        let media = try LiveKitSpeechMedia(room: room, output: output, callbacks: notices.callbacks)
         try await media.connect(grant: grant); try await media.setPlayback(tracks: [track])
         room.events!.removed("TR_output"); try await output.draining.wait()
         try await media.clearPlayback(); try await media.setPlayback(tracks: [track])

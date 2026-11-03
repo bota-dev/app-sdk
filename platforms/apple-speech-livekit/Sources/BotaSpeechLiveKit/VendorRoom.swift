@@ -16,8 +16,10 @@ final class VendorRoom: NSObject, RTCRoom, RoomDelegate, @unchecked Sendable {
     private var reading = 0
     private struct Sink { let track: RemoteAudioTrack; let renderer: VendorRenderer }
     private var sinks: [String: Sink] = [:]
+    private let externalInput: ExternalPCMInput?
 
-    override init() {
+    init(externalInput: ExternalPCMInput? = nil) {
+        self.externalInput = externalInput
         super.init()
         nativeRoom.add(delegate: self)
     }
@@ -56,10 +58,18 @@ final class VendorRoom: NSObject, RTCRoom, RoomDelegate, @unchecked Sendable {
         var sid: String? { lock.withLock { publication?.sid.stringValue } }
         init(_ track: LocalAudioTrack) { self.track = track }
         func published(_ value: LocalTrackPublication) { lock.withLock { publication = value } }
-        func dispose() async throws { try await track.stop() }
+        func dispose() async throws {
+            var failed = false
+            do { try await track.stop() } catch { failed = true }
+            // LocalAudioTrack.stop only retires its frame watcher in the pinned SDK. Join the
+            // explicit recording start as well; this adapter exclusively owns the vendor engine.
+            do { try AudioManager.shared.stopLocalRecording() } catch { failed = true }
+            if failed { throw SpeechError.cleanupFailed }
+        }
     }
     func createInput() async throws -> any RTCInput {
-        Input(await LocalAudioTrack.createTrack(name: "bota-original", options: AudioCaptureOptions()))
+        Input(await LocalAudioTrack.createTrack(name: "bota-original",
+            options: externalInput == nil ? AudioCaptureOptions() : .noProcessing))
     }
     func publish(_ input: any RTCInput) async throws {
         guard let input = input as? Input else { throw SpeechError.invalidInput }
@@ -73,7 +83,12 @@ final class VendorRoom: NSObject, RTCRoom, RoomDelegate, @unchecked Sendable {
             try await nativeRoom.localParticipant.unpublish(publication: publication)
         }
     }
-    func capture(_ enabled: Bool) throws { AudioManager.shared.mixer.micVolume = enabled ? 1 : 0 }
+    func capture(_ enabled: Bool) throws {
+        if let externalInput {
+            guard AudioManager.shared.isManualRenderingMode else { externalInput.end(); throw SpeechError.mediaFailed }
+            externalInput.capture(enabled)
+        } else { AudioManager.shared.mixer.micVolume = enabled ? 1 : 0 }
+    }
 
     func subscribe(_ sids: Set<String>) throws {
         lock.withLock { allowed = retired ? [] : sids }
@@ -134,6 +149,7 @@ final class VendorRoom: NSObject, RTCRoom, RoomDelegate, @unchecked Sendable {
         nativeRoom.remove(delegate: self)
         let old = lock.withLock { defer { sinks.removeAll() }; return Array(sinks.values) }
         for sink in old { sink.track.remove(audioRenderer: sink.renderer) }
+        try AudioManager.shared.stopLocalRecording()
     }
 
     func room(_ room: Room, participant: RemoteParticipant, didPublishTrack publication: RemoteTrackPublication) { refresh() }

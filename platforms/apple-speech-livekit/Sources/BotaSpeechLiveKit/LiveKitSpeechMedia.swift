@@ -1,7 +1,7 @@
 import BotaAppSDK
 import Foundation
 
-/// Optional microphone media port. The host supplies permission, grants and exclusive audio ownership.
+/// Optional native media port. The host supplies grants, authorized input and exclusive audio ownership.
 public final class LiveKitSpeechMedia: SpeechMediaPort, @unchecked Sendable {
     private let lock = NSRecursiveLock()
     private let room: any RTCRoom
@@ -20,10 +20,15 @@ public final class LiveKitSpeechMedia: SpeechMediaPort, @unchecked Sendable {
     private var input: (any RTCInput)?
     private var cleanupFailed = false
     private let onCleanClose: @Sendable () throws -> Void
+    private let externalInput: ExternalPCMInput?
 
     init(room: any RTCRoom, output: any PCMOutput, callbacks: SpeechMediaCallbacks,
-         onCleanClose: @escaping @Sendable () throws -> Void = {}) {
+         externalInput: ExternalPCMInput? = nil, onCleanClose: @escaping @Sendable () throws -> Void = {}) throws {
         self.room = room; self.output = output; self.callbacks = callbacks; self.onCleanClose = onCleanClose
+        self.externalInput = externalInput
+        try externalInput?.attach { [weak self] in
+            DispatchQueue.global().async { [weak self] in self?.fail() }
+        }
         room.observe(RTCEvents(text: { [weak self] sender, text in
             guard let self, self.lock.withLock({ !self.closed }) else { return }
             self.callbacks.text(sender, text)
@@ -36,8 +41,26 @@ public final class LiveKitSpeechMedia: SpeechMediaPort, @unchecked Sendable {
     public static func create(callbacks: SpeechMediaCallbacks) throws -> LiveKitSpeechMedia {
         let lease = try VendorAudioLease.acquire()
         let output = ApplePCMOutput(failed: { callbacks.playbackBlocked() })
-        return LiveKitSpeechMedia(room: VendorRoom(), output: output, callbacks: callbacks,
+        return try LiveKitSpeechMedia(room: VendorRoom(), output: output, callbacks: callbacks,
             onCleanClose: { try lease.release() })
+    }
+
+    /// Uses an authorized host PCM branch with no physical microphone or LiveKit AVAudioSession changes.
+    /// The host owns its audio route and must reserve the process-wide LiveKit engine exclusively.
+    /// Simultaneous use by another LiveKit room is unsupported; this is an unpublished source candidate.
+    public static func createExternal(callbacks: SpeechMediaCallbacks, input: ExternalPCMInput) throws -> LiveKitSpeechMedia {
+        try input.requireAvailable()
+        let lease = try VendorAudioLease.acquire(externalInput: input)
+        do {
+            return try LiveKitSpeechMedia(room: VendorRoom(externalInput: input),
+                output: ApplePCMOutput(failed: { callbacks.playbackBlocked() }), callbacks: callbacks,
+                externalInput: input, onCleanClose: { try lease.release() })
+        } catch {
+            input.retire()
+            // A failed release retains the reservation; no later adapter may reuse uncertain ownership.
+            try? lease.release()
+            throw error
+        }
     }
 
     private func checkOpen() throws { if closed { throw SpeechError.closed } }
@@ -48,6 +71,7 @@ public final class LiveKitSpeechMedia: SpeechMediaPort, @unchecked Sendable {
             guard !attempted, grant.provider == "livekit" else { throw SpeechError.invalidInput }
             attempted = true
             return try otherTasks.submit { [self] in
+                try externalInput?.validate(grant)
                 try await room.connect(grant)
                 try lock.withLock { try checkOpen(); connected = true }
             }
@@ -56,7 +80,7 @@ public final class LiveKitSpeechMedia: SpeechMediaPort, @unchecked Sendable {
     }
 
     public func muteInput() throws {
-        try lock.withLock { inputVersion &+= 1; try room.capture(false) }
+        try lock.withLock { inputVersion &+= 1; externalInput?.capture(false); try room.capture(false) }
     }
     public func silencePlayback() throws {
         try lock.withLock {
@@ -67,7 +91,7 @@ public final class LiveKitSpeechMedia: SpeechMediaPort, @unchecked Sendable {
     }
     public var supportsSourceFinish: Bool { true }
     public func holdInput() throws {
-        try lock.withLock { try checkOpen(); held = true; try room.capture(false) }
+        try lock.withLock { try checkOpen(); held = true; externalInput?.capture(false); try room.capture(false) }
     }
     public func inputPublication() throws -> String? {
         try lock.withLock {
@@ -193,6 +217,7 @@ public final class LiveKitSpeechMedia: SpeechMediaPort, @unchecked Sendable {
         let task = lock.withLock {
             if let closing { return closing }
             closed = true; connected = false; room.observe(nil)
+            externalInput?.retire()
             do { try silencePlayback() } catch { cleanupFailed = true }
             do { try muteInput() } catch { cleanupFailed = true }
             let pending = inputTasks.retire() + outputTasks.retire() + otherTasks.retire()
