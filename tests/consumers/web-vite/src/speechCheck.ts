@@ -6,6 +6,7 @@ let callbacks: SpeechMediaCallbacks, grant: SpeechGrant
 let capture = false, publication = false, created = 0, closed = 0, sequence = 0
 let revision = 1, targetLanguage = 'zh'
 let cleanupFailure = false
+let cleanup: Promise<void> | undefined, completeCleanup = () => {}
 const peer = () => grant.participant_id === '22222222-2222-4222-8222-222222222222' ?
   '33333333-3333-4333-8333-333333333333' : '22222222-2222-4222-8222-222222222222'
 function base() { return { protocolVersion: 1, projectId: 'prj_synthetic', sessionId: grant.session_id,
@@ -26,6 +27,8 @@ const gate = {
   apply(next: number, language: string) { revision = next; targetLanguage = language; applied() },
   failCleanup() { cleanupFailure = true },
   failMedia() { callbacks.failed() },
+  holdCleanup() { cleanup = new Promise(resolve => { completeCleanup = resolve }) },
+  completeCleanup() { completeCleanup() },
 }
 declare global { interface Window { __speechGate: typeof gate } }
 window.__speechGate = gate
@@ -37,7 +40,7 @@ mountSpeechApp(document.querySelector('#app')!, notices => {
     microphonePublication() { return publication ? 'TR_owned' : null },
     silencePlayback() {}, async clearPlayback() {}, async setPlayback() {}, async resumeAudio() {},
     async setMicrophone(enabled) { capture = enabled; publication = enabled },
-    async close() { closed++; capture = false; publication = false; if (cleanupFailure) throw Error('synthetic cleanup failure') },
+    async close() { closed++; capture = false; publication = false; await cleanup; if (cleanupFailure) throw Error('synthetic cleanup failure') },
   }
   return port
 })

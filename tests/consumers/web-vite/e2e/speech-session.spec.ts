@@ -136,3 +136,19 @@ test('terminal media loss clears the view and late callbacks cannot repopulate i
   await expect(page.getByTestId('caption-pair')).toHaveCount(0)
   expect((await state(page)).closed).toBe(1)
 })
+
+test('explicit authorization loss during a preference change stops input and clears captions', async ({ page }) => {
+  const access = { denied: false }
+  await prepare(page, access); await join(page)
+  await page.getByRole('button', { name: 'Start microphone', exact: true }).click()
+  await page.evaluate(() => (window as any).__speechGate.caption('Private caption', true, false))
+  await page.evaluate(() => (window as any).__speechGate.holdCleanup())
+  access.denied = true
+  await page.getByLabel('Receive in').selectOption('ja')
+  await page.getByRole('button', { name: 'Apply listening preference' }).click()
+  await expect(page.getByTestId('caption-pair')).toHaveCount(0)
+  expect((await state(page)).capture).toBe(false)
+  await page.evaluate(() => (window as any).__speechGate.completeCleanup())
+  await expect(page.getByTestId('connection')).toHaveText('Not connected')
+  expect((await state(page)).closed).toBe(1)
+})

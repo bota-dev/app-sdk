@@ -108,7 +108,9 @@ export function mountSpeechApp(root: HTMLElement, mediaFactory: WebSpeechSession
   async function leave() {
     if (retiring) return retiring
     if (phase === 'idle' || phase === 'failed') return
-    generation++; phase = 'closing'; abort?.abort(); render()
+    generation++; phase = 'closing'; abort?.abort()
+    // Retire content immediately; uncertain native cleanup must not retain the view.
+    code.value = ''; pairs.clear(); drawCaptions(); render()
     retiring = (async () => {
       try {
         await startup
@@ -116,7 +118,7 @@ export function mountSpeechApp(root: HTMLElement, mediaFactory: WebSpeechSession
         owner = undefined; joined = undefined; phase = 'idle'
       } catch (value) { phase = 'failed'; error.textContent = message(value) }
       finally {
-        code.value = ''; listening = false; busy = false; pairs.clear(); drawCaptions(); render()
+        listening = false; busy = false; render()
         element('#policy').textContent = 'Your host determines the recording policy before you join.'
       }
     })()
@@ -141,7 +143,12 @@ export function mountSpeechApp(root: HTMLElement, mediaFactory: WebSpeechSession
           'Live only. No original audio archive or saved caption history. This view clears when you leave.' :
           'Text is retained under your host’s policy. No original audio archive. This view clears when you leave.'
         created = await createWebSpeechSession({ configuration: initial.configuration, grant: initial.grant,
-          host: host.callbacks(initial), mediaFactory, signal: controller.signal,
+          host: host.callbacks(initial, () => {
+            if (current !== generation) return
+            error.textContent = 'Authorization is no longer available. Rejoin with current access.'
+            // Do not await close inside a callback that close itself must settle.
+            void leave()
+          }), mediaFactory, signal: controller.signal,
           onState: state => { if (current === generation) { render(); if (state.disconnect) void leave() } },
           onCaption: value => { if (current === generation) caption(value) },
           onError: value => { if (current === generation) error.textContent = message(value) },

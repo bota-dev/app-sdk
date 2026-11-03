@@ -25,7 +25,7 @@ export function speechHost(role: string, code: string) {
   }
   return {
     join: (signal: AbortSignal) => request<SpeechJoin>('join', {}, signal),
-    callbacks(initial: SpeechJoin): SpeechHostCallbacks {
+    callbacks(initial: SpeechJoin, denied: () => void): SpeechHostCallbacks {
       let revision = initial.configuration.subscription.revision
       const { context } = initial.configuration
       function own(request: { projectId: string; sessionId: string; participantId: string; memberGeneration: number }) {
@@ -36,10 +36,17 @@ export function speechHost(role: string, code: string) {
         async changeSubscription(selection, signal) {
           if (selection.sourceParticipantIds.length !== 1 || selection.sourceParticipantIds[0] !== initial.peer.participantId)
             throw new SpeechSessionError('invalid_input')
-          const value = await request<SpeechSubscription>('subscription', { expectedRevision: revision,
-            targetLanguage: selection.targetLanguage, mode: selection.mode }, signal)
-          revision = value.revision
-          return value
+          try {
+            const value = await request<SpeechSubscription>('subscription', { expectedRevision: revision,
+              targetLanguage: selection.targetLanguage, mode: selection.mode }, signal)
+            revision = value.revision
+            return value
+          } catch (error) {
+            // The SDK reports ordinary subscription IO failures without retiring capture.
+            // An explicit host denial instead retires this App owner immediately.
+            if (error instanceof HostError && error.status === 403) denied()
+            throw error
+          }
         },
         renewGrant: signal => request<SpeechGrant>('grant', {}, signal),
         async readCaptions(input, signal) {

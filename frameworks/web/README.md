@@ -851,6 +851,9 @@ Listening remains connected. **Leave** interrupts remaining work, clears the
 volatile caption view and joins cleanup. An uncertain cleanup disables a new
 owner until the tab is closed. A revision conflict requires leaving and reading a
 fresh authorized snapshot, rather than overwriting another preference.
+Explicit authorization denial during a preference update immediately retires
+the owner and clears the view; temporary preference failures retain independent
+capture and require reconciliation before another change.
 
 The view keeps at most 100 paired passages in memory, renders text as text, and
 does not persist captions, grants, cursors or access codes in browser storage.
