@@ -795,6 +795,80 @@ device changes, network loss, TURN, archive correlation and real-provider latenc
 need separate runtime qualification. This module does not establish original
 audio archival or device-speaker support.
 
+### Two-speaker browser companion
+
+The source-only [conversation page](../../tests/consumers/web-vite/speech.html)
+uses the packed Web SDK, its actual Rust/Wasm policy and the public LiveKit
+`2.23.0` factories. It provides A/B roles, paired original/translated captions,
+independent microphone and listening controls, receiving-language/mode changes,
+autoplay recovery, normal source finish and joined terminal cleanup. It starts
+with both capture and listening off. Changing roles requires leaving first;
+another tab's receiving preference remains independent.
+
+The [loopback host](../../tools/web/serve-speech.mjs) is an operator lab example,
+not a deployed authentication service. It serves the built page only on
+`127.0.0.1` and proxies the existing speech control API. Each independent access
+code maps to one pre-admitted participant UUID and fixed member generation.
+The browser cannot choose another participant, project, source set or API origin.
+Project credentials stay in the Node process; only that role's short-lived grant
+reaches the SDK. Requests are bounded, cancellable, no-store and not retried
+after an uncertain mutation. Production hosts must replace the lab codes with
+their signed-in principal and fresh membership authorization.
+
+Before running the lab, the authorized host must create an active, media-ready
+session with two current `host_microphone` participants and initial subscriptions
+that each select only the other participant. Both must have publish/subscribe
+permission. Receiving languages must be included in the session's allowed set.
+This example accepts only explicitly selected `text_only` or `live_only` sessions.
+It rejects `original_audio_and_text`, external sources and replaced members before
+requesting a grant; it has no phone/browser encrypted original-capture profile
+and never silently changes retention.
+
+From the repository root, build and verify the packed consumer with the pinned
+Node/Rust/Web toolchain, then load the operator configuration from a private,
+untracked environment file:
+
+```sh
+npm run web:verify
+node --env-file=/absolute/path/to/private-speech-lab.env tools/web/serve-speech.mjs
+```
+
+| Environment variable | Required value |
+| --- | --- |
+| `BOTA_SPEECH_API_ORIGIN` | The explicitly selected Bota API origin; HTTPS, or HTTP on `127.0.0.1` for a disposable local backend. |
+| `BOTA_SPEECH_API_KEY` | A server-side credential with `speech_sessions:read` and `speech_sessions:write`. Never use a `VITE_` variable for this value. |
+| `BOTA_SPEECH_PROJECT_ID`, `BOTA_SPEECH_SESSION_ID` | The same authorized project and already-created session. |
+| `BOTA_SPEECH_A_PARTICIPANT_ID`, `BOTA_SPEECH_B_PARTICIPANT_ID` | Two distinct admitted participant UUIDs. |
+| `BOTA_SPEECH_A_MEMBER_GENERATION`, `BOTA_SPEECH_B_MEMBER_GENERATION` | Their exact current positive member generations. |
+| `BOTA_SPEECH_A_CODE`, `BOTA_SPEECH_B_CODE` | Independent random access codes, each 32–128 characters, shared only with the intended lab operator. |
+| `BOTA_SPEECH_PORT` | Optional loopback port; defaults to `4173`. |
+
+Open the printed loopback URL, choose the assigned role and enter its access code.
+Join does not start the microphone. Use **Start microphone** and **Start listening**
+independently; **Finish speaking** holds the exact publication until the SDK
+reports processing completion or an explicit unavailable/interrupted outcome.
+Listening remains connected. **Leave** interrupts remaining work, clears the
+volatile caption view and joins cleanup. An uncertain cleanup disables a new
+owner until the tab is closed. A revision conflict requires leaving and reading a
+fresh authorized snapshot, rather than overwriting another preference.
+
+The view keeps at most 100 paired passages in memory, renders text as text, and
+does not persist captions, grants, cursors or access codes in browser storage.
+Text retention remains a backend session policy; input processing completion does
+not mean translated audio was heard or an original archive was verified.
+Separate browser tabs do not separate physical speakers: use qualified independent
+inputs/devices, or explicitly change role between turns on a shared microphone.
+Headset, AEC, overlapping speech and real cloud behavior remain qualification work.
+
+The existing packed-consumer browser gate exercises this same view and real
+Rust/Wasm policy through synthetic HTTP/media boundaries. Its separate
+`speech-check.html` harness is not served by the operator host. A normal-entry
+check loads the actual vendor bundle without opening media or contacting a host.
+Host regressions also cover real loopback HTTP, role/origin isolation, immutable
+member binding, exact source finish, cancellation and bounded admission.
+These checks do not establish encoded RTC delivery, ASR/MT/TTS quality, measured
+latency, production login, device acceptance or any other SDK family's App adoption.
+
 ## Physical acceptance
 
 Automated Chromium uses deterministic fake Bluetooth and storage boundaries;
