@@ -541,11 +541,18 @@ jobs:
           DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
         run: bash tools/speech/test-apple-livekit.sh -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
 
-      - name: Compile optional Apple speech adapter for iOS
+      - name: Build Apple speech companion for iOS and macOS
         timeout-minutes: 20
         env:
           DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
         run: bash tools/speech/build-apple-livekit-ios.sh
+
+      - name: Preserve internal Apple speech companion Apps
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: apple-speech-companion-${{ github.sha }}
+          path: target/apple-speech-companion/*.zip
+          if-no-files-found: error
 
       - name: Test independent Watch HTTP controls and source consumer
         run: bash tools/apple/test-watch-control.sh

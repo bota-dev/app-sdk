@@ -20,6 +20,8 @@ for source in (root / "bindings/device-sdk-ffi/include").glob("*.h"):
 (c / "bridge.c").write_text("/* Rust supplies the shipping C ABI implementation. */\n", encoding="utf-8")
 for name, source in [
     ("Sources/BotaSpeechLiveKit", "platforms/apple-speech-livekit/Sources/BotaSpeechLiveKit"),
+    ("Sources/SpeechCompanion", "platforms/apple-speech-livekit/Examples/SpeechCompanion"),
+    ("Sources/SpeechCompanionApp", "platforms/apple-speech-livekit/Examples/App"),
 ]:
     link = stage / name
     link.parent.mkdir(parents=True, exist_ok=True)
@@ -49,7 +51,9 @@ let package = Package(name: "BotaSpeechHostCheck", platforms: [.macOS(.v13)],
         .target(name: "BotaAppSDK", dependencies: ["BotaDeviceSDKC"],
                 linkerSettings: [.unsafeFlags([RUST_LIBRARY])]),
         .target(name: "BotaSpeechLiveKit", dependencies: ["BotaAppSDK", .product(name: "LiveKit", package: "client-sdk-swift")]),
-        .executableTarget(name: "BotaSpeechLiveKitHostChecks", dependencies: ["BotaSpeechLiveKit"], path: "HostChecks"),
+        .target(name: "SpeechCompanion", dependencies: ["BotaSpeechLiveKit"]),
+        .executableTarget(name: "SpeechCompanionApp", dependencies: ["SpeechCompanion"], exclude: ["Info.plist"]),
+        .executableTarget(name: "BotaSpeechLiveKitHostChecks", dependencies: ["BotaSpeechLiveKit", "SpeechCompanion"], path: "HostChecks"),
     ])
 '''.replace("RUST_LIBRARY", json.dumps(str(root / "target/debug/libbota_device_sdk_ffi.a")))
 (stage / "Package.swift").write_text(manifest, encoding="utf-8")

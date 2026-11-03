@@ -1,5 +1,19 @@
 import XCTest
 
+final class CompanionTests: XCTestCase, @unchecked Sendable {
+    func testJoin() async throws { try await CompanionChecks().testCompanionJoinsOnlyTheLoopbackRoleWithoutProjectCredentials() }
+    func testAdmission() async throws { try await CompanionChecks().testCompanionRefusesUnsupportedRetentionAndForeignOriginsBeforeCapture() }
+    func testRetirement() async throws { try await CompanionChecks().testCompanionRetirementRejectsLateBootstrap() }
+    func testConcurrency() async throws { try await CompanionChecks().testCompanionDoesNotStartConcurrentBootstrapRequests() }
+    func testBounds() async throws { try await CompanionChecks().testCompanionBoundsResponsesAndDoesNotRetryDeniedRequests() }
+    func testFinishContract() async throws { try await CompanionChecks().testCompanionFinishUsesExplicitNullBoundariesAndAcceptsPendingResponse() }
+    func testNativeOwner() async throws { try await CompanionChecks().testCompanionAppUsesTheNativeOwnerAndClearsOnLeave() }
+    func testLateAppJoin() async throws { try await CompanionChecks().testCompanionAppJoinsLateBootstrapBeforeAllowingAnotherOwner() }
+    func testPermission() async throws { try await CompanionChecks().testCompanionPermissionDenialAndLateApprovalNeverStartInput() }
+    func testAppFinishAndCleanup() async throws { try await CompanionChecks().testCompanionFinishKeepsListeningAndFailedCleanupBlocksReentry() }
+    func testCaptions() async throws { try await CompanionChecks().testCompanionPairsCaptionsAndClearsOnLanguageChange() }
+}
+
 final class ExternalPCMTests: XCTestCase, @unchecked Sendable {
     func testCopy() async throws { try await ExternalChecks().testExternalInputCopiesBorrowedFramesAndStartsSilent() }
     func testMute() async throws { try await ExternalChecks().testExternalMuteAndHoldCannotReplayQueuedSpeech() }

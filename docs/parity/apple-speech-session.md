@@ -3,9 +3,73 @@
 Status: unreleased Phase 3 source preview for the existing iOS 15+ / macOS 13+
 matrix. `SpeechSession` executes the shared Rust policy through the separate
 native C ABI. Optional LiveKit microphone and authorized external PCM adapters
-connect the facade to native input and bounded playback. Host conference integration, Flutter media adoption, consuming applications and
+connect the facade to native input and bounded playback. A native companion App
+now consumes these sources through the loopback operator host. Host conference
+integration, Flutter media adoption, production App integration and
 physical audio qualification remain incomplete. All five SDK families remain
 in the first delivery and the original G1–G6 gates remain open where unproved.
+
+## Native conversation companion
+
+`platforms/apple-speech-livekit/Examples/Companion.xcodeproj` contains a SwiftUI
+iOS/macOS App. The `SpeechCompanion` source product supplies its view, UI owner
+and bounded native HTTP callbacks; `SpeechCompanionApp` is also a macOS SwiftPM
+executable for compilation checks. Build the native XCFramework first with
+`tools/apple/build-xcframework.sh`, then open the project in Xcode and select
+`SpeechCompanionApp`. `bash tools/speech/build-apple-livekit-ios.sh` builds both
+consumer Apps, checks owned-source warnings, locally signs the macOS bundle and
+writes internal ZIPs under `target/apple-speech-companion`. The iOS ZIP is
+unsigned. These are source previews, outside the published release inventory.
+
+Configure and start the existing [loopback operator host](../../frameworks/web/README.md#two-speaker-browser-companion),
+with two pre-admitted microphone members and exclusive peer subscriptions.
+Enter `http://127.0.0.1:4173`, role A or B and that role's private access code.
+Use a distinct role for the other Web/native companion. No project or provider
+credential belongs in this App. Joining starts neither capture nor listening;
+enable each independently. The microphone asks for system permission first.
+The App clears a submitted code from the form and forgets the owner's native
+copy on departure. It does not persist codes or caption text.
+
+The local host supports `text_only` and `live_only`. Unsupported archival or
+external-conference admission fails before capture. It does not silently
+substitute retention or reuse a device's encrypted-upload identity. Its IPv4
+loopback restriction is intentional: macOS and an iOS Simulator on the host can
+use it; a physical iPhone needs an authenticated App-host integration. Do not
+change the URL to a LAN address or expose the operator proxy to solve that gap.
+
+Original/translated captions share a source/epoch/unit card, with at most 100
+cards in memory. A 32-event UI mailbox closes an overloaded owner. Native Rust
+validates captions first; the UI also fences queued old revisions immediately
+when language/mode changes. Final text cannot regress to a draft. Source finish
+accepts the existing 202 response and encodes unknown boundaries as explicit
+JSON nulls; native policy retains the hold and distinguishes finish outcomes.
+Finishing input keeps listening available.
+
+Leave, view departure or backgrounding clears text and retires callbacks before
+joining HTTP bootstrap and native cleanup. The permission dialog's inactive
+phase alone does not leave. Late microphone approval cannot start a retired
+owner. Failed cleanup prevents reentry until the App restarts. Stable messages
+replace upstream errors; HTTP uses ephemeral storage, no redirects, eight-second
+timeouts and a 512 KiB response limit. There is no App-level mutation retry.
+
+November 3 development checks exercise the real Rust ABI, shipping Swift session
+and optional media owner with controlled room/HTTP ports. They cover loopback
+admission, bounded/denied responses, concurrent and late bootstrap, independent
+input/listening, permission retirement, paired captions, language-switch clearing,
+source finish and cleanup poisoning. The complete local adapter suite has 37
+checks with strict concurrency and warnings-as-errors. The SwiftUI executable
+also compiles locally. Exact Xcode CI supplies complete App/framework builds;
+these checks do not establish an actual RTC/provider call or physical audio.
+
+| Requirement | Implementation/evidence | Remaining acceptance |
+| --- | --- | --- |
+| RTC-O01–03 | Native A/B App, paired cards, independent controls; composed controller checks | Authorized two-party RTC/ASR/translation/playback |
+| RTC-M04 | iOS/macOS consumer source, permission and native lifecycle ownership | Phone routing/AEC, signed installation and published package |
+| RTC-X02–03 | Native finish/recovery, retired UI revisions, joined leave | Actual expiry/revocation, provider tails and weak-network recovery |
+| RTC-O04 / RTC-X01 | Existing retention refusal is preserved | Shared capture/archive clock, encrypted archive branch and reconciliation |
+
+The single cross-repository completion checklist remains in the internal
+Realtime Speech Design. These source additions do not close its G1–G6 gates.
 
 ## Public contract and ownership
 

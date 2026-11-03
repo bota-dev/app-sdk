@@ -13,6 +13,12 @@ tracked separately.
 
 ## Unreleased
 
+- Add a native Apple conversation companion source with A/B roles, paired
+  captions, independent microphone/listening, explicit permission, source
+  finish and joined cleanup. Its loopback host keeps project/provider keys
+  outside the App. Xcode builds iOS/macOS consumer Apps; physical/provider
+  acceptance, original-audio archival and public distribution remain pending.
+
 - Add a Flutter speech control source preview backed by per-engine native
   sessions, with typed captions/state, independent capture/listening, language
   changes, source finish and recovery. Bounded delivery and engine teardown
