@@ -85,6 +85,7 @@ thread = Thread(target=lambda: server.serve_forever(poll_interval=0.1), daemon=T
 thread.start()
 try:
     run('reverse', 'tcp:4173', 'tcp:' + str(server.server_port))
+    run('logcat', '-c')
     run('logcat', '-b', 'crash', '-c')
     (output / 'launch.txt').write_bytes(run('shell', 'am', 'start', '-W', '-n', package + '/dev.bota.speech.companion.MainActivity'))
     wait_for(lambda value: labelled(value, 'Listen in your language.') is not None)
@@ -106,6 +107,7 @@ except BaseException:
     # This emulator contains only synthetic fixture data and never opens media.
     # Preserve startup evidence before force-stop destroys the failed process.
     for name, arguments in [
+        ('runtime.txt', ('logcat', '-d', '-v', 'threadtime', 'ReactNativeJS:V', '*:E')),
         ('crash.txt', ('logcat', '-b', 'crash', '-d', '-v', 'threadtime')),
         ('failure.png', ('exec-out', 'screencap', '-p')),
     ]:
