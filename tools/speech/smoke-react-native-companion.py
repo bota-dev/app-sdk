@@ -8,7 +8,7 @@ import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from threading import Event, Thread
-import xml.etree.ElementTree as ET
+from defusedxml import ElementTree as ET
 
 adb, apk, destination = sys.argv[1:]
 output = Path(destination)
@@ -25,7 +25,7 @@ def screen():
     run('shell', 'uiautomator', 'dump', '--compressed', '/sdcard/bota-speech-window.xml')
     data = run('exec-out', 'cat', '/sdcard/bota-speech-window.xml')
     (output / 'window.xml').write_bytes(data)
-    return ET.fromstring(data)
+    return ET.fromstring(data, forbid_dtd=True)
 
 def wait_for(predicate, scroll=False):
     deadline = time.monotonic() + 60

@@ -27,7 +27,8 @@
     "tools/baseline/compare-workflows.mjs": "5916b0f0712342a153fee18d4751270374221f0bd68df52b6ba5aab8155a57cf",
     "tools/flutter/verify-pigeon.mjs": "7075ea28256ea6f3307a220b8d29117bad4721dfa4e7b74863aea8c84784f2e0",
     "tools/release/wait-cocoapods.mjs": "96d05f66038c98d44a6d3f046216d00b8d14a1172430e570db251319e0bc5a8d",
-    "tools/xtask/src/main.rs": "a47014fe411b655db72de809f5f1dc16d1658f840cccce72e8ff6fbe86585fcc"
+    "tools/xtask/src/main.rs": "a47014fe411b655db72de809f5f1dc16d1658f840cccce72e8ff6fbe86585fcc",
+    "platforms/android/speech-companion/src/main/AndroidManifest.xml": "dd37c23463c80f066962a76cbd5240b7b132166d03d9c809ba5cd5b9191394be"
   },
   "findings": [
     {
@@ -625,6 +626,13 @@
       "scope": "reviewed pinned artifact HTTPS transport",
       "rationale": "The origin and path are fixed to the official Google NDK object; explicit ssl.create_default_context() requires certificate chain and hostname verification. No redirects, untrusted URL or unverified context is accepted. Exact size/SHA-256 and ZIP CRCs are checked before unpacking.",
       "source_revision_basis": "bd19cd344bd2389d4ca3923a63d64e4c71d53fd0 plus this new reviewed downloader"
+    },
+    {
+      "rule": "java.android.security.exported_activity.exported_activity",
+      "path": "platforms/android/speech-companion/src/main/AndroidManifest.xml",
+      "original_line": 12,
+      "scope": "reviewed public launcher boundary",
+      "rationale": "Android requires the launcher Activity to be exported. CompanionActivity does not consume Intent extras or URI authority; initial state is silent and disconnected, with explicit user join and microphone permission/action gates. The Robolectric exportedLauncherIgnoresIntentAuthority regression verifies injected host, code, autoJoin and input extras cannot start or configure a session."
     }
   ]
 }

@@ -2,7 +2,10 @@
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 mode="${1:---android}"
-case "$mode" in --js-only|--android|--ios) ;; *) echo 'Usage: test-react-native-companion.sh [--js-only|--android|--ios]' >&2; exit 1 ;; esac
+case "$mode" in
+    "--js-only" | "--android" | "--ios") ;;
+    *) echo 'Usage: test-react-native-companion.sh [--js-only|--android|--ios]' >&2; exit 1 ;;
+esac
 app="$root/tests/consumers/react-native-speech"
 export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=8192}"
 (cd "$root/frameworks/react-native"; npm run build)

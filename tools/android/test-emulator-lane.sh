@@ -102,8 +102,17 @@ test "$("$ADB" shell getprop sys.boot_completed | tr -d '\r')" = "1"
 "$ADB" shell settings put global transition_animation_scale 0
 "$ADB" shell settings put global animator_duration_scale 0
 
+run_speech_smoke() {
+  local smoke_environment="$ROOT/target/speech-smoke-python"
+  python3 -m venv "$smoke_environment"
+  "$smoke_environment/bin/python" -m pip install --disable-pip-version-check --require-hashes --no-deps \
+    -r "$ROOT/tools/speech/smoke-requirements.txt"
+  "$smoke_environment/bin/python" "$ROOT/tools/speech/smoke-react-native-companion.py" \
+    "$ADB" "$speech_companion_apk" "$ROOT/target/react-native-speech-smoke"
+}
+
 if [[ "$speech_only" == true ]]; then
-  python3 "$ROOT/tools/speech/smoke-react-native-companion.py" "$ADB" "$speech_companion_apk" "$ROOT/target/react-native-speech-smoke"
+  run_speech_smoke
   exit 0
 fi
 
@@ -133,7 +142,7 @@ instrumentation_classes="dev.bota.sdk.internal.bluetooth.BluetoothPermissionTest
 
 if [[ -n "$speech_companion_apk" ]]; then
   test "$api" = 35
-  python3 "$ROOT/tools/speech/smoke-react-native-companion.py" "$ADB" "$speech_companion_apk" "$ROOT/target/react-native-speech-smoke"
+  run_speech_smoke
 fi
 
 test "$release_digest" = "$(shasum -a 256 "$release_aar" | awk '{print $1}')"

@@ -2,7 +2,10 @@
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 mode="${1:---android}"
-case "$mode" in --dart-only|--android|--ios|--all) ;; *) echo 'Usage: test-flutter-companion.sh [--dart-only|--android|--ios|--all]' >&2; exit 1 ;; esac
+case "$mode" in
+    "--dart-only" | "--android" | "--ios" | "--all") ;;
+    *) echo 'Usage: test-flutter-companion.sh [--dart-only|--android|--ios|--all]' >&2; exit 1 ;;
+esac
 "$root/tools/flutter/run-flutter.sh" --version >/dev/null
 version="$(node -p "require('$root/tools/flutter/flutter-version.json').version")"
 case "$(uname -s)-$(uname -m)" in
