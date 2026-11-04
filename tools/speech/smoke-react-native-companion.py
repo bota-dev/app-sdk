@@ -58,6 +58,7 @@ def tap(node):
     run('shell', 'input', 'tap', str((x1 + x2) // 2), str((y1 + y2) // 2))
 
 run('install', '-r', str(Path(apk).resolve()), timeout=120)
+package_uid = re.search(r'\buid:(\d+)', run('shell', 'cmd', 'package', 'list', 'packages', '-U', package).decode()).group(1)
 width, height = map(int, re.findall(r'(\d+)x(\d+)', run('shell', 'wm', 'size').decode())[-1])
 # A neutral UI error alone could come from JS validation without native HTTP.
 # Observe the exact synthetic request at a disposable loopback fixture as well.
@@ -107,7 +108,7 @@ except BaseException:
     # This emulator contains only synthetic fixture data and never opens media.
     # Preserve startup evidence before force-stop destroys the failed process.
     for name, arguments in [
-        ('runtime.txt', ('logcat', '-d', '-v', 'threadtime', 'ReactNativeJS:V', '*:E')),
+        ('runtime.txt', ('logcat', '-d', '-v', 'threadtime', '--uid=' + package_uid)),
         ('crash.txt', ('logcat', '-b', 'crash', '-d', '-v', 'threadtime')),
         ('failure.png', ('exec-out', 'screencap', '-p')),
     ]:
