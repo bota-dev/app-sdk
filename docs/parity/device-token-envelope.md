@@ -3,6 +3,11 @@
 ## Plaintext/encrypted compatibility (unreleased)
 
 The current byte and API contract is [device-token-v1](../../protocol/device-token-v1.md).
+The backend now accepts explicit first-bind PK_D using TOFU, with immutable pins
+and source provenance. This removes mandatory manufacturing pre-enrollment,
+accepts lower first-use identity assurance and changes no SDK token bytes. APP
+already supplies the key; refresh/WiFi cannot enroll it. Apply migration134 and
+the matching API before relying on this behavior.
 Rust accepts exactly one raw token or envelope and selects the corresponding
 characteristic before writing. RN's material broker and compatibility manager,
 and the Web provider, enforce the same exclusive choice. No failed encrypted

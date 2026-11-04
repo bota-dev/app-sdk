@@ -27,7 +27,7 @@ sizes. Payload offsets 0..79 are unchanged. Offsets 80..111 contain the active
 credential commitment; the four identity fields start at offset 112 and remaining
 padding is zero. The commitment is SHA256 of ASCII
 `bota/enc-v2/credential/v1`, one NUL byte, the token byte length as u16LE and
-the installed token bytes. It is encrypted to the independently enrolled PK_D;
+the installed token bytes. It is encrypted to the pinned PK_D;
 it is never returned as a public response field or logged. The credential/result
 HKDF domains, AAD and `b2` framing remain v2; the envelope transcript hash binds
 them to the exact v3 grant, preventing cross-version substitution.
@@ -35,7 +35,9 @@ them to the exact v3 grant, preventing cross-version substitution.
 The backend locks current EndUser/device, checks binding/reset/enrollment, then
 locks the one active, unrevoked, unexpired device credential for that exact
 project/device/EndUser. Ambiguous, missing or legacy-null commitment refuses
-issuance. It uses no submitted key as enrollment and makes no registry changes.
+issuance. WiFi issuance uses no submitted key as enrollment and makes no registry
+changes. The separate [bind-time TOFU policy](device-token-v1.md#cryptography-and-byte-layout)
+may establish a missing pin before WiFi use; manufacturing enrollment is optional.
 Firmware verifies signature, recipient key and environment, requires paired
 state, compares the signed serial and commitment with protected installed
 credentials, and retains connection/credential-epoch, nonce and expiry fences.
@@ -47,7 +49,8 @@ reconfiguration; unsupported firmware still requires an update.
 
 API failures distinguish `device_identity_not_enrolled`, `device_identity_revoked`,
 `device_identity_mismatch` and `device_binding_proof_unavailable`. A successful
-bind is not evidence of trusted enrollment. Deployment, independent enrollment,
+legacy bind without an explicit key is not evidence of a pin. Deployment, bind-time
+pinning (or existing administrator enrollment),
 SDK publication/adoption and physical firmware acceptance remain separate gates.
 The v2 layout below is retained for existing callers; its device-side signed
 installation-envelope prerequisite applies only to v2.
