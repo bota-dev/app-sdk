@@ -72,6 +72,10 @@ published audio. When an audio retry returns `waiting_for_inputs`, call
 `resume(id)` to reupload the exact files. `cancel(id)` fences further work; saved
 audio is retained. It cannot recall already issued URLs or provider requests.
 
+An output's `processing_error: processing_dispatch_deferred` indicates temporary
+AI admission or dispatch failure. Display it separately from audio save failure;
+the backend reconciles the same stage IDs and clears it after successful dispatch.
+
 The helper checks every local file before first admission. On recovery it first
 replays the journaled intent, allowing an already saved operation to recover even
 after local files disappear. It serializes concurrent saves of the same UUID

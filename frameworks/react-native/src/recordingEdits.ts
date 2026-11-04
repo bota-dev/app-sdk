@@ -15,7 +15,7 @@ export interface RecordingEditRequest {
 export interface RecordingEditStatus {
   operation_id: string; state: 'waiting_for_inputs' | 'queued' | 'processing' | 'saved' | 'failed' | 'cancelled';
   failure_code?: string | null; ai_cancelled?: boolean;
-  outputs: Array<{ index: number; recording_id: string; status: string; transcription_status?: string | null; summary_status?: string | null }>;
+  outputs: Array<{ index: number; recording_id: string; status: string; transcription_status?: string | null; summary_status?: string | null; processing_error?: string | null }>;
   required_uploads: Array<RecordingEditFile & { target: 'input' | 'output'; index: number }>;
 }
 export interface RecordingEditJournal<Handle> { version: 1; scope_key: string; request: RecordingEditRequest; files: Record<string, Handle> }
