@@ -573,6 +573,15 @@ bundle requires normal signing before device installation. Neither is a public
 SDK release. Android uses `adb reverse tcp:4173 tcp:4173` for the default host;
 an iOS device needs an operator-provided loopback tunnel to that same host.
 
+The Android build checks the actual ARM64/x86_64 compilation databases before
+preserving an APK. The App and safe-area component must use the same Fabric
+property-layout definitions; mismatched definitions can compile successfully
+but corrupt native memory at startup. The pinned safe-area dependency uses
+React Native's shared compiler options. Full CI also starts the bundled App
+on API 35 and verifies its native loopback HTTP path. The separate Android
+startup workflow can replay a preserved same-repository CI APK and retains
+App-scoped runtime logs, crash records and screenshots on failure.
+
 Native HTTP reuses the companion's bounded, no-redirect transport. Leaving or
 entering background retires the JS owner, clears its 100-pair view immediately
 and joins pending host/media cleanup. Late authorization and permission replies

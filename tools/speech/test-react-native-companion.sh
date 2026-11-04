@@ -19,6 +19,7 @@ if [[ "$mode" == --android ]]; then
     "$JAVA_HOME/bin/keytool" -genkeypair -keystore "$app/android/app/speech-debug.keystore" -storepass android -alias androiddebugkey -keypass android \
         -dname 'CN=Internal Speech Companion' -keyalg RSA -validity 30
     "$app/android/gradlew" -p "$app/android" :app:assembleRelease :app:lintRelease --max-workers=2 -PreactNativeArchitectures=arm64-v8a,x86_64
+    python3 "$root/tools/speech/check-react-native-companion-android.py" "$app/android/app"
     cp "$app/android/app/build/outputs/apk/release/app-release.apk" "$output/react-native-speech-companion.apk"
 else
     "$root/tools/apple/build-xcframework.sh"
