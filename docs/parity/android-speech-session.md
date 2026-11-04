@@ -55,10 +55,12 @@ calls, no redirects, no connection retry, strict UTF-8 and at most 512 KiB per
 response. Its request cancellation closes the actual OkHttp call. Source finish
 preserves explicit unknown boundary fields and accepts 202 without interpreting
 it as completed; Rust evaluates the unchanged body. Codes and captions are not
-persisted or logged, and App backup/transfer is disabled. No original-audio
-capture/archive profile is introduced by this example.
+persisted or logged, and App backup/transfer is disabled. When the host admits
+`speech_capture_pcm_v1`, the independent original owner retains encrypted audio
+and its journal in backup-excluded storage until exact verified publication.
+That durable state is separate from volatile role credentials and live captions.
 
-The local development check has 13 tests, including real loopback HTTP,
+The local development check covers real loopback HTTP,
 native Rust/JNI controller composition and an actual Activity lifecycle check,
 plus lint and a debug APK build. Native
 IO uses a dedicated real executor so virtual caller time cannot outrun actual tasks.
@@ -70,7 +72,7 @@ an actual RTC/provider conversation, Bluetooth/AEC routing or physical acceptanc
 | RTC-O01–03 | Native role UI, paired captions and independent controls; composed controller checks | Authorized two-party media and provider delivery |
 | RTC-M04 | Native Activity, permission ownership, strict build and APK packaging | Physical routing, installation and released package |
 | RTC-X02–03 | Source finish, revision retirement, bounded HTTP and joined leave | Actual expiry/revocation, provider tails and weak networks |
-| RTC-O04 / RTC-X01 | Unsupported archival still fails before capture | Authorized encrypted capture branch, clocks/gaps and reconciliation |
+| RTC-O04 / RTC-X01 | Dedicated native original owner, same-source PCM, encrypted retry, clocks/gaps and verified-file text alignment; unsupported profiles fail before capture | Physical capture, process recovery, all retention modes and actual provider reconciliation |
 
 The internal Realtime Speech Design remains the single end-to-end completion
 checklist. This source App does not close an unverified G1–G6 gate.

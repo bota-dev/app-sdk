@@ -69,7 +69,7 @@ these checks do not establish an actual RTC/provider call or physical audio.
 | RTC-O01–03 | Native A/B App, paired cards, independent controls; composed controller checks | Authorized two-party RTC/ASR/translation/playback |
 | RTC-M04 | iOS/macOS consumer source, permission and native lifecycle ownership | Phone routing/AEC, signed installation and published package |
 | RTC-X02–03 | Native finish/recovery, retired UI revisions, joined leave | Actual expiry/revocation, provider tails and weak-network recovery |
-| RTC-O04 / RTC-X01 | Existing retention refusal is preserved | Shared capture/archive clock, encrypted archive branch and reconciliation |
+| RTC-O04 / RTC-X01 | Dedicated native original owner, same-source PCM, encrypted retry, clocks/gaps and verified-file text alignment; unsupported profiles fail before capture | Physical capture, process recovery, all retention modes and actual provider reconciliation |
 
 The single cross-repository completion checklist remains in the internal
 Realtime Speech Design. These source additions do not close its G1–G6 gates.
