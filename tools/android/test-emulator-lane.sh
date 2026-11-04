@@ -12,6 +12,7 @@ repository="$ROOT/target/android-m2"
 release_directory="$ROOT/target/android-release"
 public_only=false
 speech_companion_apk=""
+speech_only=false
 while (($#)); do
   case "$1" in
     --api) api="${2:?--api requires a value}"; shift 2 ;;
@@ -19,6 +20,7 @@ while (($#)); do
     --release-directory) release_directory="${2:?--release-directory requires a value}"; shift 2 ;;
     --public-only) public_only=true; shift ;;
     --speech-companion-apk) speech_companion_apk="${2:?--speech-companion-apk requires a path}"; shift 2 ;;
+    --speech-only) speech_only=true; shift ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -37,6 +39,10 @@ case "$api" in
     exit 2
     ;;
 esac
+if [[ "$speech_only" == true ]] && [[ "$api" != 35 || "$public_only" == true || ! -f "$speech_companion_apk" ]]; then
+  echo "--speech-only requires API 35 and an existing --speech-companion-apk, without --public-only" >&2
+  exit 2
+fi
 export ANDROID_AVD_HOME="$ROOT/target/android-avd-$api"
 for tool in "$ADB" "$EMULATOR" "$AVDMANAGER"; do test -x "$tool"; done
 
@@ -95,6 +101,11 @@ test "$("$ADB" shell getprop sys.boot_completed | tr -d '\r')" = "1"
 "$ADB" shell settings put global window_animation_scale 0
 "$ADB" shell settings put global transition_animation_scale 0
 "$ADB" shell settings put global animator_duration_scale 0
+
+if [[ "$speech_only" == true ]]; then
+  python3 "$ROOT/tools/speech/smoke-react-native-companion.py" "$ADB" "$speech_companion_apk" "$ROOT/target/react-native-speech-smoke"
+  exit 0
+fi
 
 for package in dev.bota.sdk.test dev.bota.example dev.bota.example.test dev.bota.legacy dev.bota.legacy.test; do
   "$ADB" uninstall "$package" >/dev/null 2>&1 || true

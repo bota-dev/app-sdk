@@ -1,0 +1,82 @@
+name: Internal speech App Android startup check
+
+# Diagnose a preserved APK without rebuilding the SDK matrix. Normal CI still
+# requires the complete package, emulator and exact-source inventory gates.
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_run:
+        description: CI run containing the preserved RN Android APK; empty selects the latest available on this branch
+        type: string
+        required: false
+  push:
+    branches-ignore: [main]
+    paths: [.github/workflows/check-speech-app-android.yml]
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  startup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Resolve a preserved same-repository CI APK
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_RUN: ${{ inputs.artifact_run }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$REQUESTED_RUN" ]]; then
+            [[ "$REQUESTED_RUN" =~ ^[0-9]+$ ]]
+            candidates="$REQUESTED_RUN"
+          else
+            candidates="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch "$GITHUB_REF_NAME" --limit 20 --json databaseId --jq '.[].databaseId')"
+          fi
+          for candidate in $candidates; do
+            sha="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$candidate" --jq 'select(.head_repository.full_name == .repository.full_name and .path == ".github/workflows/ci.yml") | .head_sha')"
+            [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || continue
+            artifact="react-native-speech-companion-android-$sha"
+            found="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$candidate/artifacts" --jq ".artifacts[] | select(.name == \"$artifact\" and .expired == false) | .id")"
+            if [[ -n "$found" ]]; then
+              printf 'run-id=%s\nartifact=%s\n' "$candidate" "$artifact" >> "$GITHUB_OUTPUT"
+              printf 'Preserved APK source: %s, CI run: %s\n' "$sha" "$candidate"
+              exit 0
+            fi
+          done
+          echo 'No preserved same-repository CI APK was found' >&2
+          exit 1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ steps.source.outputs.artifact }}
+          run-id: ${{ steps.source.outputs.run-id }}
+          github-token: ${{ github.token }}
+          path: target/react-native-speech-companion/
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Prepare disposable API 35 emulator
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "emulator" "platform-tools" "system-images;android-35;google_apis;x86_64"
+          if [[ -e /dev/kvm ]]; then sudo chmod 666 /dev/kvm; fi
+      - name: Verify bundled startup and native loopback HTTP
+        run: tools/android/test-emulator-lane.sh --api 35 --speech-only --speech-companion-apk target/react-native-speech-companion/react-native-speech-companion.apk
+      - name: Retain startup diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: react-native-speech-startup-${{ github.run_id }}
+          path: |
+            target/react-native-speech-smoke/
+            target/android-emulator-35.log
+          if-no-files-found: warn
+          retention-days: 7

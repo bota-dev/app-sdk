@@ -85,7 +85,8 @@ thread = Thread(target=lambda: server.serve_forever(poll_interval=0.1), daemon=T
 thread.start()
 try:
     run('reverse', 'tcp:4173', 'tcp:' + str(server.server_port))
-    run('shell', 'am', 'start', '-W', '-n', package + '/dev.bota.speech.companion.MainActivity')
+    run('logcat', '-b', 'crash', '-c')
+    (output / 'launch.txt').write_bytes(run('shell', 'am', 'start', '-W', '-n', package + '/dev.bota.speech.companion.MainActivity'))
     wait_for(lambda value: labelled(value, 'Listen in your language.') is not None)
     (output / 'conversation.png').write_bytes(run('exec-out', 'screencap', '-p'))
     tap(control('Role access code', 'android.widget.EditText'))
@@ -101,6 +102,18 @@ try:
     (output / 'unavailable-host.png').write_bytes(run('exec-out', 'screencap', '-p'))
     run('shell', 'input', 'keyevent', 'HOME')
     print('Bundled RN App rendered, sent the native loopback join request, handled HTTP 503 and accepted background navigation. No media was started.')
+except BaseException:
+    # This emulator contains only synthetic fixture data and never opens media.
+    # Preserve startup evidence before force-stop destroys the failed process.
+    for name, arguments in [
+        ('crash.txt', ('logcat', '-b', 'crash', '-d', '-v', 'threadtime')),
+        ('failure.png', ('exec-out', 'screencap', '-p')),
+    ]:
+        try:
+            (output / name).write_bytes(run(*arguments))
+        except Exception:
+            pass
+    raise
 finally:
     try:
         run('shell', 'am', 'force-stop', package)
