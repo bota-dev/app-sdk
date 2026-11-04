@@ -42,8 +42,7 @@ impl WifiProvisioning {
             if key == [0; 32]
                 || request == 0
                 || ![1, 2].contains(&action)
-                || grant.len() != 509
-                || &grant[..8] != p::WIFI_PROVISIONING_MAGIC
+                || wifi_provisioning_version(grant).is_err()
                 || grant[8..14] != [0, 16, 0, 1, 0, 3]
                 || grant[14] > 2
                 || grant[15] != action
@@ -155,7 +154,7 @@ pub fn wifi_provisioning_grant_chunks(
     grant: &[u8],
     capacity: usize,
 ) -> Result<Vec<Vec<u8>>, DeviceSdkError> {
-    if grant.len() != 509 || !(20..=512).contains(&capacity) {
+    if wifi_provisioning_version(grant).is_err() || !(20..=512).contains(&capacity) {
         return Err(invalid());
     }
     Ok(grant
@@ -164,21 +163,30 @@ pub fn wifi_provisioning_grant_chunks(
         .map(|(i, bytes)| {
             let mut frame = vec![0xb2, 0];
             frame.extend_from_slice(&((i * (capacity - 6)) as u16).to_le_bytes());
-            frame.extend_from_slice(&509u16.to_le_bytes());
+            frame.extend_from_slice(&(grant.len() as u16).to_le_bytes());
             frame.extend_from_slice(bytes);
             frame
         })
         .collect())
 }
 
-pub fn validate_wifi_provisioning_capability(bytes: &[u8]) -> Result<(), DeviceSdkError> {
-    if bytes != [0xb2, 2, 7, 0, 253, 1, 126, 0] {
-        return Err(DeviceSdkError::new(
+/// Version is explicit; v3 adds binding proof without changing credential frames.
+pub fn wifi_provisioning_version(grant: &[u8]) -> Result<u8, DeviceSdkError> {
+    match grant.len() {
+        509 if &grant[..8] == p::WIFI_PROVISIONING_MAGIC => Ok(2),
+        541 if &grant[..8] == p::WIFI_PROVISIONING_V3_MAGIC => Ok(3),
+        _ => Err(invalid()),
+    }
+}
+pub fn validate_wifi_provisioning_capability(bytes: &[u8]) -> Result<u8, DeviceSdkError> {
+    match bytes {
+        [0xb2, 2, 7, 0, 253, 1, 126, 0] => Ok(2),
+        [0xb2, 3, 7, 0, 29, 2, 126, 0] => Ok(3),
+        _ => Err(DeviceSdkError::new(
             ErrorCode::UnsupportedCapability,
             Operation::Provision,
             false,
         )
-        .with_detail("device requires secure WiFi provisioning firmware"));
+        .with_detail("device requires supported secure WiFi provisioning firmware")),
     }
-    Ok(())
 }

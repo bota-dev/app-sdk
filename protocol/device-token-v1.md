@@ -6,7 +6,8 @@ semantics. HTTPS returns `credential_envelope` with `format=bota-device-token-v1
 include `device_token`. Clients request `credential_delivery=hpke_v1` in the
 existing request for encrypted issuance. The backend switch
 `DEVICE_TOKEN_ENCRYPTION_ENABLED` defaults to false in all environments: in that
-mode it returns only raw `device_token` without requiring trusted enrollment.
+mode it returns only raw `device_token`. First-bind key admission below applies
+independently of this representation.
 Compatible clients must support both representations; mixed responses fail.
 Missing trust or invalid crypto never triggers automatic plaintext fallback.
 
@@ -27,8 +28,14 @@ and bounds before relaying `credential_envelope.data` to the SDK.
 
 RFC 9180 base HPKE: DHKEM(P-256, HKDF-SHA256) 0x0010, HKDF-SHA256 0x0001,
 ChaCha20-Poly1305 0x0003. Info is ASCII `bota-device-token-v1` without NUL.
-Only a separately enrolled physical-device public key may select the recipient.
-A BLE-read key is a consistency check, never enrollment authority.
+The backend uses a pinned recipient key. An authorized first bind may explicitly
+submit the BLE-read `pk_d` to create that pin (TOFU); manufacturing pre-enrollment
+is optional. This proves no factory identity and accepts first-use impersonation
+risk. Existing pins, revocations and historical-key consistency are enforced;
+refresh and WiFi never enroll or replace keys. Pin creation is atomic with bind
+preparation; abort after successful preparation retains the pin. Legacy missing
+pins require explicit same-key unbind/rebind, not a WiFi retry. APP already sends
+this field, so no new request round, token wire format or firmware key is needed.
 
 All integers are unsigned big-endian. The envelope is 230–768 bytes:
 
@@ -132,7 +139,7 @@ release are qualified. Deploy compatible firmware/SDK/Apps before changing a
 running encrypted-only backend to plaintext. Missing configuration selects
 plaintext; explicitly retain `true` during a staged rollout when needed.
 
-Encrypted mode requires migration124, independently verified Manufacturing enrollment,
+Encrypted mode requires migrations124/128/134 and a pinned recipient identity,
 a provisioned device private key and matching backend signing trust, regenerated
 RN core on the mandated Linux/Rust toolchain, native/Web/Flutter qualification,
 and physical BLE/WiFi/LTE acceptance. Legacy claim/provision token-return routes

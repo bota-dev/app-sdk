@@ -62,8 +62,7 @@ impl WifiProvisioningCodecs {
     pub(crate) fn call(&mut self, value: Value) -> Result<Vec<u8>, DeviceSdkError> {
         match input::<Request>(value)? {
             Request::Capability { bytes } => {
-                validate_wifi_provisioning_capability(&bytes)?;
-                output(&())
+                output(&validate_wifi_provisioning_capability(&bytes)?)
             }
             Request::Create {
                 grant,
@@ -74,7 +73,8 @@ impl WifiProvisioningCodecs {
                 capacity,
             } => {
                 if self.sessions.len() >= 16
-                    || grant.format != "bota-wifi-config-v2"
+                    || !["bota-wifi-config-v2", "bota-wifi-config-v3"]
+                        .contains(&grant.format.as_str())
                     || grant.serial_number != serial
                     || grant.binding_generation == 0
                     || grant.expires_at.is_empty()
@@ -100,6 +100,14 @@ impl WifiProvisioningCodecs {
                     return Err(invalid("invalid secure WiFi request"));
                 }
                 let envelope = decode(&grant.grant_blob)?;
+                if grant.format
+                    != format!(
+                        "bota-wifi-config-v{}",
+                        wifi_provisioning_version(&envelope)?
+                    )
+                {
+                    return Err(invalid("WiFi grant protocol version mismatch"));
+                }
                 let mut key = decode(&grant.key_base64)?;
                 let key_array = key
                     .as_slice()
@@ -144,32 +152,42 @@ mod tests {
     use super::*;
     #[test]
     fn bridge_executes_secure_vector_and_retires_handles() {
-        let v: Value =
-            serde_json::from_str(include_str!("../../../protocol/wifi-config-v2.vector.json"))
-                .unwrap();
-        let r = &v["response"];
-        let grant = json!({"format":r["format"],"grantBlob":r["envelope_base64"],"keyBase64":r["key_base64"],
+        for source in [
+            include_str!("../../../protocol/wifi-config-v2.vector.json"),
+            include_str!("../../../protocol/wifi-config-v3.vector.json"),
+        ] {
+            let v: Value = serde_json::from_str(source).unwrap();
+            let r = &v["response"];
+            let grant = json!({"format":r["format"],"grantBlob":r["envelope_base64"],"keyBase64":r["key_base64"],
             "requestId":r["request_id"],"authNonce":r["auth_nonce"],"action":r["action"],"serialNumber":r["serial_number"],
             "bindingGeneration":r["binding_generation"],"expiresAt":r["expires_at"]});
-        let mut state = WifiProvisioningCodecs::default();
-        let created:Value=serde_json::from_slice(&state.call(json!({"Create":{"grant":grant,"ssid":"Audit-Network",
+            let mut state = WifiProvisioningCodecs::default();
+            let created:Value=serde_json::from_slice(&state.call(json!({"Create":{"grant":grant,"ssid":"Audit-Network",
             "password":"Audit-Only-123","nonce":r["auth_nonce"],"serial":"TEST000001","capacity":182}})).unwrap()).unwrap();
-        assert_eq!(created["chunks"].as_array().unwrap().len(), 3);
-        let expected = v["credentialHex"].as_str().unwrap();
-        let bytes: Vec<u8> = serde_json::from_value(created["credentials"].clone()).unwrap();
-        assert_eq!(
-            bytes.iter().map(|v| format!("{v:02x}")).collect::<String>(),
-            expected
-        );
-        let raw = v["successHex"].as_str().unwrap();
-        let wire: Vec<u8> = (0..raw.len())
-            .step_by(2)
-            .map(|i| u8::from_str_radix(&raw[i..i + 2], 16).unwrap())
-            .collect();
-        let result = json!({"Result":{"id":created["id"],"bytes":wire}});
-        let result_json: Value =
-            serde_json::from_slice(&state.call(result.clone()).unwrap()).unwrap();
-        assert_eq!(result_json["success"], true);
-        assert!(state.call(result).is_err());
+            assert_eq!(
+                created["chunks"].as_array().unwrap().len(),
+                if r["format"] == "bota-wifi-config-v3" {
+                    4
+                } else {
+                    3
+                }
+            );
+            let expected = v["credentialHex"].as_str().unwrap();
+            let bytes: Vec<u8> = serde_json::from_value(created["credentials"].clone()).unwrap();
+            assert_eq!(
+                bytes.iter().map(|v| format!("{v:02x}")).collect::<String>(),
+                expected
+            );
+            let raw = v["successHex"].as_str().unwrap();
+            let wire: Vec<u8> = (0..raw.len())
+                .step_by(2)
+                .map(|i| u8::from_str_radix(&raw[i..i + 2], 16).unwrap())
+                .collect();
+            let result = json!({"Result":{"id":created["id"],"bytes":wire}});
+            let result_json: Value =
+                serde_json::from_slice(&state.call(result.clone()).unwrap()).unwrap();
+            assert_eq!(result_json["success"], true);
+            assert!(state.call(result).is_err());
+        }
     }
 }

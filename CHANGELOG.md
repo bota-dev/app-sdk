@@ -13,6 +13,12 @@ tracked separately.
 
 ## Unreleased
 
+- Add explicit personal WiFi v2/v3 capability selection and v3 credential-binding
+  proof independent of token delivery format. React Native exposes
+  `wifi.readProvisioningVersion` / `DeviceManager.readWiFiProvisioningVersion`
+  and rejects mismatched grant versions before writes. Requires coordinated API,
+  SDK/App and firmware adoption; publication and physical acceptance are pending.
+
 - Add a Watch HTTP command source product and primary Double Tap helper to the
   root Swift package and release generator, separate from the native core.
   Developers supply their own application UI, authorization headers and business

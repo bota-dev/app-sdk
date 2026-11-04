@@ -82,3 +82,41 @@ fn validates_credentials_and_grant_before_exposing_any_bytes() {
     assert!(WifiProvisioning::new([7; 32], &g, 41, 2).is_err());
     assert!(WifiProvisioning::new([7; 32], b"legacy.jwt", 41, 1).is_err());
 }
+
+#[test]
+fn v3_uses_explicit_binding_proof_profile_and_preserves_v2() {
+    use bota_device_sdk_core::protocol::{
+        validate_wifi_provisioning_capability, wifi_provisioning_grant_chunks,
+    };
+    assert_eq!(
+        validate_wifi_provisioning_capability(&[0xb2, 3, 7, 0, 29, 2, 126, 0]).unwrap(),
+        3
+    );
+    assert_eq!(
+        validate_wifi_provisioning_capability(&[0xb2, 2, 7, 0, 253, 1, 126, 0]).unwrap(),
+        2
+    );
+    assert!(validate_wifi_provisioning_capability(&[0xb2, 3, 7, 0, 253, 1, 126, 0]).is_err());
+    let v: Value =
+        serde_json::from_str(include_str!("../../../protocol/wifi-config-v3.vector.json")).unwrap();
+    let grant = STANDARD
+        .decode(v["response"]["envelope_base64"].as_str().unwrap())
+        .unwrap();
+    let mut s = WifiProvisioning::new([7; 32], &grant, 41, 1).unwrap();
+    assert_eq!(
+        s.seal_credentials("Audit-Network", "Audit-Only-123")
+            .unwrap(),
+        unhex(v["credentialHex"].as_str().unwrap())
+    );
+    assert_eq!(
+        s.open_result(&unhex(v["successHex"].as_str().unwrap()))
+            .unwrap(),
+        0
+    );
+    let chunks = wifi_provisioning_grant_chunks(&grant, 182).unwrap();
+    assert_eq!(chunks.len(), 4);
+    assert_eq!(&chunks[0][4..6], &541u16.to_le_bytes());
+    let mut wrong = grant.clone();
+    wrong[7] = b'2';
+    assert!(WifiProvisioning::new([7; 32], &wrong, 41, 1).is_err());
+}

@@ -50,7 +50,8 @@ function fixture(overrides = {}, scope = {}, gatt = (_context, body) => body()) 
         : { success: input.bytes[0] !== 9, ...(input.bytes[0] === 9 ? { error: 'invalid_grant' } : {}) };
       case 'decodeWiFiConfigResult': return { success: true };
       case 'wifiProvisioning':
-        if (input.Capability || input.Free) return null;
+        if (input.Capability) return 2;
+        if (input.Free) return null;
         if (input.Create) return { id: 1, chunks: [[111]], credentials: [113] };
         if (input.Result) return { success: true };
         throw Error('unknown secure WiFi operation');

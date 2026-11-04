@@ -1,9 +1,10 @@
 # Secure WiFi static-analysis review
 
 This review covers SDK PR #73 at `059e686a9146bccd878bde0ff99e150dcde29479`
-and its security-check follow-up. The authoritative contract remains
-[WiFi provisioning v2](../../protocol/wifi-config-v2.md); the PR owns the single
-cross-repository completion checklist.
+and its security-check follow-up, plus the PR #75 v3 test-vector triage below.
+The authoritative contract is [WiFi provisioning v2/v3](../../protocol/wifi-config-v2.md).
+The respective PR
+links the single cross-repository completion checklist.
 
 ## Findings and evidence
 
@@ -40,3 +41,33 @@ bytes are unchanged.
 
 The shared compound-engineering skill is unavailable locally. This direct
 requirement-to-evidence review follows the fallback in `CONTRIBUTING.md`.
+
+## PR #75: synthetic v3 credential finding
+
+[CodeQL alert 25](https://github.com/bota-dev/app-sdk/security/code-scanning/25)
+flags the password literal in
+[`v3_uses_explicit_binding_proof_profile_and_preserves_v2`](https://github.com/bota-dev/app-sdk/blob/3332e1757a981d97d438e5ae09013dafc7475d60/core/device-sdk-core/tests/wifi_provisioning.rs#L107).
+At reviewed source `3332e1757a981d97d438e5ae09013dafc7475d60`, this is a Rust
+integration test comparing encrypted credentials against the public synthetic
+[v3 vector](../../protocol/wifi-config-v3.vector.json). The fixture identifies
+its keys as synthetic and unsuitable for deployed devices. CodeQL also classifies
+the finding as `test`. The fixed SSID/password are test inputs, not deployment
+credentials; preserving them retains exact backend/SDK/firmware interoperability.
+
+Production `WifiProvisioning::seal_credentials` receives the caller's SSID and
+password; `WifiProvisioning::new` derives direction-specific keys from the current
+operation key and complete grant. The JS production binding receives the current
+grant's key. It does not import this fixture. Disposition: `used in tests`, with
+this evidence recorded on alert 25. No source obfuscation, scanner suppression,
+workflow change, production-code change or generated-artifact change is needed.
+
+Focused verification on that source:
+
+| Requirement | Verification | Status |
+| --- | --- | --- |
+| Native v2/v3 vector interoperability and refusal | `cargo test --locked -p bota-device-sdk-core --test wifi_provisioning` | 4 passed, no skips |
+| Actual generated runtime and BLE host encryption, v3 negotiation and refusal | `node --test frameworks/react-native/src/jsHost/__tests__/wifiProvisioning.test.mjs` | 11 passed, no skips |
+| Hosted alert closure and exact-head checks | Read alert 25 and commit check runs, including the independent `CodeQL` result check | Recorded on PR #75 separately from local tests; successful analysis workflows alone are insufficient |
+
+This follow-up changes review evidence only. Package publication, installed-App
+adoption and physical firmware qualification retain their existing release gates.

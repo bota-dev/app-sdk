@@ -245,6 +245,8 @@ export class JsDeviceControls {
         return this.configureWiFi(json(args[1]), json(args[2]), json(args[3]), connection, context);
       case 'disconnectWiFi':
         return this.configureWiFi('', '', undefined, connection, context);
+      case 'readWiFiProvisioningVersion':
+        return this.readWiFiProvisioningVersion(connection, context);
       case 'readWiFiStatus':
         return this.decodeRead('decodeWiFiStatus', 'SERVICE_BOTA_WIFI_CONFIG', 'CHAR_WIFI_STATUS', connection, context);
       case 'scanWiFiNetworks':
@@ -349,18 +351,25 @@ export class JsDeviceControls {
     } finally { encodedGrant.fill(0); command.fill(0); }
   }
 
+  private async readWiFiProvisioningVersion(connection: JsControlConnection, context: JsHostContext): Promise<JsValue> {
+    const capability = await this.step(connection, context, () => this.options.ports.ble.read(
+      this.address('SERVICE_BOTA_WIFI_CONFIG', 'CHAR_WIFI_GRANT', connection), context));
+    return this.codec('wifiProvisioning', { Capability: { bytes: publicBytes(capability) } });
+  }
+
   private async configureWiFi(ssid: JsValue, password: JsValue, grant: unknown,
     connection: JsControlConnection, context: JsHostContext): Promise<JsValue> {
     let authority: Record<string, JsValue>;
     try { authority = record(typeof grant === 'string' ? JSON.parse(grant) : json(grant)); }
     catch { throw controlError('invalid_input', context.operation); }
     const expiry = typeof authority.expiresAt === 'string' ? Date.parse(authority.expiresAt) : NaN;
-    if (authority.format !== 'bota-wifi-config-v2' || !Number.isFinite(expiry) || expiry <= Date.now()) {
+    if (!['bota-wifi-config-v2', 'bota-wifi-config-v3'].includes(String(authority.format)) || !Number.isFinite(expiry) || expiry <= Date.now()) {
       throw controlError('invalid_input', context.operation);
     }
-    const capability = await this.step(connection, context, () => this.options.ports.ble.read(
-      this.address('SERVICE_BOTA_WIFI_CONFIG', 'CHAR_WIFI_GRANT', connection), context));
-    this.codec('wifiProvisioning', { Capability: { bytes: publicBytes(capability) } });
+    const version = await this.readWiFiProvisioningVersion(connection, context);
+    if (authority.format !== `bota-wifi-config-v${version}`) {
+      throw controlError('unsupported_capability', context.operation);
+    }
     const nonce = await this.decodeRead('decodeHex', 'SERVICE_BOTA_AUTH', 'CHAR_AUTH_NONCE', connection, context, { length: 16 });
     const prepared = record(this.codec('wifiProvisioning', { Create: {
       grant: authority, ssid, password, nonce, serial: connection.device.serialNumber, capacity: this.capacity(connection),

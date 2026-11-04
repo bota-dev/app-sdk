@@ -779,6 +779,7 @@ for (const platform of ['android', 'ios']) {
           firmwareVersion: '', pairingState: 'unpaired', macAddress: null, rssi: -60, discoveredAt: new Date() });
         assert.equal(device.deviceType, 'bota_note');
         assert.equal(device.capabilities.wifiUpload, wifiPresent);
+        assert.equal(await client.wifi.readProvisioningVersion(device),2);
         assert.equal(device.capabilities.lteUpload, false);
         assert.deepEqual(await client.wifi.configure(device, { ssid: 'Audit-Network', password: 'Audit-Only-123' },
           { grantBlob: r.envelope_base64, expiresAt: new Date(r.expires_at), format: r.format,
