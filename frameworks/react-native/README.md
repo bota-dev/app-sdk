@@ -557,6 +557,8 @@ data. No PCM, device recording identity or original-audio archive is introduced.
 
 Run `bash tools/speech/test-react-native-companion.sh --android` or `--ios`
 from the repository root with Node 22 and the matching platform toolchain.
+The generated iOS Podfile includes the vendor's `livekit/podspecs` source and
+the normal CocoaPods CDN so the pinned `LiveKitWebRTC` dependency can resolve.
 `--js-only` runs the actual generated-policy consumer checks without native
 builds. The helper prepares ignored projects from the pinned React Native
 0.86.3 template; maintained App/native sources are under `src/` and `native/`.

@@ -63,6 +63,8 @@ replace(manifest, 'android:usesCleartextTraffic="${usesCleartextTraffic}"',
         'android:networkSecurityConfig="@xml/network_security_config" android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules"')
 
 ios = app / "ios"
+podfile = ios / "Podfile"
+podfile.write_text("source 'https://github.com/livekit/podspecs.git'\nsource 'https://cdn.cocoapods.org/'\n\n" + podfile.read_text())
 runner = ios / "SpeechCompanion"
 for source in (app / "native/ios").iterdir():
     shutil.copyfile(source, runner / source.name)

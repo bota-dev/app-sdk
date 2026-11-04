@@ -1,0 +1,58 @@
+name: Internal speech App iOS check
+
+# A focused feedback loop. The normal CI still builds this same consumer and
+# remains the required full-source gate; this workflow publishes no SDK package.
+on:
+  workflow_dispatch:
+  push:
+    branches-ignore: [main]
+    paths:
+      - .github/workflows/check-speech-app-ios.yml
+      - tests/consumers/react-native-speech/**
+      - tools/speech/*react-native-companion*
+      - platforms/apple-speech-livekit/Examples/SpeechCompanion/LabTransport.swift
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  react-native-speech:
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      BUNDLE_GEMFILE: ${{ github.workspace }}/frameworks/react-native/Gemfile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            frameworks/react-native/package-lock.json
+            tests/consumers/react-native-speech/package-lock.json
+      - uses: ruby/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f # v1.335.0
+        with:
+          ruby-version: "3.3.13"
+          bundler: "2.6.9"
+          bundler-cache: true
+          working-directory: frameworks/react-native
+      - name: Verify pinned Apple tooling
+        run: |
+          test "$(xcodebuild -version | sed -n '1s/^Xcode //p')" = "26.3"
+          test "$(xcodebuild -version | sed -n '2s/^Build version //p')" = "17C529"
+          bundle exec ruby -e 'require "cocoapods"; require "xcodeproj"; abort unless Pod::VERSION == "1.16.2" && Xcodeproj::VERSION == "1.27.0"'
+      - name: Install SDK package dependencies
+        run: npm ci --prefix frameworks/react-native
+      - name: Build bundled React Native conversation App
+        run: bash tools/speech/test-react-native-companion.sh --ios
+      - name: Retain internal unsigned App
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: react-native-speech-ios-check-${{ github.sha }}
+          path: target/react-native-speech-companion/
+          if-no-files-found: error
+          compression-level: 0
