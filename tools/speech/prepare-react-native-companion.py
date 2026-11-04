@@ -50,9 +50,15 @@ shutil.copyfile(app / "native/android/SpeechLabHost.kt", kotlin / "SpeechLabHost
 native = root / "platforms/android/speech-companion/src/main"
 shutil.copyfile(native / "kotlin/dev/bota/speech/companion/NativeLabTransport.kt", kotlin / "NativeLabTransport.kt")
 shutil.copytree(native / "res/xml", android / "app/src/main/res/xml", dirs_exist_ok=True)
+shutil.copyfile(native / "res/drawable/companion_icon.xml", android / "app/src/main/res/drawable/companion_icon.xml")
+replace(android / "app/src/main/res/values/strings.xml", 'Hello App Display Name', 'Bota Conversation')
 manifest = android / "app/src/main/AndroidManifest.xml"
+replace(manifest, '<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
+        '<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">')
 replace(manifest, '<uses-permission android:name="android.permission.INTERNET" />',
-        '<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />')
+        '<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />\n    <uses-permission android:name="android.permission.CAMERA" tools:node="remove" />\n    <uses-feature android:name="android.hardware.microphone" android:required="false" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />')
+replace(manifest, '@mipmap/ic_launcher_round', '@drawable/companion_icon')
+replace(manifest, '@mipmap/ic_launcher', '@drawable/companion_icon')
 replace(manifest, 'android:usesCleartextTraffic="${usesCleartextTraffic}"',
         'android:networkSecurityConfig="@xml/network_security_config" android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules"')
 
