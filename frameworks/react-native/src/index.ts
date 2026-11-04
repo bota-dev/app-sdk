@@ -1,4 +1,6 @@
 import NativeBotaDeviceSDK from './specs/NativeBotaDeviceSDK';
+export { createRecordingEditClient } from './recordingEdits';
+export type { RecordingEditFile, RecordingEditSource, RecordingEditRequest, RecordingEditStatus, RecordingEditJournal, RecordingEditHost } from './recordingEdits';
 import NativeBotaUploadV2Backend from './specs/NativeBotaUploadV2Backend';
 import { createBotaReactNativeRuntime } from './runtime';
 import { setDefaultCompatibilityClient } from './compatibility/runtime';

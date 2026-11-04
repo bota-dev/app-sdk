@@ -207,3 +207,5 @@ export type { NativeLocalWifiTransport, NativeLocalWifiOptions } from './jsHost/
 
 /** Mandatory local-control AEAD profile supported by this exact SDK. */
 export const LOCAL_WIFI_CONTROL_PROFILE = 2;
+export { createRecordingEditClient } from './recordingEdits';
+export type { RecordingEditFile, RecordingEditSource, RecordingEditRequest, RecordingEditStatus, RecordingEditJournal, RecordingEditHost } from './recordingEdits';
