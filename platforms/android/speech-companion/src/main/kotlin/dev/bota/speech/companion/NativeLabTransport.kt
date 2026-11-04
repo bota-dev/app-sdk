@@ -15,6 +15,18 @@ import okhttp3.Response
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
+internal class LabFailure : IllegalStateException("Speech host unavailable")
+internal class LabRequest(val url: String, val headers: Map<String, String>, val body: String) {
+    override fun toString() = "LabRequest(redacted)"
+}
+internal class LabResponse(val status: Int, val body: String) {
+    override fun toString() = "LabResponse(status=$status, content redacted)"
+}
+internal interface LabTransport {
+    suspend fun send(request: LabRequest): LabResponse
+    fun close()
+}
+
 internal class NativeLabTransport : LabTransport {
     private val client = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
         .retryOnConnectionFailure(false).callTimeout(8, TimeUnit.SECONDS).connectTimeout(8, TimeUnit.SECONDS)

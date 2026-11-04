@@ -527,8 +527,8 @@ Live-only sessions never read retained history and report `unavailable`; their
 visible text remains volatile. Recovery never requests TTS or replays audio.
 
 The facade and optional native LiveKit media adapter are source candidates.
-Packaged App adoption, native dependency builds, platform audio sessions and
-physical duplex qualification remain separate completion work.
+An internal conversation App consumes these entries; production App adoption,
+platform audio sessions and physical duplex qualification remain separate work.
 Do not advertise this as an available published SDK or a qualified mobile
 interpreter. Existing recording/upload ownership and receipt-based cleanup
 remain unchanged.
@@ -544,6 +544,40 @@ numbers identify the candidate, not a qualified native binary or device matrix.
 Follow the [vendor's native setup](https://docs.livekit.io/transport/sdk-platforms/react-native/)
 for iOS/Android linking and microphone permissions, and call `registerGlobals()`
 once during host initialization before constructing any LiveKit rooms.
+
+The [internal conversation companion](../../tests/consumers/react-native-speech)
+uses the exact local SDK package and npm-locked vendor dependencies. It provides
+A/B role login, paired original/translated captions, independent microphone and
+listening controls, language/mode selection, source finish and caption recovery.
+It shares the operator-only loopback proxy described in
+[the native companion setup](../../docs/parity/android-speech-session.md), with
+only `text_only` and `live_only` microphone sessions admitted. Project/provider
+credentials stay on the host; role codes and grants are transient JS control
+data. No PCM, device recording identity or original-audio archive is introduced.
+
+Run `bash tools/speech/test-react-native-companion.sh --android` or `--ios`
+from the repository root with Node 22 and the matching platform toolchain.
+`--js-only` runs the actual generated-policy consumer checks without native
+builds. The helper prepares ignored projects from the pinned React Native
+0.86.3 template; maintained App/native sources are under `src/` and `native/`.
+The outputs in `target/react-native-speech-companion/` contain bundled JavaScript
+and use release configuration without Metro/development reload. The Android APK
+uses a disposable internal test key and arm64/x86_64 binaries; the unsigned iOS
+bundle requires normal signing before device installation. Neither is a public
+SDK release. Android uses `adb reverse tcp:4173 tcp:4173` for the default host;
+an iOS device needs an operator-provided loopback tunnel to that same host.
+
+Native HTTP reuses the companion's bounded, no-redirect transport. Leaving or
+entering background retires the JS owner, clears its 100-pair view immediately
+and joins pending host/media cleanup. Late authorization and permission replies
+cannot start capture; failed cleanup blocks re-entry until process restart.
+Changing languages clears the prior revision before requesting its replacement.
+Native HTTP also cancels on background/engine invalidation. This does not prove
+that a suspended JS thread or an independently destroyed vendor bridge has
+retired physical media: actual background/interruption/engine teardown, routes,
+duplex/AEC, real RTC/provider and host external-input qualification remain open.
+The internal App reserves one native audio session exclusively and must not be
+embedded alongside another uncoordinated room/player.
 
 ```ts
 import { AudioSession, registerGlobals, setLogLevel } from '@livekit/react-native'

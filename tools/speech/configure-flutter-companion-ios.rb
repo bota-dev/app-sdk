@@ -5,7 +5,7 @@ app = Pathname.new(ARGV.fetch(0)).expand_path
 project = Xcodeproj::Project.open(app.join("ios/Runner.xcodeproj"))
 runner = project.targets.find { |target| target.name == "Runner" }
 group = project.main_group.find_subpath("Runner", false)
-%w[LabHost.swift FlutterLabOwner.swift].each do |name|
+%w[LabHost.swift LabTransport.swift FlutterLabOwner.swift].each do |name|
   runner.source_build_phase.add_file_reference(group.new_file(name))
 end
 package = project.new(Xcodeproj::Project::Object::XCLocalSwiftPackageReference)

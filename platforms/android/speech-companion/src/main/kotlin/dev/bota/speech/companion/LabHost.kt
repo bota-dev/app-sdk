@@ -8,17 +8,6 @@ import kotlinx.coroutines.ensureActive
 import org.json.JSONArray
 import org.json.JSONObject
 
-internal class LabFailure : IllegalStateException("Speech host unavailable")
-internal class LabRequest(val url: String, val headers: Map<String, String>, val body: String) {
-    override fun toString() = "LabRequest(redacted)"
-}
-internal class LabResponse(val status: Int, val body: String) {
-    override fun toString() = "LabResponse(status=$status, content redacted)"
-}
-internal interface LabTransport {
-    suspend fun send(request: LabRequest): LabResponse
-    fun close()
-}
 internal class LabJoin(val role: String, val peerRole: String, val peerId: String,
     val languages: List<String>, val configuration: SpeechConfiguration, val grant: SpeechGrant)
 

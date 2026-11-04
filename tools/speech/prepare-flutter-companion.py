@@ -87,7 +87,7 @@ let package = Package(name: "BotaSpeechLiveKit", platforms: [.iOS(.v15)],
 runner = app / "ios/Runner"
 for name in ["AppDelegate.swift", "SceneDelegate.swift"]:
     shutil.copyfile(source / "ios" / name, runner / name)
-for name in ["LabHost.swift", "FlutterLabOwner.swift"]:
+for name in ["LabHost.swift", "LabTransport.swift", "FlutterLabOwner.swift"]:
     shutil.copyfile(root / "platforms/apple-speech-livekit/Examples/SpeechCompanion" / name, runner / name)
 info = runner / "Info.plist"
 with info.open("rb") as handle:

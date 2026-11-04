@@ -13,6 +13,12 @@ tracked separately.
 
 ## Unreleased
 
+- Add an internal React Native conversation App using the generated Rust speech
+  policy and pinned native LiveKit dependencies, paired captions, foreground
+  ownership and bounded loopback authorization. Bundled Android/iOS consumers
+  remain separate from real media, physical lifecycle, original archival and
+  public release qualification.
+
 - Add an internal Flutter conversation companion using native-prepared grants
   and Apple/Android LiveKit factories, with paired captions and independent
   input/listening. Engine replacement joins cleanup and rejects late permission

@@ -11,12 +11,14 @@ api=""
 repository="$ROOT/target/android-m2"
 release_directory="$ROOT/target/android-release"
 public_only=false
+speech_companion_apk=""
 while (($#)); do
   case "$1" in
     --api) api="${2:?--api requires a value}"; shift 2 ;;
     --repository) repository="${2:?--repository requires a value}"; shift 2 ;;
     --release-directory) release_directory="${2:?--release-directory requires a value}"; shift 2 ;;
     --public-only) public_only=true; shift ;;
+    --speech-companion-apk) speech_companion_apk="${2:?--speech-companion-apk requires a path}"; shift 2 ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -117,6 +119,11 @@ instrumentation_classes="dev.bota.sdk.internal.bluetooth.BluetoothPermissionTest
 "$ROOT/tools/android/test-legacy-consumer.sh" --api "$api" --mode binary \
   --repository "$repository"
 "$ROOT/tools/android/test-consumer.sh" --api "$api" --repository "$repository"
+
+if [[ -n "$speech_companion_apk" ]]; then
+  test "$api" = 35
+  python3 "$ROOT/tools/speech/smoke-react-native-companion.py" "$ADB" "$speech_companion_apk" "$ROOT/target/react-native-speech-smoke"
+fi
 
 test "$release_digest" = "$(shasum -a 256 "$release_aar" | awk '{print $1}')"
 test "$release_digest" = "$(shasum -a 256 "$repository_aar" | awk '{print $1}')"
