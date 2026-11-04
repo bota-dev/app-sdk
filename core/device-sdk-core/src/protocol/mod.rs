@@ -43,3 +43,6 @@ pub use local_wifi_transfer::*;
 
 mod local_wifi_control;
 pub use local_wifi_control::*;
+
+mod wifi_provisioning;
+pub use wifi_provisioning::*;

@@ -456,10 +456,17 @@ export type WiFiStatus = 'idle' | 'connecting' | 'connected' | 'failed' | 'disco
  * WiFi configuration grant from backend
  */
 export interface WiFiConfigGrant {
-  /** Grant blob (JWT token) */
+  /** Canonical base64 of the device-targeted signed HPKE envelope. */
   grantBlob: string;
   /** Expiration timestamp */
   expiresAt: Date;
+  format?: 'bota-wifi-config-v2';
+  keyBase64?: string;
+  requestId?: string;
+  authNonce?: string;
+  action?: 'set' | 'disconnect';
+  serialNumber?: string;
+  bindingGeneration?: number;
 }
 
 /**

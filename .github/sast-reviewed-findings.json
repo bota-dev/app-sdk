@@ -6,7 +6,8 @@
     "Owned ABI regression fixtures and explicit literal-argv developer tools",
     "Pinned NDK downloader: fixed Google HTTPS origin and explicit ssl.create_default_context() chain/hostname verification; https://docs.python.org/3/library/ssl.html#ssl.create_default_context",
     "BYO customer ABI 0x0530: packet-kind constant only; encode uses PacketFields.required_bytes_bounded to check typed field length <= 32768 before the existing owned copy. No new unsafe borrow or suppression is introduced; existing reviewed unsafe boundaries are unchanged.",
-    "Local WiFi compatibility: command_from_packet adds only local_wifi: false to the existing encrypted-v2 request. The C ABI remains BLE-only; allowed fields, PacketFields validation and every reviewed unsafe boundary are unchanged."
+    "Local WiFi compatibility: command_from_packet adds only local_wifi: false to the existing encrypted-v2 request. The C ABI remains BLE-only; allowed fields, PacketFields validation and every reviewed unsafe boundary are unchanged.",
+    "Secure WiFi v2 review (2026-11-03): protocol.rs changes only the owned encode regression to require UnsupportedOperation/Provision for legacy WiFi credentials. Packet ownership, the encode call, input validation and all annotated unsafe boundaries are unchanged. All 85 existing dispositions remain applicable."
   ],
   "original_source_revision": "dc51e35dd5f968ad2b2847d0a08742757cf9fdbb",
   "reviewed_files": {
@@ -15,7 +16,7 @@
     "bindings/device-sdk-ffi/src/lib.rs": "8abc996862cbef531b7388bee816513e367cb751818d7456a81f1df9ba4c7c43",
     "bindings/device-sdk-ffi/src/output.rs": "937ec7839d7d3cee8627b7f2b4ddaf79d99e4598184a9645eadbef35ad8f5f46",
     "bindings/device-sdk-ffi/src/packet.rs": "cad11458b11c6ddefe8205b43e75a6df8ec1d0a58598086677440272af3cf69d",
-    "bindings/device-sdk-ffi/src/protocol.rs": "4a0fb2b32d8343682de7111d271aa23b8c66d120d5bcddfc119705a844bb842c",
+    "bindings/device-sdk-ffi/src/protocol.rs": "efbad6653b3fc1d0ff64491d3f3ae71e130a8326b6907c6a89006fb3f05938fa",
     "bindings/device-sdk-ffi/src/protocol/byo_ble.rs": "dab32cf60949b109d512a62e70e21736021d9b4044cb9310aa9b94b0f32a6a81",
     "bindings/device-sdk-ffi/src/protocol/byo_recovery.rs": "7fe1df556cce2f5812f9068ab26f990133b957c53dfe5cb33f26e1dbd1fb79d2",
     "bindings/device-sdk-ffi/src/protocol/v2_demo.rs": "469f2ad2bfeab53015e99529e9014f20e294b672a2dd6e658f43cbc774e17b0c",

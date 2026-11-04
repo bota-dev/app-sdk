@@ -1,5 +1,12 @@
 # Bota SDK for Web
 
+Personal WiFi set/disconnect is temporarily unavailable on the Web adapter:
+legacy plaintext encoding is disabled in shared Rust. Calls reject before BLE
+writes. Scanning and status remain available. Secure personal WiFi v2 is
+implemented by the React Native JavaScript runtime; see
+[the security contract](../../protocol/wifi-config-v2.md). Do not restore a
+plaintext fallback while adding this profile to another adapter.
+
 Published `2.0.0-beta.17` retains Web's Rust/Wasm implementation and the existing
 public package identity. Exact public npm bytes match the approved main-CI
 inventory. React Native's generated-JS route uses its original `/runtime` entry.
