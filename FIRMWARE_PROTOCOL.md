@@ -162,9 +162,11 @@ results are 0 success, 1 invalid token, 2 storage error, 3 chunk error and
 Time sync on `0002/0004` is eight bytes: Unix seconds u32LE, milliseconds
 within the second u16LE, then timezone offset in minutes i16LE.
 
-WiFi configuration uses mandatory [secure personal WiFi v2](protocol/wifi-config-v2.md)
+WiFi configuration uses versioned [secure personal WiFi v2/v3](protocol/wifi-config-v2.md)
 on `0006/0001` (capability and signed HPKE grant), `0006/0002` (one-use AEAD
 credentials), and `0006/0003` (authenticated result and ordinary status).
+V3 verifies the active installed credential commitment independently of token
+delivery format; v2 retains its signed token-envelope prerequisite.
 The shared legacy plaintext credential encoder is disabled. Disconnect also
 requires fresh signed authority; there is no plaintext fallback. Success
 acknowledges encrypted persistence and connection scheduling, not DHCP.

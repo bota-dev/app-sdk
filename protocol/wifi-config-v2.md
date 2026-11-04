@@ -1,10 +1,56 @@
-# Secure personal WiFi provisioning v2
+# Secure personal WiFi provisioning v2 and v3
 
 Contract: `wifi-config-v2-2026-11-02`. This is a coordinated source change;
 package publication, firmware image qualification and phone/radio acceptance
 are separate release gates. Legacy plaintext credential encoding is disabled
 on all shared-core adapters. The React Native JavaScript runtime implements
 this profile; older/native-only adapters reject it before credential writes.
+
+## Token-delivery-independent binding (v3)
+
+Contract `wifi-config-v3-2026-11-04` removes the requirement to retain an encrypted device-token
+installation envelope. Token binding/refresh still selects its own delivery
+format. WiFi authorization never reads that compatibility switch.
+
+The SDK reads the capability before requesting authority. Exact capability
+`b2 03 07 00 1d 02 7e 00` selects `protocol_version: 3` and response
+`format: bota-wifi-config-v3`. V2 capability selects version 2; omitted API
+version retains v2 for existing clients. A capability/response/envelope version
+mismatch fails before credential writes. Never retry a v3 refusal through v2.
+The updated reference firmware advertises v3 only; old SDKs fail capability
+validation and require an SDK/App update.
+
+V3 retains the v2 algorithms, identity fields, actions, expiry, nonce and
+credential/result framing. Its envelope is 541 bytes: magic `BOTAWFP3`, HPKE
+info `bota-wifi-config-v3`, payload 344 bytes, and the existing header/signature/tag
+sizes. Payload offsets 0..79 are unchanged. Offsets 80..111 contain the active
+credential commitment; the four identity fields start at offset 112 and remaining
+padding is zero. The commitment is SHA256 of ASCII
+`bota/enc-v2/credential/v1`, one NUL byte, the token byte length as u16LE and
+the installed token bytes. It is encrypted to the independently enrolled PK_D;
+it is never returned as a public response field or logged. The credential/result
+HKDF domains, AAD and `b2` framing remain v2; the envelope transcript hash binds
+them to the exact v3 grant, preventing cross-version substitution.
+
+The backend locks current EndUser/device, checks binding/reset/enrollment, then
+locks the one active, unrevoked, unexpired device credential for that exact
+project/device/EndUser. Ambiguous, missing or legacy-null commitment refuses
+issuance. It uses no submitted key as enrollment and makes no registry changes.
+Firmware verifies signature, recipient key and environment, requires paired
+state, compares the signed serial and commitment with protected installed
+credentials, and retains connection/credential-epoch, nonce and expiry fences.
+The signature binds the full identity and current binding generation to this
+credential. No token envelope, second persistent identity store or token
+rotation is needed for each WiFi operation. Both token delivery formats qualify.
+Credentials predating stored commitments require normal credential renewal or
+reconfiguration; unsupported firmware still requires an update.
+
+API failures distinguish `device_identity_not_enrolled`, `device_identity_revoked`,
+`device_identity_mismatch` and `device_binding_proof_unavailable`. A successful
+bind is not evidence of trusted enrollment. Deployment, independent enrollment,
+SDK publication/adoption and physical firmware acceptance remain separate gates.
+The v2 layout below is retained for existing callers; its device-side signed
+installation-envelope prerequisite applies only to v2.
 
 ## Authority and capability
 

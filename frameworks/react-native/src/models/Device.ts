@@ -460,7 +460,7 @@ export interface WiFiConfigGrant {
   grantBlob: string;
   /** Expiration timestamp */
   expiresAt: Date;
-  format?: 'bota-wifi-config-v2';
+  format?: 'bota-wifi-config-v2' | 'bota-wifi-config-v3';
   keyBase64?: string;
   requestId?: string;
   authNonce?: string;

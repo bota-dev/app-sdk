@@ -620,6 +620,10 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     await this.client.provisioning.writeConnectionSettings(device, settings);
   }
 
+  async readWiFiProvisioningVersion(deviceId: string): Promise<2 | 3> {
+    return this.client.wifi.readProvisioningVersion(this.requireConnected(deviceId));
+  }
+
   /** Secure-only entry point used to prevent older packages from sending plaintext. */
   async configureSecureWiFi(deviceId: string, credentials: WiFiCredentials, grant: WiFiConfigGrant): Promise<WiFiConfigResult> {
     return this.configureWiFi(deviceId, credentials, grant);

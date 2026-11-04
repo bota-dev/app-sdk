@@ -77,7 +77,7 @@ const controls = [
   'requestStartRecording', 'requestStopRecording', 'readRecordingState',
   'readFindChallenge', 'readFindBindingChallenge', 'confirmFindBinding', 'readFindCapabilities', 'readFindStatus', 'requestFindDevice',
   'startRecordingStateUpdates', 'stopRecordingStateUpdates', 'configureSecureWiFi', 'configureWiFi', 'disconnectWiFi',
-  'readConnectionSettings', 'writeConnectionSettings', 'readWiFiStatus', 'scanWiFiNetworks',
+  'readConnectionSettings', 'writeConnectionSettings', 'readWiFiStatus', 'readWiFiProvisioningVersion', 'scanWiFiNetworks',
   'startStatusUpdates', 'stopStatusUpdates', 'startWiFiStatusUpdates', 'stopWiFiStatusUpdates',
   'startDeviceLogs', 'stopDeviceLogs',
   'readDiagnosticEvents', 'acknowledgeDiagnosticEvents',

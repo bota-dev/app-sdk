@@ -342,6 +342,7 @@ export type BotaDeviceSDKLogClient = {
 };
 
 export type BotaDeviceSDKWiFiClient = {
+  readProvisioningVersion(device: ConnectedDevice): Promise<2 | 3>;
   configure(
     device: ConnectedDevice,
     credentials: WiFiCredentials,
@@ -1588,6 +1589,11 @@ export const createBotaDeviceSDK = (
   };
 
   const wifi: BotaDeviceSDKWiFiClient = {
+    async readProvisioningVersion(device) {
+      const version = await requireNativeModule('readWiFiProvisioningVersion').readWiFiProvisioningVersion(toNativeConnectedDevice(device));
+      if (version !== 2 && version !== 3) throw new BotaRuntimeCompatibilityError('native_contract_unsupported', 'readWiFiProvisioningVersion');
+      return version;
+    },
     async configure(device, credentials, grant) {
       return mapWiFiConfigResult(
         await requireNativeModule('configureSecureWiFi').configureSecureWiFi(
