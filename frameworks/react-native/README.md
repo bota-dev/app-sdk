@@ -578,7 +578,8 @@ preserving an APK. The App and safe-area component must use the same Fabric
 property-layout definitions; mismatched definitions can compile successfully
 but corrupt native memory at startup. The pinned safe-area dependency uses
 React Native's shared compiler options. Full CI also starts the bundled App
-on API 35 and verifies its native loopback HTTP path. The separate Android
+on API 35 and verifies its native loopback HTTP path, including original-capture
+profile admission and a handled unavailable-host response. The separate Android
 startup workflow can replay a preserved same-repository CI APK and retains
 App-scoped runtime logs, crash records and screenshots on failure.
 

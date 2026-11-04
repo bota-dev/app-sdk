@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Exercise the bundled internal App on an already booted disposable emulator."""
+import json
 import re
 import subprocess
 import sys
@@ -69,10 +70,16 @@ class UnavailableHost(BaseHTTPRequestHandler):
 
     def do_POST(self):
         self.connection.settimeout(2)
-        if (self.path == '/speech-host/join' and self.headers.get('Content-Length') == '2' and
+        length = int(self.headers.get('Content-Length', '0'))
+        body = self.rfile.read(length) if 0 < length <= 512 else b''
+        try:
+            payload = json.loads(body)
+        except (ValueError, UnicodeDecodeError):
+            payload = None
+        if (self.path == '/speech-host/join' and
             self.headers.get('Origin') == 'http://127.0.0.1:4173' and
             self.headers.get('X-Speech-Role') == 'a' and self.headers.get('X-Speech-Code') == 'x' * 32 and
-            self.rfile.read(2) == b'{}'):
+            payload == {'captureProfile': 'speech_capture_pcm_v1'}):
             received_join.set()
         payload = b'{"error":{"code":"unavailable"}}'
         self.send_response(503)
