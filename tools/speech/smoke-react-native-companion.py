@@ -4,7 +4,9 @@ import re
 import subprocess
 import sys
 import time
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from threading import Event, Thread
 import xml.etree.ElementTree as ET
 
 adb, apk, destination = sys.argv[1:]
@@ -33,16 +35,17 @@ def wait_for(predicate):
         time.sleep(1)
     raise RuntimeError('The bundled conversation App did not reach the expected screen')
 
-def matching(tree, attribute, value):
-    return next((node for node in tree.iter('node') if node.get(attribute) == value), None)
+def matching(tree, attribute, value, class_name=None):
+    return next((node for node in tree.iter('node') if node.get(attribute) == value and
+                 (class_name is None or node.get('class') == class_name)), None)
 
-def labelled(tree, value):
-    node = matching(tree, 'text', value)
-    return node if node is not None else matching(tree, 'content-desc', value)
+def labelled(tree, value, class_name=None):
+    node = matching(tree, 'text', value, class_name)
+    return node if node is not None else matching(tree, 'content-desc', value, class_name)
 
-def control(value):
+def control(value, class_name=None):
     for _ in range(6):
-        node = labelled(screen(), value)
+        node = labelled(screen(), value, class_name)
         if node is not None:
             return node
         run('shell', 'input', 'swipe', str(width // 2), str(height * 3 // 4), str(width // 2), str(height // 3), '400')
@@ -56,11 +59,36 @@ def tap(node):
 
 run('install', '-r', str(Path(apk).resolve()), timeout=120)
 width, height = map(int, re.findall(r'(\d+)x(\d+)', run('shell', 'wm', 'size').decode())[-1])
+# A neutral UI error alone could come from JS validation without native HTTP.
+# Observe the exact synthetic request at a disposable loopback fixture as well.
+received_join = Event()
+class UnavailableHost(BaseHTTPRequestHandler):
+    def log_message(self, *_args):
+        pass
+
+    def do_POST(self):
+        self.connection.settimeout(2)
+        if (self.path == '/speech-host/join' and self.headers.get('Content-Length') == '2' and
+            self.headers.get('Origin') == 'http://127.0.0.1:4173' and
+            self.headers.get('X-Speech-Role') == 'a' and self.headers.get('X-Speech-Code') == 'x' * 32 and
+            self.rfile.read(2) == b'{}'):
+            received_join.set()
+        payload = b'{"error":{"code":"unavailable"}}'
+        self.send_response(503)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+server = HTTPServer(('127.0.0.1', 0), UnavailableHost)
+thread = Thread(target=lambda: server.serve_forever(poll_interval=0.1), daemon=True)
+thread.start()
 try:
+    run('reverse', 'tcp:4173', 'tcp:' + str(server.server_port))
     run('shell', 'am', 'start', '-W', '-n', package + '/dev.bota.speech.companion.MainActivity')
     wait_for(lambda value: labelled(value, 'Listen in your language.') is not None)
     (output / 'conversation.png').write_bytes(run('exec-out', 'screencap', '-p'))
-    tap(control('Role access code'))
+    tap(control('Role access code', 'android.widget.EditText'))
     run('shell', 'input', 'text', 'x' * 32)
     run('shell', 'input', 'keyevent', 'BACK')
     tap(control('Join conversation'))
@@ -68,8 +96,16 @@ try:
     for _ in range(4):
         run('shell', 'input', 'swipe', str(width // 2), str(height * 3 // 4), str(width // 2), str(height // 3), '400')
     wait_for(lambda value: any('Could not join.' in node.get('text', '') + node.get('content-desc', '') for node in value.iter('node')))
+    if not received_join.is_set():
+        raise RuntimeError('The conversation App did not send the native loopback join request')
     (output / 'unavailable-host.png').write_bytes(run('exec-out', 'screencap', '-p'))
     run('shell', 'input', 'keyevent', 'HOME')
-    print('Bundled RN App rendered, handled an unavailable loopback host and accepted background navigation. No media was started.')
+    print('Bundled RN App rendered, sent the native loopback join request, handled HTTP 503 and accepted background navigation. No media was started.')
 finally:
-    run('shell', 'am', 'force-stop', package)
+    try:
+        run('shell', 'am', 'force-stop', package)
+        run('reverse', '--remove', 'tcp:4173')
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
