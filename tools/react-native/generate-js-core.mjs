@@ -22,6 +22,7 @@ const inputs = [
   ...walk(join(root, 'bindings/device-sdk-js')).filter(path => /(?:\.rs|Cargo\.toml)$/.test(path)),
   join(root, 'Cargo.toml'), join(root, 'Cargo.lock'), join(root, 'rust-toolchain.toml'), fileURLToPath(import.meta.url),
   join(root, 'package-lock.json'),
+  join(root, 'protocol/manifest/speech-capture-v1.json'),
   join(root, 'tools/react-native/preserve-js-function-boundaries.mjs'),
 ].sort((a, b) => relative(root, a).replaceAll('\\', '/').localeCompare(relative(root, b).replaceAll('\\', '/'), 'en'));
 const hash = createHash('sha256');
@@ -70,7 +71,9 @@ const lowered = join(scratch, 'core.lowered.wasm');
 const binaryenRun = (tool, arguments_) => {
   const log = join(scratch, `${tool}.log`), descriptor = openSync(log, 'w');
   try {
-    execFileSync(process.execPath, [join(root, `node_modules/binaryen/bin/${tool}`), ...arguments_],
+    // Preserve explicit Node runtime flags for emulated build hosts. Rust and
+    // Binaryen compilation options remain identical to the canonical CI build.
+    execFileSync(process.execPath, [...process.execArgv, join(root, `node_modules/binaryen/bin/${tool}`), ...arguments_],
       { cwd: root, stdio: ['ignore', descriptor, descriptor] });
   } catch {
     const input = openSync(log, 'r'), prefix = Buffer.alloc(2048);

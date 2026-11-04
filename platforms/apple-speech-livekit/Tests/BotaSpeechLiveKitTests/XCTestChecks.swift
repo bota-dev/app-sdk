@@ -1,6 +1,9 @@
 import XCTest
 
 final class CompanionTests: XCTestCase, @unchecked Sendable {
+    func testOriginalIndependence() async throws { try await CompanionChecks().testOriginalOwnerSurvivesRtcFailureAndStopsOnExplicitLeave() }
+    func testReactNativeOriginalIndependence() async throws { try await CompanionChecks().testReactNativeRtcClosePreservesIndependentOriginal() }
+    func testReactNativeNativeExpiry() async throws { try await CompanionChecks().testReactNativeNativeExpiryRetiresMediaWithoutJsPolling() }
     func testFlutterPreparation() async throws { try await CompanionChecks().testFlutterPreparationIsNativeAndConsumedByOnlyItsEngine() }
     func testFlutterRetirement() async throws { try await CompanionChecks().testFlutterEngineReplacementRetiresLateBootstrap() }
     func testFlutterCleanupFailure() async throws { try await CompanionChecks().testFlutterCleanupFailurePreventsNewEngineAdmission() }

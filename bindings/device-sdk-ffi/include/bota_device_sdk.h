@@ -593,6 +593,13 @@ BotaDeviceSdkStatusV1 bota_device_sdk_v1_speech_output_view(
 );
 void bota_device_sdk_v1_speech_output_free(BotaDeviceSdkSpeechOutputV1 *output);
 
+/* Metadata-only host archive policy; no PCM or key material. Input is bounded to
+ * 65536 UTF-8 bytes. Uses the same owned output/error contract as speech_step. */
+BotaDeviceSdkStatusV1 bota_device_sdk_v1_speech_capture(
+    BotaDeviceSdkSliceV1 command,
+    BotaDeviceSdkSpeechOutputV1 **out_json,
+    BotaDeviceSdkErrorV1 **out_error);
+
 #ifdef __cplusplus
 }
 #endif

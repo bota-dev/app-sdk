@@ -2,6 +2,7 @@ package dev.bota.speech.companion
 
 import dev.bota.sdk.speech.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
 import java.util.concurrent.Executors
 import org.json.JSONObject
 import org.junit.Assert.*
@@ -47,6 +48,31 @@ class CompanionModelTest {
         Executors.newSingleThreadExecutor().asCoroutineDispatcher().use { dispatcher ->
             withTimeout(15_000) { action(dispatcher) }
         }
+    }
+
+    @Test fun rtcFailurePreservesOriginalUntilExplicitStopAndLeaveJoinsIt() = uiTest { ui ->
+        val transport = modelTransport(); val normal = transport.handler
+        transport.handler = { request -> if (request.url.endsWith("/join")) LabResponse(200, joinFixture("original_audio_and_text")) else normal(request) }
+        val port = ModelMedia(); var observed: SpeechMediaCallbacks? = null; var publish: ((OriginalView) -> Unit)? = null
+        var closed = false
+        val original = object : LabOriginalOwner {
+            override var capturing = false
+            override var finished = false
+            override var rtcLost = false
+            override fun media(callbacks: SpeechMediaCallbacks): SpeechMediaPort { observed = callbacks; return port }
+            override suspend fun start() { capturing = true; publish?.invoke(OriginalView(true, true, false, "Recording")) }
+            override suspend fun finish() { capturing = false; finished = true; publish?.invoke(OriginalView(true, false, true, "Retained")) }
+            override suspend fun close() { finish(); closed = true }
+        }
+        val model = CompanionModel({ error("Opened a second microphone") }, { true }, { transport }, ui,
+            originalFactory = { _, _, update -> publish = update; update(OriginalView(enabled = true)); original })
+        model.join("http://127.0.0.1:4173", "a", "a".repeat(40)); model.setInput(true)
+        assertTrue(original.capturing); assertTrue(model.state.value.original.enabled)
+        withContext(ui) { original.rtcLost = true; observed!!.failed() }
+        withTimeout(5000) { model.state.first { !it.connected } }
+        assertTrue(original.capturing); assertFalse(closed); assertFalse(transport.closed)
+        model.finish(); assertTrue(original.finished); assertFalse(original.capturing)
+        model.leave(); assertTrue(closed); assertTrue(transport.closed); model.dispose()
     }
 
     @Test fun realPolicyJoinsSilentAndKeepsCaptureIndependentFromListening() = uiTest { ui ->

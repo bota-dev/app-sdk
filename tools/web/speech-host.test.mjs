@@ -74,6 +74,26 @@ test('unsupported original archival, external sources and replaced members fail 
   }
 })
 
+test('original capture requires capability on join and pins archive uploads to the authenticated role after RTC ends', async () => {
+  const f = fixture(); f.view.session.retention = 'original_audio_and_text'
+  assert.equal((await f.request('join', { captureProfile: 'speech_capture_pcm_v1' })).status, 200)
+  assert.equal((await f.request('join', { captureProfile: 'unknown' })).status, 400)
+  const captureId = '55555555-5555-4555-8555-555555555555'
+  const packet = { nonce: 'A'.repeat(16), ciphertext: 'A'.repeat(128024), header: { sequence: 0,
+    clockId: captureId, firstSample: 0, samples: 48000, archiveSample: 0 } }
+  f.view.session.state = 'ended'
+  assert.equal((await f.request('capture_chunk', { captureId, packet })).status, 200)
+  assert.ok(f.calls.at(-1).url.endsWith(`/participants/${a}/captures/${captureId}/chunk`))
+  assert.deepEqual(f.calls.at(-1).body, { member_generation: 2, packet })
+  const before = f.calls.length
+  assert.equal((await f.request('capture_chunk', { captureId, packet, participantId: b })).status, 400)
+  assert.equal((await f.request('capture_key', { captureId: '../foreign' })).status, 400)
+  assert.equal(f.calls.length, before)
+  assert.equal((await f.request('capture_bind', { captureId, workerGeneration: 3, trackSid: 'TR_owned' })).status, 200)
+  assert.deepEqual(f.calls.at(-1).body, { member_generation: 2, worker_generation: 3, source_id: sourceId, source_epoch: 4, track_sid: 'TR_owned' })
+  assert.equal((await f.request('capture_bind', { captureId, workerGeneration: 3, trackSid: 'TR_foreign' })).status, 409)
+})
+
 test('language updates retain the caller revision and only select the other authorized role', async () => {
   const f = fixture()
   const response = await f.request('subscription', { expectedRevision: 3, targetLanguage: 'ja', mode: 'translated' })

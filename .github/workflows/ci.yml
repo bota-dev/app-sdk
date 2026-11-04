@@ -579,6 +579,9 @@ jobs:
       - name: Test Apple package and XCFramework
         run: tools/apple/test-package.sh -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
 
+      - name: Verify native original capture and encrypted recovery
+        run: bash tools/speech/test-apple-capture.sh
+
       - name: Verify optional Apple LiveKit speech adapter
         timeout-minutes: 20
         env:

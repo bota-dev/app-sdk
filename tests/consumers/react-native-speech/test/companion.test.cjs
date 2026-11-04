@@ -24,6 +24,23 @@ function setup(overrides = {}) {
   return { app, native, captured: () => captured, closed: () => closed, callbacks: () => callbacks,
     join: () => app.join('http://127.0.0.1:4173', 'a', 'x'.repeat(32)) };
 }
+test('RTC failure keeps original capture and its explicit stop available', async () => {
+  const original = { enabled: true, capturing: false, finished: false, rtcAvailable: true, status: 'Ready', passages: [] };
+  const value = initial(); value.configuration.context = { ...value.configuration.context, retention: 'original_audio_and_text' };
+  let leaves = 0;
+  const f = setup({ request: async (_id, _origin, _role, _code, action) => ({ status: action === 'join' ? 200 : 503,
+      body: JSON.stringify(action === 'join' ? value : { error: { code: 'unavailable' } }) }),
+    originalView: async () => JSON.stringify(original), startOriginal: async () => { original.capturing = true; },
+    finishOriginal: async () => { original.capturing = false; original.finished = true; }, closeSession: async () => { leaves++; } });
+  try {
+    await f.join(); assert.equal(f.app.phase, 'connected'); await f.app.microphone(); assert.equal(original.capturing, true);
+    original.rtcAvailable = false; f.callbacks().failed();
+    for (let i = 0; i < 20 && f.app.phase !== 'original'; i++) await new Promise(resolve => setImmediate(resolve));
+    assert.equal(f.app.phase, 'original'); assert.equal(original.capturing, true); assert.equal(leaves, 0);
+    await f.app.finishOriginal(); assert.equal(original.finished, true); assert.equal(f.app.original.capturing, false);
+  } finally { await f.app.leave(); }
+  assert.equal(leaves, 1);
+});
 test('late bootstrap after leave cannot create media or re-enter before HTTP settles', async () => {
   const wait = deferred(); const f = setup({ request: async () => wait.promise });
   const joining = f.join(); const leaving = f.app.leave();

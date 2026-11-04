@@ -26,6 +26,14 @@
     "./speech/livekit": {
       "types": "./dist/speechLiveKit.d.ts",
       "import": "./dist/speechLiveKit.js"
+    },
+    "./speech/capture": {
+      "types": "./dist/speechCapture.d.ts",
+      "import": "./dist/speechCapture.js"
+    },
+    "./speech/capture-input": {
+      "types": "./dist/speechCaptureInput.d.ts",
+      "import": "./dist/speechCaptureInput.js"
     }
   },
   "types": "./dist/index.d.ts",

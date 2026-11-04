@@ -5,6 +5,8 @@ import dev.bota.sdk.speech.SpeechGrant
 import dev.bota.sdk.speech.SpeechSessionException
 import java.nio.ByteBuffer
 import java.util.ArrayDeque
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * One authorized participant's original audio branch, owned by one media session.
@@ -92,6 +94,19 @@ public class ExternalPcmInput internal constructor(
 
     /** Unexpected source end retires the media session. Use SpeechSession.finishInput for a normal finish. */
     public fun end() { val report = synchronized(lock) { failLocked() }; report?.invoke() }
+
+    /** After stopping the physical source, join the queued RTC branch before
+     * requesting source finish. This proves local render consumption, never RTP delivery. */
+    public suspend fun drain(): Boolean = withTimeoutOrNull(250) {
+        while (true) {
+            val ready = synchronized(lock) {
+                if (terminal || !capturing || muted) false else if (queue.isEmpty()) true else null
+            }
+            if (ready != null) return@withTimeoutOrNull ready
+            delay(5)
+        }
+        @Suppress("UNREACHABLE_CODE") false
+    } ?: false
 
     internal fun retire() {
         synchronized(lock) { terminal = true; capturing = false; queue.clear(); failed = null }

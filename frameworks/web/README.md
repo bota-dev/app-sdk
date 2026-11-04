@@ -819,10 +819,11 @@ Before running the lab, the authorized host must create an active, media-ready
 session with two current `host_microphone` participants and initial subscriptions
 that each select only the other participant. Both must have publish/subscribe
 permission. Receiving languages must be included in the session's allowed set.
-This example accepts only explicitly selected `text_only` or `live_only` sessions.
-It rejects `original_audio_and_text`, external sources and replaced members before
-requesting a grant; it has no phone/browser encrypted original-capture profile
-and never silently changes retention.
+This example accepts `text_only`, `live_only`, and explicitly negotiated
+`original_audio_and_text` sessions. Original mode requires the dedicated host
+capture backend profile and durable browser storage. Unsupported storage,
+external sources and replaced members are refused; retention never changes
+silently. Clients without the capture capability still reject original mode.
 
 From the repository root, build and verify the packed consumer with the pinned
 Node/Rust/Web toolchain, then load the operator configuration from a private,
@@ -836,7 +837,7 @@ node --env-file=/absolute/path/to/private-speech-lab.env tools/web/serve-speech.
 | Environment variable | Required value |
 | --- | --- |
 | `BOTA_SPEECH_API_ORIGIN` | The explicitly selected Bota API origin; HTTPS, or HTTP on `127.0.0.1` for a disposable local backend. |
-| `BOTA_SPEECH_API_KEY` | A server-side credential with `speech_sessions:read` and `speech_sessions:write`. Never use a `VITE_` variable for this value. |
+| `BOTA_SPEECH_API_KEY` | A server-side credential with `speech_sessions:read` and `speech_sessions:write`. Original mode also requires `recordings:read`, `recordings:write` and `transcriptions:read`. Never use a `VITE_` variable for this value. |
 | `BOTA_SPEECH_PROJECT_ID`, `BOTA_SPEECH_SESSION_ID` | The same authorized project and already-created session. |
 | `BOTA_SPEECH_A_PARTICIPANT_ID`, `BOTA_SPEECH_B_PARTICIPANT_ID` | Two distinct admitted participant UUIDs. |
 | `BOTA_SPEECH_A_MEMBER_GENERATION`, `BOTA_SPEECH_B_MEMBER_GENERATION` | Their exact current positive member generations. |
@@ -871,6 +872,47 @@ Host regressions also cover real loopback HTTP, role/origin isolation, immutable
 member binding, exact source finish, cancellation and bounded admission.
 These checks do not establish encoded RTC delivery, ASR/MT/TTS quality, measured
 latency, production login, device acceptance or any other SDK family's App adoption.
+
+### Independent original capture (unreleased)
+
+The optional `@bota.dev/web-app-sdk/speech/capture` entry owns an authenticated
+encrypted journal in IndexedDB and a non-extractable WebCrypto key. Import a
+capture-scoped preparation from the authenticated host using
+`createWebSpeechCapture({ scope, prepared })`. The scope must include the current
+account/project/session/member generation. Web Locks prevent two tabs from
+recovering the same capture concurrently; persistent storage is required.
+`recoverWebSpeechCapture` seals an interrupted clock with an explicit unknown
+tail. It never resumes a crashed capture as though no samples were lost.
+
+`@bota.dev/web-app-sdk/speech/capture-input` supplies
+`createWebSpeechCaptureInput({ archive })`. Call `start()` only after explicit
+capture consent. One microphone and one 48 kHz AudioWorklet produce the same
+quantized PCM16 for RTC and encrypted archival. Supply its borrowed output track
+as `originalMicrophone` to the LiveKit adapter; the participant remains
+`host_microphone`. RTC owns only a derived branch. `stop()` closes the current
+capture clock; `finish()` seals the original manifest. Bound durable writes never
+block RTC: dropped positions become exact gaps. An interrupted render thread
+records an unknown tail. Serve the packaged `speechCaptureWorklet.js` as a
+same-origin asset under the host CSP; Vite consumers should disable asset
+inlining or supply an explicit worklet URL.
+
+Call `archive.flush(host, signal)` for one bounded upload pass and schedule
+foreground retries independently from RTC. Per-part acknowledgements retain
+local ciphertext. Only the exact published/verified receipt permits atomic local
+audio deletion and key retirement. Completed identity metadata remains available
+through `listWebSpeechCaptureReceipts` for later authorized text retrieval.
+`close()` cancels IO and releases ownership while preserving unfinished originals.
+No closed-tab or background execution is promised.
+
+The browser companion starts one explicit original per join. **Stop and save
+original** seals it; rejoin for a new recording. A failed live connection does not
+stop original capture while its existing host grant remains valid. Grant expiry
+stops the microphone, and independently authorized archive upload may continue.
+Rejoining recovers encrypted pending originals for the same scope. The original
+panel distinguishes stored-audio verification, capture gaps and final text
+alignment. Final text is independently reprocessed from verified original bytes,
+with exact sample intervals and discontinuities; it does not assert RTP clock
+synchronization. Live captions remain provisional for this purpose.
 
 ## Physical acceptance
 

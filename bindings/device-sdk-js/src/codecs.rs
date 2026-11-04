@@ -250,6 +250,10 @@ struct ReceiverEvent {
 impl CodecState {
     #[inline(never)]
     pub(crate) fn execute(&mut self, name: &str, value: Value) -> Result<Vec<u8>, DeviceSdkError> {
+        if name == "speechCapture" {
+            return bota_device_sdk_core::speech::capture::dispatch_json(&value.to_string())
+                .map(String::into_bytes);
+        }
         if name == "speechSession" {
             return self.speech.call(value);
         }

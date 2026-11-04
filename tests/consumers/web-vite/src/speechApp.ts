@@ -1,10 +1,11 @@
 import { createWebSpeechSession, SpeechSessionError, type SpeechCaptionUpdate, type SpeechSession,
   type WebSpeechSessionOptions } from '@bota.dev/web-app-sdk/speech'
 import { HostError, speechHost, type SpeechJoin } from './speechHost'
+import { speechOriginal, type OriginalMediaFactory } from './speechOriginal'
 
 /** The same view/controller is exercised with synthetic IO in speech-check.html.
  * The normal page always supplies the real public LiveKit factories. */
-export function mountSpeechApp(root: HTMLElement, mediaFactory: WebSpeechSessionOptions['mediaFactory']) {
+export function mountSpeechApp(root: HTMLElement, mediaFactory: WebSpeechSessionOptions['mediaFactory'], originalMedia?: OriginalMediaFactory) {
   root.innerHTML = `
     <header><p class="eyebrow">BOTA · CONVERSATION LAB</p><h1>Listen in your language.</h1>
       <p>Two speakers. Independent microphones, captions and listening.</p></header>
@@ -28,7 +29,9 @@ export function mountSpeechApp(root: HTMLElement, mediaFactory: WebSpeechSession
     </section>
     <section class="panel" aria-labelledby="captions-title"><div class="heading"><h2 id="captions-title">Conversation</h2>
       <span class="muted">Most recent 100 passages</span></div><p id="empty" class="muted">Captions will appear here when the other speaker talks.</p>
-      <div id="captions" aria-live="polite"></div></section>`
+      <div id="captions" aria-live="polite"></div></section>
+    <section id="original-panel" class="panel" hidden><h2>Original recording</h2>
+      <p id="original-status" role="status"></p><div id="aligned-text"></div></section>`
   function element<T extends HTMLElement>(id: string): T { return root.querySelector<T>(id)! }
   const connection = element('[data-testid=connection]'), input = element<HTMLButtonElement>('#input'), listen = element<HTMLButtonElement>('#listen')
   const language = element<HTMLSelectElement>('#language'), mode = element<HTMLSelectElement>('#mode'), role = element<HTMLSelectElement>('#role')
@@ -39,6 +42,7 @@ export function mountSpeechApp(root: HTMLElement, mediaFactory: WebSpeechSession
   let phase: 'idle' | 'joining' | 'connected' | 'closing' | 'failed' = 'idle'
   let owner: SpeechSession | undefined, joined: SpeechJoin | undefined, abort: AbortController | undefined
   let startup: Promise<void> | undefined, retiring: Promise<void> | undefined
+  let original: Awaited<ReturnType<typeof speechOriginal>> | undefined, rtcFailed = false
   let generation = 0, busy = false, listening = false, selectedLanguage = 'zh'
   const languageName = (tag: string) => new Intl.DisplayNames(['en'], { type: 'language' }).of(tag) ?? tag
   function message(value: unknown) {
@@ -59,12 +63,16 @@ export function mountSpeechApp(root: HTMLElement, mediaFactory: WebSpeechSession
   }
   function render() {
     const active = phase === 'connected', state = owner?.state
-    connection.textContent = { idle: 'Not connected', joining: 'Joining…', connected: 'Connected', closing: 'Leaving…', failed: 'Cleanup required' }[phase]
+    connection.textContent = active && rtcFailed ? 'Live connection lost' : { idle: 'Not connected', joining: 'Joining…', connected: 'Connected', closing: 'Leaving…', failed: 'Cleanup required' }[phase]
     element<HTMLButtonElement>('#join').disabled = phase !== 'idle'
     role.disabled = code.disabled = phase !== 'idle'
     element<HTMLButtonElement>('#leave').disabled = phase === 'idle' || phase === 'closing' || phase === 'failed'
     for (const id of ['#input', '#listen', '#finish', '#resume', '#language', '#mode', '#apply']) element<HTMLButtonElement>(id).disabled = !active || busy
     input.textContent = state?.canCapture ? 'Mute microphone' : 'Start microphone'
+    if (original) {
+      input.textContent = original.finished ? 'Original finished' : original.capturing ? 'Stop and save original' : 'Start microphone'
+      if (original.finished || rtcFailed && !original.capturing) input.disabled = true
+    }
     listen.textContent = listening ? 'Stop listening' : 'Start listening'
     if (state?.sourceFinish.holdPublication) input.disabled = true
     const status = state?.sourceFinish.status
@@ -89,7 +97,7 @@ export function mountSpeechApp(root: HTMLElement, mediaFactory: WebSpeechSession
       translation.textContent = translated ? String(translated.record.text) : 'Waiting for translation…'
       translation.className = 'translation'
       const status = document.createElement('small')
-      status.textContent = `${languageName(selectedLanguage)} · ${reference.final && (!translated || translated.final) ? 'Confirmed' : 'Interim'}`
+      status.textContent = `${languageName(selectedLanguage)} · ${original ? 'Live caption · provisional for original alignment' : reference.final && (!translated || translated.final) ? 'Confirmed' : 'Interim'}`
       row.append(label, original, translation, status); captions.append(row)
     }
   }
@@ -110,11 +118,14 @@ export function mountSpeechApp(root: HTMLElement, mediaFactory: WebSpeechSession
     if (phase === 'idle' || phase === 'failed') return
     generation++; phase = 'closing'; abort?.abort()
     // Retire content immediately; uncertain native cleanup must not retain the view.
-    code.value = ''; pairs.clear(); drawCaptions(); render()
+    code.value = ''; pairs.clear(); drawCaptions(); element('#aligned-text').replaceChildren(); render()
     retiring = (async () => {
       try {
         await startup
-        await owner?.close()
+        const results = await Promise.allSettled([original?.close(), owner?.close()])
+        original = undefined
+        const failed = results.find(result => result.status === 'rejected')
+        if (failed?.status === 'rejected') throw failed.reason
         owner = undefined; joined = undefined; phase = 'idle'
       } catch (value) { phase = 'failed'; error.textContent = message(value) }
       finally {
@@ -132,32 +143,51 @@ export function mountSpeechApp(root: HTMLElement, mediaFactory: WebSpeechSession
     startup = (async () => {
       let created: SpeechSession | undefined
       try {
-        const initial = await host.join(controller.signal)
+        const initial = await host.join(controller.signal, originalMedia !== undefined)
         if (current !== generation) return
-        if (!['live_only', 'text_only'].includes(initial.configuration.context.retention)) throw new HostError(409, 'unsupported_session')
+        if (!['live_only', 'text_only', ...(originalMedia ? ['original_audio_and_text'] : [])].includes(initial.configuration.context.retention)) throw new HostError(409, 'unsupported_session')
         joined = initial
+        rtcFailed = false
+        element('#original-panel').hidden = initial.configuration.context.retention !== 'original_audio_and_text'
+        if (initial.configuration.context.retention === 'original_audio_and_text') {
+          original = await speechOriginal(initial, host, controller.signal, (status, passages) => {
+            if (current !== generation) return
+            element('#original-status').textContent = status
+            if (passages) element('#aligned-text').replaceChildren(...passages.map(text => {
+              const paragraph = document.createElement('p'); paragraph.textContent = text; return paragraph
+            }))
+            render()
+          }, () => { if (current === generation) void leave() })
+        }
         selectedLanguage = initial.configuration.subscription.targetLanguage
         language.replaceChildren(...initial.allowedLanguages.map(tag => new Option(languageName(tag), tag)))
         language.value = selectedLanguage; mode.value = initial.configuration.subscription.mode
         element('#policy').textContent = initial.configuration.context.retention === 'live_only' ?
           'Live only. No original audio archive or saved caption history. This view clears when you leave.' :
-          'Text is retained under your host’s policy. No original audio archive. This view clears when you leave.'
+          initial.configuration.context.retention === 'text_only' ? 'Text is retained under your host’s policy. No original audio archive. This view clears when you leave.' :
+          'Your original is encrypted on this browser until its archive is verified. Finish or rejoin for a new recording. Final aligned text replaces provisional live captions.'
         created = await createWebSpeechSession({ configuration: initial.configuration, grant: initial.grant,
           host: host.callbacks(initial, () => {
             if (current !== generation) return
             error.textContent = 'Authorization is no longer available. Rejoin with current access.'
             // Do not await close inside a callback that close itself must settle.
             void leave()
-          }), mediaFactory, signal: controller.signal,
-          onState: state => { if (current === generation) { render(); if (state.disconnect) void leave() } },
+          }, grant => original?.renew(grant)), mediaFactory: original ? callbacks => original!.media(originalMedia!, callbacks) : mediaFactory, signal: controller.signal,
+          onState: state => { if (current === generation) { render(); if (state.disconnect && !(original && rtcFailed)) void leave() } },
           onCaption: value => { if (current === generation) caption(value) },
-          onError: value => { if (current === generation) error.textContent = message(value) },
+          onError: value => {
+            if (current !== generation) return
+            if (original && value.code === 'media_failed') {
+              rtcFailed = true; error.textContent = 'Live connection lost. Original capture continues until you stop or its authorization expires.'
+            } else error.textContent = message(value)
+          },
         })
         owner = created
         await created.ready
         if (current !== generation) { await created.close(); return }
         phase = 'connected'; render()
       } catch (value) {
+        await original?.close(); original = undefined
         if (created) {
           try { await created.close() }
           catch (cleanup) { phase = 'failed'; error.textContent = message(cleanup); throw cleanup }
@@ -175,9 +205,22 @@ export function mountSpeechApp(root: HTMLElement, mediaFactory: WebSpeechSession
     catch (value) { if (current === generation) error.textContent = message(value) }
     finally { if (current === generation) { busy = false; render() } }
   }
-  input.addEventListener('click', () => void command(session => session.setInput(!session.state.canCapture)))
+  input.addEventListener('click', () => void command(async session => {
+    if (!original) return session.setInput(!session.state.canCapture)
+    if (original.capturing) {
+      await original.finish()
+      if (!rtcFailed) await session.finishInput()
+    } else {
+      await original.start()
+      try { await session.setInput(true) }
+      catch (error) { if (!rtcFailed) await original.finish(); throw error }
+    }
+  }))
   listen.addEventListener('click', () => void command(async session => { await session.setListening(!listening); listening = !listening }))
-  element('#finish').addEventListener('click', () => void command(session => session.finishInput()))
+  element('#finish').addEventListener('click', () => void command(async session => {
+    await original?.finish()
+    if (!rtcFailed) return session.finishInput()
+  }))
   element('#resume').addEventListener('click', () => void command(session => session.resumeAudio()))
   element('#apply').addEventListener('click', () => void command(async session => {
     await session.changeSubscription({ targetLanguage: language.value, mode: mode.value as SpeechJoin['configuration']['subscription']['mode'],

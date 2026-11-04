@@ -35,9 +35,13 @@ capture. Initial permission and audio-route ownership remain host responsibiliti
 The existing native contracts apply unchanged:
 [Apple](apple-speech-session.md) and [Android](android-speech-session.md).
 The optional LiveKit modules provide microphone and authorized native PCM input
-candidates on both Apple and Android. Actual host capture integration and
-simultaneous archival remain incomplete. Flutter controls do not implement those
-media paths; PCM remains inside the native host.
+candidates on both Apple and Android. The source companion composes
+[independent native capture and archival](speech-original-capture.md).
+PCM and capture keys remain inside the native host. `setSpeechConnectionFactory`
+accepts a native `BotaFlutterSpeechConnection` that joins original and RTC
+cleanup. Its Dart `originalView()` exposes bounded final-text display metadata;
+`finishOriginal()` remains callable after RTC media failure. Existing
+`setSpeechFactory` users retain the RTC-only behavior.
 
 ```dart
 final speech = BotaSpeechClient();
@@ -108,7 +112,8 @@ dialogs collect the loopback host, A/B role and access code. The native owner
 prepares the short-lived grant before Dart starts the exact session; a second
 engine or session cannot consume it. Only display metadata returns to Dart.
 The existing loopback operator setup in the [Web guide](../../frameworks/web/README.md#two-speaker-browser-companion)
-applies unchanged. The App refuses original-audio retention before capture.
+applies unchanged. Original retention is admitted only with the dedicated
+capture profile and native original owner prepared before capture.
 
 The UI provides paired captions, independent microphone/listening controls,
 language/mode selection, source finish, recovery and audio resume. Its volatile
@@ -129,8 +134,8 @@ Use an explicitly selected Android device with an ADB loopback reverse, or the
 operator host's iOS Simulator. Physical iPhone login requires an authenticated
 host integration. No backend, provider or device session is started by building.
 
-This source consumer does not enable original archival, provide production host
-authentication or qualify real RTC/provider delivery. The optional Android
+This source consumer implements original archival but does not provide production
+host authentication or qualify real RTC/provider delivery. The optional Android
 dependency redistribution limitation in the [Android guide](android-speech-session.md)
 also applies. Its debug artifacts do not enter the synchronized public release.
 
@@ -142,7 +147,7 @@ also applies. Its debug artifacts do not enter the synchronized public release.
 | RTC-O03 / RTC-M02–03: independent controls and languages | Dart channel round-trip and native delegate checks | Real concurrent capture/playback and personalized receiving languages |
 | RTC-X02–03: retirement, source finish and recovery | Correlation fencing, joined close, stable failure, typed finish/recovery, dropped late callbacks | Actual backend authority, RTP tails, expiry/revocation and network recovery |
 | RTC-X03: bounded queues and cancellation | Slow-Dart overflow, cancelled waiter, synchronous factory overflow and late/duplicate reply regressions | Physical lifecycle, route changes, prolonged degraded links |
-| RTC-X01 / G4: retention and data truth | No bridge audio or implicit storage; private text uses explicit callbacks | Original archival, clocks/gaps, all retention modes and verified reconciliation |
+| RTC-X01 / G4: retention and data truth | Native encrypted original owner, clocks/gaps and independent stop; bounded final-text view without bridge audio or keys | Actual storage/process recovery, all retention modes and provider reconciliation |
 | G6: synchronized delivery | Source metadata, Pigeon drift and component tests | Final-source CI, immutable packages, consuming Apps and physical media qualification |
 
 The local candidate passes all 94 Dart checks (including seven speech checks),

@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """Prepare ignored platform projects from the exact npm-locked RN template."""
 from pathlib import Path
+import json
 import plistlib
+import re
 import shutil
 import sys
 
 root = Path(sys.argv[1]).resolve()
 app = root / "tests/consumers/react-native-speech"
+version = re.search(r'^version = "([^"]+)"', (root / "sdk-version.toml").read_text(), re.M).group(1)
 template = app / "node_modules/@react-native-community/template/template"
 for platform in ["android", "ios"]:
     destination = app / platform
@@ -40,15 +43,29 @@ replace(android / "build.gradle", 'buildToolsVersion = "36.0.0"', 'buildToolsVer
 replace(android / "app/build.gradle", 'applicationId "dev.bota.speech.companion"', 'applicationId "dev.bota.speech.rncompanion"')
 replace(android / "app/build.gradle", "file('debug.keystore')", "file('speech-debug.keystore')")
 replace(android / "app/build.gradle", 'implementation("com.facebook.react:react-android")',
-        'implementation("com.facebook.react:react-android")\n    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")')
+        f'''implementation("com.facebook.react:react-android")
+    implementation("dev.bota:bota-app-sdk:{version}")
+    implementation(files({json.dumps(str(root / "platforms/android/speech-livekit/build/outputs/aar/speech-livekit-release.aar"))}))
+    implementation("io.livekit:livekit-android:2.29.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")''')
+with (android / "build.gradle").open("a") as output:
+    output.write(f'''\nallprojects {{ repositories {{
+        exclusiveContent {{
+            forRepository {{ maven {{ url = uri({json.dumps(str(root / "target/android-m2"))}) }} }}
+            filter {{ includeGroup("dev.bota") }}
+        }}
+        exclusiveContent {{
+            forRepository {{ maven {{ url = uri("https://jitpack.io") }} }}
+            filter {{ includeVersion("com.github.davidliu", "audioswitch", "039a35aefab7747c557242fa216c9ea11743b604") }}
+        }}
+    }} }}\n''')
 kotlin = android / "app/src/main/java/com/helloworld"
-replace(kotlin / "MainApplication.kt", 'import android.app.Application',
-        'import android.app.Application\nimport com.livekit.reactnative.LiveKitReactNative\nimport com.livekit.reactnative.audio.AudioType')
 replace(kotlin / "MainApplication.kt", 'PackageList(this).packages.apply {', 'PackageList(this).packages.apply {\n          add(SpeechLabPackage())')
-replace(kotlin / "MainApplication.kt", 'loadReactNative(this)', 'LiveKitReactNative.setup(this, AudioType.CommunicationAudioType())\n    loadReactNative(this)')
 shutil.copyfile(app / "native/android/SpeechLabHost.kt", kotlin / "SpeechLabHost.kt")
 native = root / "platforms/android/speech-companion/src/main"
-shutil.copyfile(native / "kotlin/dev/bota/speech/companion/NativeLabTransport.kt", kotlin / "NativeLabTransport.kt")
+for name in ["NativeLabTransport.kt", "LabHost.kt", "LabOriginal.kt", "ReactNativeLabOwner.kt"]:
+    shutil.copyfile(native / "kotlin/dev/bota/speech/companion" / name, kotlin / name)
 shutil.copytree(native / "res/xml", android / "app/src/main/res/xml", dirs_exist_ok=True)
 shutil.copyfile(native / "res/drawable/companion_icon.xml", android / "app/src/main/res/drawable/companion_icon.xml")
 replace(android / "app/src/main/res/values/strings.xml", 'Hello App Display Name', 'Bota Conversation')
@@ -63,14 +80,26 @@ replace(manifest, 'android:usesCleartextTraffic="${usesCleartextTraffic}"',
         'android:networkSecurityConfig="@xml/network_security_config" android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules"')
 
 ios = app / "ios"
-podfile = ios / "Podfile"
-podfile.write_text("source 'https://github.com/livekit/podspecs.git'\nsource 'https://cdn.cocoapods.org/'\n\n" + podfile.read_text())
 runner = ios / "SpeechCompanion"
 for source in (app / "native/ios").iterdir():
     shutil.copyfile(source, runner / source.name)
-shutil.copyfile(root / "platforms/apple-speech-livekit/Examples/SpeechCompanion/LabTransport.swift", runner / "LabTransport.swift")
-replace(runner / "AppDelegate.swift", 'import UIKit', 'import UIKit\nimport livekit_react_native')
-replace(runner / "AppDelegate.swift", 'let delegate = ReactNativeDelegate()', 'LivekitReactNative.setup()\n    let delegate = ReactNativeDelegate()')
+for name in ["LabTransport.swift", "LabHost.swift", "LabOriginal.swift", "ReactNativeLabOwner.swift"]:
+    shutil.copyfile(root / "platforms/apple-speech-livekit/Examples/SpeechCompanion" / name, runner / name)
+speech = ios / "native/speech-livekit"
+shutil.copytree(root / "platforms/apple-speech-livekit/Sources", speech / "Sources", dirs_exist_ok=True)
+(speech / "Package.swift").write_text(f'''// swift-tools-version: 6.1
+import PackageDescription
+let package = Package(name: "BotaSpeechLiveKit", platforms: [.iOS(.v15)],
+    products: [.library(name: "BotaSpeechLiveKit", targets: ["BotaSpeechLiveKit"])],
+    dependencies: [.package(name: "app-sdk", path: {json.dumps(str(root / "platforms/apple"))}),
+        .package(url: "https://github.com/livekit/client-sdk-swift.git", exact: "2.18.0")],
+    targets: [.target(name: "BotaSpeechLiveKit", dependencies: [
+        .product(name: "BotaAppSDK", package: "app-sdk"), .product(name: "LiveKit", package: "client-sdk-swift")])],
+    swiftLanguageModes: [.v6])
+''')
+lock = ios / "SpeechCompanion.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+lock.parent.mkdir(parents=True, exist_ok=True)
+shutil.copyfile(root / "platforms/apple-speech-livekit/Package.resolved", lock)
 with (runner / "Info.plist").open('rb') as stream:
     info = plistlib.load(stream)
 info['CFBundleDisplayName'] = 'Bota Conversation'

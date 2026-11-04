@@ -4,7 +4,7 @@ Status: unreleased Phase 3 source preview. The first delivery still includes
 Apple, Android, Flutter, React Native and Web. The optional Android LiveKit
 adapter now connects this facade to microphone or authorized host PCM in source.
 An optional native companion App now consumes it through the loopback operator
-host. Host conference integration, Flutter media adoption, production application adoption and the Phase 3
+host. Host conference integration, production application adoption and the Phase 3
 qualification gates remain incomplete.
 
 ## Native conversation companion
@@ -31,7 +31,9 @@ or establish qualification for a later platform or store submission.
 
 Start the [loopback operator host](../../frameworks/web/README.md#two-speaker-browser-companion)
 with two pre-admitted microphone roles, exclusive peer subscriptions and
-`text_only` or `live_only`. On an explicitly selected USB/emulator test device,
+`text_only`, `live_only`, or the explicit
+[`speech_capture_pcm_v1` original profile](speech-original-capture.md). The
+original panel keeps stop/upload controls after RTC failure. On an explicitly selected USB/emulator test device,
 forward its loopback port with `adb -s SERIAL reverse tcp:4173 tcp:4173`, install
 the internal APK and enter `http://127.0.0.1:4173`, the role and its access code.
 Use a distinct role in the peer Web/native companion. Remove the reverse mapping

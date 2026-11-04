@@ -17,6 +17,7 @@ internal data class CompanionState(val connected: Boolean = false, val joining: 
     val listening: Boolean = false, val canPlay: Boolean = false, val language: String = "zh",
     val mode: SpeechListeningMode = SpeechListeningMode.TRANSLATED, val languages: List<String> = listOf("en", "zh", "ja"),
     val pairs: List<CaptionPair> = emptyList(), val busy: Set<String> = emptySet(),
+    val original: OriginalView = OriginalView(),
     val notice: String = "Choose a role and join your local session.")
 private sealed interface UiEvent {
     data class State(val value: SpeechState) : UiEvent
@@ -27,7 +28,8 @@ private sealed interface UiEvent {
 /** UI lifetime only. The native SDK and Rust retain media, authorization and protocol policy. */
 internal class CompanionModel(private val mediaFactory: (SpeechMediaCallbacks) -> SpeechMediaPort,
     private val canRecord: () -> Boolean, private val transport: () -> LabTransport = { NativeLabTransport() },
-    private val dispatcher: CoroutineDispatcher = Dispatchers.Main.immediate) {
+    private val dispatcher: CoroutineDispatcher = Dispatchers.Main.immediate,
+    private val originalFactory: (suspend (LabHost, LabJoin, (OriginalView) -> Unit) -> LabOriginalOwner)? = null) {
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private val mutable = MutableStateFlow(CompanionState())
     val state: StateFlow<CompanionState> = mutable.asStateFlow()
@@ -35,6 +37,7 @@ internal class CompanionModel(private val mediaFactory: (SpeechMediaCallbacks) -
         private set
     private var session: SpeechSession? = null
     private var host: LabHost? = null
+    private var original: LabOriginalOwner? = null
     private var initial: LabJoin? = null
     private var bootstrap: Deferred<LabJoin>? = null
     private var retirement: Deferred<Unit>? = null
@@ -47,11 +50,18 @@ internal class CompanionModel(private val mediaFactory: (SpeechMediaCallbacks) -
         owner = UUID.randomUUID(); val current = owner
         update { copy(joining = true, notice = "Joining…") }
         try {
-            val host = LabHost(origin, role, code, transport()); this@CompanionModel.host = host
+            val host = LabHost(origin, role, code, transport(), originalCapable = originalFactory != null); this@CompanionModel.host = host
             val pending = scope.async { host.join() }; bootstrap = pending
             val joined = pending.await()
             if (current != owner) return@withContext
             bootstrap = null; initial = joined; retiredCaptionRevision = 0
+            if (joined.configuration.context.retention == SpeechRetention.ORIGINAL_AUDIO_AND_TEXT) {
+                val acquired = (originalFactory ?: throw LabFailure())(host, joined) { value ->
+                    if (current == owner) update { copy(original = value, input = value.capturing) }
+                }
+                if (current != owner) { acquired.close(); return@withContext }
+                original = acquired
+            }
             update { copy(language = joined.configuration.subscription.selection.targetLanguage,
                 mode = joined.configuration.subscription.selection.mode, languages = joined.languages) }
             val queue = Channel<UiEvent>(32); events = queue
@@ -64,7 +74,8 @@ internal class CompanionModel(private val mediaFactory: (SpeechMediaCallbacks) -
                     }
                 } catch (_: LabFailure) { if (current == owner) leave("The display could not keep up. Join again.") }
             }
-            val native = SpeechSession.create(joined.configuration, joined.grant, mediaFactory, host, object : SpeechObserver {
+            val selectedMedia = original?.let { retained -> { callbacks: SpeechMediaCallbacks -> retained.media(callbacks) } } ?: mediaFactory
+            val native = SpeechSession.create(joined.configuration, joined.grant, selectedMedia, host, object : SpeechObserver {
                 override fun stateChanged(state: SpeechState) = offer(UiEvent.State(state))
                 override fun caption(caption: SpeechCaption) = offer(UiEvent.Caption(caption))
                 override fun error(error: SpeechSessionException) = offer(UiEvent.Error(error))
@@ -82,13 +93,19 @@ internal class CompanionModel(private val mediaFactory: (SpeechMediaCallbacks) -
     suspend fun leave(reason: String = "Left the session."): Unit = withContext(dispatcher + NonCancellable) {
         retirement?.let { runCatching { it.await() }; return@withContext }
         owner = UUID.randomUUID()
-        val pending = bootstrap; val native = session; val host = host
-        bootstrap = null; session = null; this@CompanionModel.host = null; initial = null
+        val pending = bootstrap; val native = session; val host = host; val original = original
+        bootstrap = null; session = null; this@CompanionModel.host = null; this@CompanionModel.original = null; initial = null
         pending?.cancel(); events?.close(); events = null; pump?.cancel(); pump = null
         update { copy(connected = false, joining = false, closing = true, input = false, listening = false,
-            canPlay = false, pairs = emptyList(), busy = emptySet(), notice = reason) }
+            canPlay = false, pairs = emptyList(), original = OriginalView(), busy = emptySet(), notice = reason) }
         val task = scope.async(start = CoroutineStart.LAZY) {
-            host?.close(); pending?.join(); native?.close(); Unit
+            var failed = false
+            host?.close()
+            try { original?.finish() } catch (_: Exception) { failed = true }
+            try { pending?.join(); native?.close() } catch (_: Exception) { failed = true }
+            try { original?.close() } catch (_: Exception) { failed = true }
+            if (failed) throw LabFailure()
+            Unit
         }
         retirement = task; task.start()
         try { task.await() }
@@ -97,8 +114,13 @@ internal class CompanionModel(private val mediaFactory: (SpeechMediaCallbacks) -
     }
     suspend fun setInput(enabled: Boolean, permissionOwner: UUID = owner): Unit = withContext(dispatcher) {
         if (permissionOwner != owner || "finish" in state.value.busy) return@withContext
+        if (!enabled && original != null) {
+            original?.finish()
+            if (!state.value.connected) return@withContext
+        }
+        if (enabled && original?.finished == true) return@withContext
         if (enabled && !canRecord()) { update { copy(notice = "Microphone permission is required. Enable it in system settings, then try again.") }; return@withContext }
-        if (run("input") { it.setInput(enabled) }) update { copy(input = enabled) }
+        if (run("input") { it.setInput(enabled); if (enabled) original?.start() }) update { copy(input = enabled && (this@CompanionModel.original?.capturing ?: true)) }
     }
     suspend fun setListening(enabled: Boolean): Unit = withContext(dispatcher) {
         if (run("listen") { it.setListening(enabled) }) update { copy(listening = enabled) }
@@ -115,6 +137,8 @@ internal class CompanionModel(private val mediaFactory: (SpeechMediaCallbacks) -
     }
     suspend fun finish(): Unit = withContext(dispatcher) {
         if ("input" in state.value.busy) return@withContext
+        original?.finish()
+        if (!state.value.connected) return@withContext
         update { copy(input = false) }
         var result = "unavailable"
         if (run("finish") { result = it.finishInput().status }) {
@@ -142,7 +166,8 @@ internal class CompanionModel(private val mediaFactory: (SpeechMediaCallbacks) -
             return current == owner
         } catch (error: Exception) {
             if (current == owner) {
-                if (native.state.value.disconnect || error is CancellationException) leave("The session ended. Join again with current authorization.")
+                if (native.state.value.disconnect && original?.rtcLost == true) rtcEnded()
+                else if (native.state.value.disconnect || error is CancellationException) leave("The session ended. Join again with current authorization.")
                 else update { copy(notice = "The action could not finish. Try again or leave the session.") }
             }
             if (error is CancellationException) throw error
@@ -153,8 +178,10 @@ internal class CompanionModel(private val mediaFactory: (SpeechMediaCallbacks) -
         when (event) {
             is UiEvent.State -> {
                 val state = session?.state?.value ?: event.value
-                update { copy(input = input && state.canCapture, canPlay = state.canPlay) }
-                if (state.disconnect) leave("The session ended. Join again with current authorization.")
+                update { copy(input = this@CompanionModel.original?.capturing ?: (input && state.canCapture), canPlay = state.canPlay) }
+                if (state.disconnect) {
+                    if (original?.rtcLost == true) rtcEnded() else leave("The session ended. Join again with current authorization.")
+                }
             }
             is UiEvent.Error -> when (event.value.code) {
                 SpeechErrorCode.AUTHORIZATION_UNAVAILABLE -> leave("Authorization ended. Join again.")
@@ -184,6 +211,10 @@ internal class CompanionModel(private val mediaFactory: (SpeechMediaCallbacks) -
                 update { copy(pairs = pairs.toList()) }
             }
         }
+    }
+    private fun rtcEnded() {
+        update { copy(connected = false, listening = false, canPlay = false, input = this@CompanionModel.original?.capturing == true,
+            notice = "Realtime audio disconnected. Your original capture remains independent; stop it when ready.") }
     }
     private fun update(change: CompanionState.() -> CompanionState) { mutable.value = mutable.value.change() }
 }

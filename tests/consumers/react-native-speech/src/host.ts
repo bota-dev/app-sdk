@@ -5,6 +5,10 @@ export interface NativeHost {
   request(id: string, origin: string, role: string, code: string, action: string, body: string): Promise<{ status: number; body: string }>;
   cancel(id: string): Promise<void>;
   microphonePermission(): Promise<boolean>;
+  originalView?(): Promise<string>;
+  startOriginal?(): Promise<void>;
+  finishOriginal?(): Promise<void>;
+  closeSession?(): Promise<void>;
 }
 export interface Joined {
   role: 'a' | 'b'; peer: { role: 'a' | 'b'; participantId: string }; allowedLanguages: string[];
@@ -49,7 +53,7 @@ export function labHost(native: NativeHost, origin: string, role: string, access
       if (value.role !== role || value.peer.role === role || !['a', 'b'].includes(value.peer.role) ||
           value.peer.participantId === context.participantId || subscription.sourceParticipantIds.length !== 1 ||
           subscription.sourceParticipantIds[0] !== value.peer.participantId || !context.canPublish || !context.canSubscribe ||
-          !['live_only', 'text_only'].includes(context.retention) || value.allowedLanguages.length > 7 ||
+          !['live_only', 'text_only', ...(native.originalView && native.startOriginal && native.finishOriginal && native.closeSession ? ['original_audio_and_text'] : [])].includes(context.retention) || value.allowedLanguages.length > 7 ||
           new Set(value.allowedLanguages).size !== value.allowedLanguages.length ||
           !value.allowedLanguages.includes(subscription.targetLanguage)) throw new HostError(409, 'unsupported_session');
       return value;
@@ -90,7 +94,7 @@ export function labHost(native: NativeHost, origin: string, role: string, access
       if (closing) return closing;
       closed = true; code = '';
       const tasks = [...pending.values()];
-      closing = Promise.allSettled(tasks.flatMap(task => [task.cancel(), task.settled])).then(results => {
+      closing = Promise.allSettled([...tasks.flatMap(task => [task.cancel(), task.settled]), native.closeSession?.()]).then(results => {
         if (results.some(result => result.status === 'rejected')) throw new HostError();
       });
       return closing;

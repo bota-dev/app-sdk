@@ -83,6 +83,37 @@ public final class ExternalPCMInput: @unchecked Sendable {
     /// Unexpected source loss fails the media session. Use SpeechSession.finishInput for normal completion.
     public func end() { let report = lock.withLock { failLocked() }; report?() }
 
+    /// Native microphone fork. Copies the same 480 PCM16LE samples used by the
+    /// independent archive; no audio crosses an application-language bridge.
+    @discardableResult public func offer(pcm16LE: Data) -> Bool {
+        var report: (@Sendable () -> Void)?
+        let accepted = lock.withLock {
+            guard !terminal, validated, capturing, !muted else { return false }
+            let time = now()
+            guard pcm16LE.count == 960, queue.count < 20, !stale(time) else { report = failLocked(); return false }
+            let samples = pcm16LE.withUnsafeBytes { bytes in
+                (0..<480).map { Int16(littleEndian: bytes.loadUnaligned(fromByteOffset: $0 * 2, as: Int16.self)) }
+            }
+            queue.append(Frame(samples: samples, offeredAt: time)); return true
+        }
+        report?(); return accepted
+    }
+
+    /// Join local render consumption after the physical source stops. This is
+    /// separate from the worker's source-finish acknowledgement and RTP delivery.
+    public func drain() async -> Bool {
+        let until = DispatchTime.now().uptimeNanoseconds + 250_000_000
+        while DispatchTime.now().uptimeNanoseconds < until {
+            let result: Bool? = lock.withLock {
+                if terminal || !capturing || muted { return false }
+                return queue.isEmpty ? true : nil
+            }
+            if let result { return result }
+            do { try await Task.sleep(nanoseconds: 5_000_000) } catch { return false }
+        }
+        return false
+    }
+
     func retire() { lock.withLock { terminal = true; capturing = false; queue.removeAll(); offset = 0; failed = nil } }
 
     private func stale(_ time: UInt64) -> Bool {

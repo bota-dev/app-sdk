@@ -7,7 +7,8 @@ import android.content.pm.PackageManager
 import android.text.InputType
 import android.view.View
 import android.widget.*
-import dev.bota.sdk.flutter.BotaFlutterSdkPlugin
+import dev.bota.sdk.flutter.*
+import dev.bota.sdk.speech.*
 import dev.bota.sdk.speech.livekit.LiveKitSpeechMedia
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -19,7 +20,8 @@ class FlutterCompanionApplication : Application() {
     internal lateinit var owner: FlutterLabOwner
     override fun onCreate() {
         super.onCreate()
-        owner = FlutterLabOwner({ LiveKitSpeechMedia.create(this, it) })
+        owner = FlutterLabOwner({ LiveKitSpeechMedia.create(this, it) },
+            originalFactory = { host, joined, update -> LabOriginal.create(this, host, joined, update) })
     }
 }
 
@@ -37,7 +39,9 @@ class FlutterCompanionActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         owner.bindEngine(engineId)
         checkNotNull(flutterEngine.plugins.get(BotaFlutterSdkPlugin::class.java) as? BotaFlutterSdkPlugin)
-            .setSpeechFactory { id, observer -> owner.create(engineId, id, observer) }
+            .setSpeechConnectionFactory { id, observer ->
+                OriginalFlutterConnection(owner, engineId, owner.create(engineId, id, observer))
+            }
         channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dev.bota.speech.companion/host").apply {
             setMethodCallHandler { call, reply ->
                 when (call.method) {
@@ -110,4 +114,27 @@ class FlutterCompanionActivity : FlutterActivity() {
         super.cleanUpFlutterEngine(flutterEngine)
     }
     override fun onDestroy() { scope.cancel(); super.onDestroy() }
+}
+
+/** Compose native original ownership with the SDK bridge without exposing PCM or keys. */
+private class OriginalFlutterConnection(private val owner: FlutterLabOwner, private val id: String,
+    private val session: SpeechSession) : BotaFlutterSpeechConnection {
+    override val state get() = session.state.value
+    override suspend fun ready() { session.ready.await() }
+    override suspend fun setInput(enabled: Boolean) {
+        if (!enabled) owner.finishOriginal(id, session)
+        session.setInput(enabled)
+        if (enabled) owner.startOriginal(id, session)
+    }
+    override suspend fun setListening(enabled: Boolean) = session.setListening(enabled)
+    override suspend fun changeSubscription(selection: SpeechSelection) = session.changeSubscription(selection)
+    override suspend fun resumeAudio() = session.resumeAudio()
+    override suspend fun recoverCaptions() = session.recoverCaptions()
+    override suspend fun finishInput(): SpeechSourceFinish { owner.finishOriginal(id, session); return session.finishInput() }
+    override suspend fun finishOriginal() = owner.finishOriginal(id, session)
+    override suspend fun originalView(): BotaFlutterSpeechOriginalView {
+        val (view, rtc) = owner.originalView(id, session)
+        return BotaFlutterSpeechOriginalView(view.enabled, view.capturing, view.finished, rtc, view.status, view.passages)
+    }
+    override suspend fun close() { owner.close(id, session).await() }
 }

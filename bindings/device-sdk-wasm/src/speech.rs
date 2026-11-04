@@ -1,6 +1,13 @@
 use bota_device_sdk_core::speech::SpeechClient;
 use wasm_bindgen::prelude::*;
 
+/// Metadata-only archive policy. Browser audio and encryption stay in browser IO.
+#[wasm_bindgen(js_name = speechCapture)]
+pub fn speech_capture(command_json: &str) -> Result<String, JsValue> {
+    bota_device_sdk_core::speech::capture::dispatch_json(command_json)
+        .map_err(|error| JsValue::from_str(error.code.as_str()))
+}
+
 fn clock(now: f64) -> Result<u64, JsValue> {
     if !now.is_finite() || !(0.0..=9_007_199_254_740_991.0).contains(&now) || now.fract() != 0.0 {
         return Err(JsValue::from_str("invalid_input"));

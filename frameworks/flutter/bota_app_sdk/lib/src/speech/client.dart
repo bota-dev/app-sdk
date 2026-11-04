@@ -219,6 +219,14 @@ final class BotaSpeechSession {
 
   Future<void> resumeAudio() =>
       _client._call(this, () => _client._host.resumeAudio(_id));
+  Future<BotaSpeechOriginalView> originalView() => _client._call(
+    this,
+    () async => BotaSpeechOriginalView.fromMessage(
+      await _client._host.originalView(_id),
+    ),
+  );
+  Future<void> finishOriginal() =>
+      _client._call(this, () => _client._host.finishOriginal(_id));
   Future<BotaSpeechRecovery> recoverCaptions() => _client._call(
     this,
     () async => BotaSpeechRecovery.fromMessage(

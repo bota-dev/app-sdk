@@ -10,7 +10,9 @@ on:
       - .github/workflows/check-speech-app-ios.yml
       - tests/consumers/react-native-speech/**
       - tools/speech/*react-native-companion*
-      - platforms/apple-speech-livekit/Examples/SpeechCompanion/LabTransport.swift
+      - platforms/apple-speech-livekit/**
+      - platforms/apple/Sources/BotaAppSDK/Speech/**
+      - protocol/manifest/speech-capture-v1.json
 
 permissions:
   contents: read
@@ -47,6 +49,10 @@ jobs:
           bundle exec ruby -e 'require "cocoapods"; require "xcodeproj"; abort unless Pod::VERSION == "1.16.2" && Xcodeproj::VERSION == "1.27.0"'
       - name: Install SDK package dependencies
         run: npm ci --prefix frameworks/react-native
+      - name: Set up Rust for the native capture owner
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.98.0
       - name: Build bundled React Native conversation App
         run: bash tools/speech/test-react-native-companion.sh --ios
       - name: Retain internal unsigned App

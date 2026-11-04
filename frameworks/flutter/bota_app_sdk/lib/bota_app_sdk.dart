@@ -7,6 +7,7 @@ export 'src/speech/models.dart'
         BotaSpeechFinishedSource,
         BotaSpeechListeningMode,
         BotaSpeechObserver,
+        BotaSpeechOriginalView,
         BotaSpeechRecovery,
         BotaSpeechSelection,
         BotaSpeechSourceFinish,

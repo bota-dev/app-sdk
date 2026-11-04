@@ -26,7 +26,8 @@ class CompanionApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         model = CompanionModel({ LiveKitSpeechMedia.create(this, it) },
-            { checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED })
+            { checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED },
+            originalFactory = { host, joined, update -> LabOriginal.create(this, host, joined, update) })
     }
 }
 
@@ -49,6 +50,8 @@ class CompanionActivity : Activity() {
     private lateinit var mode: Spinner
     private lateinit var notice: TextView
     private lateinit var captions: LinearLayout
+    private lateinit var original: TextView
+    private lateinit var stopOriginal: Button
     private var rendering = false
     private var lastPairs: List<CaptionPair>? = null
     private var lastLanguages: List<String>? = null
@@ -122,6 +125,10 @@ class CompanionActivity : Activity() {
         }
         recover = button(R.string.recover) { ui.launch { model.recoverCaptions() } }; controls.addView(recover)
         root.addView(controls)
+        original = TextView(this).apply { textSize = 16f; setTextIsSelectable(true); isSaveEnabled = false }
+        root.addView(original)
+        stopOriginal = Button(this).apply { setText(R.string.stop_original); setOnClickListener { ui.launch { model.finish() } } }
+        root.addView(stopOriginal)
         root.addView(label(R.string.conversation, 22f))
         captions = column().apply { isSaveEnabled = false }; root.addView(captions)
         setContentView(ScrollView(this).apply { addView(root) })
@@ -143,19 +150,23 @@ class CompanionActivity : Activity() {
 
     private fun render(state: CompanionState) {
         rendering = true
-        form.visibility = if (state.connected) View.GONE else View.VISIBLE
-        val canJoin = !state.joining && !state.closing && !state.cleanupFailed
+        form.visibility = if (state.connected || state.original.enabled) View.GONE else View.VISIBLE
+        val canJoin = !state.joining && !state.closing && !state.cleanupFailed && !state.original.enabled
         listOf(role, host, code, join).forEach { it.isEnabled = canJoin }
         join.setText(if (state.joining) R.string.joining else R.string.join)
-        leave.visibility = if (state.connected || state.joining) View.VISIBLE else View.GONE
+        leave.visibility = if (state.connected || state.joining || state.original.enabled) View.VISIBLE else View.GONE
         notice.text = state.notice
         controls.visibility = if (state.connected) View.VISIBLE else View.GONE
         input.isChecked = state.input; listening.isChecked = state.listening
-        input.isEnabled = "input" !in state.busy && "finish" !in state.busy
+        input.isEnabled = "input" !in state.busy && "finish" !in state.busy && !state.original.finished
         listening.isEnabled = "listen" !in state.busy
         finish.isEnabled = "finish" !in state.busy && "input" !in state.busy
         resume.isEnabled = "resume" !in state.busy; recover.isEnabled = "recovery" !in state.busy
         language.isEnabled = "selection" !in state.busy; mode.isEnabled = language.isEnabled
+        original.visibility = if (state.original.enabled) View.VISIBLE else View.GONE
+        stopOriginal.visibility = original.visibility
+        stopOriginal.isEnabled = !state.original.finished && "input" !in state.busy
+        original.text = getString(R.string.original_preview, state.original.status, state.original.passages.joinToString("\n\n"))
         if (lastLanguages != state.languages) {
             lastLanguages = state.languages
             language.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, state.languages)

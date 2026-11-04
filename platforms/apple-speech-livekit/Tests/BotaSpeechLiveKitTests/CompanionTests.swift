@@ -38,6 +38,78 @@ final class CompanionChecks: @unchecked Sendable {
     private let origin = URL(string: "http://127.0.0.1:4173")!
     private let code = String(repeating: "a", count: 40)
     @MainActor
+    func testReactNativeRtcClosePreservesIndependentOriginal() async throws {
+        final class Original: LabOriginalOwner {
+            nonisolated let room = FakeRoom(), output = FakeOutput()
+            var capturing = false, finished = false, rtcLost = true, closed = false
+            nonisolated func media(_ callbacks: SpeechMediaCallbacks) throws -> any SpeechMediaPort {
+                try LiveKitSpeechMedia(room: room, output: output, callbacks: callbacks)
+            }
+            func start() async throws { capturing = true }
+            func finish() async throws { capturing = false; finished = true }
+            func close() async throws { try await finish(); closed = true }
+        }
+        let original = Original(), transport = LabFixture(try body(retention: "original_audio_and_text"))
+        let owner = try ReactNativeLabOwner(origin: origin, role: "a", code: code, transport: transport,
+            mediaFactory: { _ in throw CheckFailure(message: "Opened a second microphone") },
+            originalFactory: { _, _, update in update(OriginalView(enabled: true)); return original })
+        let joined = try JSONDecoder().decode(LabJoin.self, from: await owner.prepare())
+        let handle = try owner.createMedia(joined.grant.sessionId)
+        _ = try await owner.command(handle, action: "connect", body: String(decoding: JSONEncoder().encode(joined.grant), as: UTF8.self))
+        _ = try await owner.command(handle, action: "input", body: "true"); try await owner.startOriginal()
+        try await owner.closeMedia(handle)
+        try require(original.capturing && !original.closed)
+        try require(owner.fence(handle, "mute") && !owner.fence("foreign", "mute"))
+        try await owner.finishOriginal(); try require(original.finished)
+        try await owner.close(); try require(original.closed)
+    }
+    @MainActor
+    func testReactNativeNativeExpiryRetiresMediaWithoutJsPolling() async throws {
+        var object = try JSONSerialization.jsonObject(with: body()) as! [String: Any]
+        var grant = object["grant"] as! [String: Any]
+        let formatter = ISO8601DateFormatter(); formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        grant["expires_at"] = formatter.string(from: Date().addingTimeInterval(0.5)); object["grant"] = grant
+        let transport = LabFixture(try JSONSerialization.data(withJSONObject: object)), room = FakeRoom(), output = FakeOutput()
+        let owner = try ReactNativeLabOwner(origin: origin, role: "a", code: code, transport: transport,
+            mediaFactory: { try LiveKitSpeechMedia(room: room, output: output, callbacks: $0) })
+        let joined = try JSONDecoder().decode(LabJoin.self, from: await owner.prepare())
+        let handle = try owner.createMedia(joined.grant.sessionId)
+        _ = try await owner.command(handle, action: "connect", body: String(decoding: JSONEncoder().encode(joined.grant), as: UTF8.self))
+        _ = try await owner.command(handle, action: "input", body: "true"); try require(room.captureEnabled)
+        try await room.disconnected.wait(); try require(!room.captureEnabled)
+        do { _ = try await owner.command(handle, action: "input", body: "true"); throw CheckFailure(message: "Expired input accepted") }
+        catch LabFailure.closed {}
+        try await owner.close()
+    }
+    @MainActor
+    func testOriginalOwnerSurvivesRtcFailureAndStopsOnExplicitLeave() async throws {
+        final class Original: LabOriginalOwner {
+            nonisolated let room = FakeRoom(), output = FakeOutput()
+            var capturing = false, finished = false, rtcLost = false, closed = false
+            var update: (@MainActor (OriginalView) -> Void)?
+            nonisolated func media(_ callbacks: SpeechMediaCallbacks) throws -> any SpeechMediaPort {
+                try LiveKitSpeechMedia(room: room, output: output, callbacks: callbacks)
+            }
+            func start() async throws { capturing = true; update?(OriginalView(enabled: true, capturing: true)) }
+            func finish() async throws { capturing = false; finished = true; update?(OriginalView(enabled: true, finished: true)) }
+            func close() async throws { try await finish(); closed = true }
+        }
+        let original = Original(), transport = LabFixture(try body(retention: "original_audio_and_text"))
+        let model = CompanionModel(transport: { transport }, requestMicrophone: { true },
+            media: { _ in throw CheckFailure(message: "Opened a second microphone") },
+            originalFactory: { _, _, update in original.update = update; update(OriginalView(enabled: true)); return original })
+        await model.join(origin: origin, role: "a", code: code); await model.setInput(true)
+        try require(model.connected && original.capturing)
+        let ended = Gate()
+        let observation = model.$connected.dropFirst().filter { !$0 }.sink { _ in ended.open() }
+        defer { observation.cancel() }
+        original.rtcLost = true; original.room.events?.failed()
+        try await ended.wait()
+        try require(original.capturing && !original.closed)
+        await model.finish(); try require(original.finished && !original.capturing)
+        await model.leave(); try require(original.closed)
+    }
+    @MainActor
     func testFlutterPreparationIsNativeAndConsumedByOnlyItsEngine() async throws {
         let transport = LabFixture(try body()), room = FakeRoom(), output = FakeOutput()
         let owner = FlutterLabOwner(transport: { transport }, media: { try LiveKitSpeechMedia(room: room, output: output, callbacks: $0) })

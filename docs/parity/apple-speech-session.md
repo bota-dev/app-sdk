@@ -5,7 +5,7 @@ matrix. `SpeechSession` executes the shared Rust policy through the separate
 native C ABI. Optional LiveKit microphone and authorized external PCM adapters
 connect the facade to native input and bounded playback. A native companion App
 now consumes these sources through the loopback operator host. Host conference
-integration, Flutter media adoption, production App integration and
+integration, production App integration and
 physical audio qualification remain incomplete. All five SDK families remain
 in the first delivery and the original G1–G6 gates remain open where unproved.
 
@@ -31,8 +31,10 @@ enable each independently. The microphone asks for system permission first.
 The App clears a submitted code from the form and forgets the owner's native
 copy on departure. It does not persist codes or caption text.
 
-The local host supports `text_only` and `live_only`. Unsupported archival or
-external-conference admission fails before capture. It does not silently
+The local host supports `text_only`, `live_only` and the explicit
+[`speech_capture_pcm_v1` original profile](speech-original-capture.md). The
+original panel retains independent stop/upload controls after RTC failure.
+Unsupported external-conference admission fails before capture. It does not silently
 substitute retention or reuse a device's encrypted-upload identity. Its IPv4
 loopback restriction is intentional: macOS and an iOS Simulator on the host can
 use it; a physical iPhone needs an authenticated App-host integration. Do not

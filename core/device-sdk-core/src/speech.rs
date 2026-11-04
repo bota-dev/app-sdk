@@ -12,6 +12,7 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use zeroize::Zeroize;
 mod captions;
+pub mod capture;
 mod finish;
 pub use captions::{
     SpeechCaptionFailure, SpeechCaptionRecovery, SpeechCaptionRequest, SpeechCaptionUpdate,

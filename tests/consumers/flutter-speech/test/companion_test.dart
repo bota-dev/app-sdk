@@ -35,6 +35,23 @@ class SpeechHost extends BotaSpeechHostApi {
   final input = <bool>[];
   bool closeFails = false;
   int revision = 1;
+  BotaSpeechOriginalMessage original = BotaSpeechOriginalMessage(
+    enabled: false,
+    capturing: false,
+    finished: false,
+    rtcAvailable: true,
+    status: '',
+    passages: [],
+  );
+  @override
+  Future<BotaSpeechOriginalMessage> originalView(String connectionId) async =>
+      original;
+  @override
+  Future<void> finishOriginal(String connectionId) async {
+    original.capturing = false;
+    original.finished = true;
+  }
+
   @override
   Future<BotaSpeechStateMessage> start(
     String connectionId,
@@ -92,6 +109,37 @@ class SpeechHost extends BotaSpeechHostApi {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'RTC failure preserves original controls and blocks a second join',
+    () async {
+      final host = SpeechHost();
+      host.original.enabled = true;
+      host.original.capturing = true;
+      final native = NativeHost();
+      final client = BotaSpeechClient.forTesting(hostApi: host);
+      final app = CompanionController(speech: client, native: native);
+      await app.join();
+      host.original.rtcAvailable = false;
+      final ended = host.state()..disconnect = true;
+      await client.onEvent(
+        BotaSpeechEventMessage(connectionId: host.id!, state: ended),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(app.connected, isFalse);
+      expect(app.active, isTrue);
+      expect(app.input, isTrue);
+      expect(native.leaves, 0);
+      await app.join();
+      expect(host.starts, 1);
+      await app.finishOriginal();
+      expect(app.original!.finished, isTrue);
+      expect(app.input, isFalse);
+      await app.leave();
+      expect(native.leaves, 1);
+      app.dispose();
+      await client.destroy();
+    },
+  );
   test(
     'late native preparation cannot start a departed Dart session',
     () async {

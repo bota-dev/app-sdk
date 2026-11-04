@@ -69,6 +69,22 @@ void main() {
         (_) => BotaSpeechRecoveryMessage(status: 'unavailable', hasMore: false),
       );
       route('destroy', (_) => null);
+      route(
+        'originalView',
+        (_) => BotaSpeechOriginalMessage(
+          enabled: true,
+          capturing: true,
+          finished: false,
+          rtcAvailable: false,
+          status: 'Recording retained',
+          passages: ['clock · 1–2 s\nFinal words'],
+        ),
+      );
+      var originalFinished = false;
+      route('finishOriginal', (_) {
+        originalFinished = true;
+        return null;
+      });
       addTearDown(() {
         for (final channel in channels) {
           messenger.setMockDecodedMessageHandler<Object?>(channel, null);
@@ -83,6 +99,12 @@ void main() {
       // A second App component must share this engine's callback owner.
       final sameEngine = BotaSpeechClient();
       expect(identical(sameEngine, client), isTrue);
+      final original = await session.originalView();
+      expect(original.rtcAvailable, isFalse);
+      expect(original.passages.single, contains('Final words'));
+      expect(original.toString(), isNot(contains('Final words')));
+      await session.finishOriginal();
+      expect(originalFinished, isTrue);
       final acknowledged = Completer<Object?>();
       ServicesBinding.instance.channelBuffers.push(
         'dev.flutter.pigeon.bota_flutter_sdk.BotaSpeechFlutterApi.onEvent',

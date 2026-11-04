@@ -21,4 +21,6 @@
     <string name="pending">Live caption</string>
     <string-array name="roles"><item>Speaker A</item><item>Speaker B</item></string-array>
     <string-array name="modes"><item>Translated</item><item>Original</item><item>Captions only</item></string-array>
+    <string name="stop_original">Stop and save original</string>
+    <string name="original_preview">%1$s\n\n%2$s</string>
 </resources>

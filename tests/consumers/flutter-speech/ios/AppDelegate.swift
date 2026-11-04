@@ -2,6 +2,7 @@ import AVFoundation
 import Flutter
 import UIKit
 import bota_app_sdk
+import BotaAppSDK
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -17,7 +18,7 @@ import bota_app_sdk
 /// The App channel carries only preparation metadata and permission results.
 @MainActor
 final class FlutterCompanionBridge: NSObject, FlutterPlugin {
-    private static let owner = FlutterLabOwner()
+    private static let owner = FlutterLabOwner(originalFactory: { try await LabOriginal.create(host: $0, joined: $1, update: $2) })
     private let id = UUID().uuidString
     private let channel: FlutterMethodChannel
     private var dialog: UIAlertController?
@@ -29,7 +30,10 @@ final class FlutterCompanionBridge: NSObject, FlutterPlugin {
         super.init()
         Self.owner.bindEngine(id)
         let capturedId = id
-        do { try plugin.setSpeechFactory { session, observer in try Self.owner.create(capturedId, sessionId: session, observer: observer) } }
+        do { try plugin.setSpeechConnectionFactory { session, observer in
+            OriginalFlutterConnection(owner: Self.owner, id: capturedId,
+                session: try Self.owner.create(capturedId, sessionId: session, observer: observer))
+        } }
         catch { _ = Self.owner.leave(id); return }
         registrar.publish(self)
         channel.setMethodCallHandler { [weak self] call, reply in
@@ -97,4 +101,30 @@ final class FlutterCompanionBridge: NSObject, FlutterPlugin {
             reply(granted && Self.owner.acceptsPermission(id, owner: captured))
         }
     }
+}
+
+@MainActor private final class OriginalFlutterConnection: BotaFlutterSpeechConnection {
+    private let owner: FlutterLabOwner, id: String, session: SpeechSession
+    init(owner: FlutterLabOwner, id: String, session: SpeechSession) { self.owner = owner; self.id = id; self.session = session }
+    var state: SpeechState { session.state }
+    func ready() async throws { try await session.ready() }
+    func setInput(_ enabled: Bool) async throws {
+        if !enabled { try await owner.finishOriginal(id, session) }
+        try await session.setInput(enabled)
+        if enabled { try await owner.startOriginal(id, session) }
+    }
+    func setListening(_ enabled: Bool) async throws { try await session.setListening(enabled) }
+    func changeSubscription(_ selection: SpeechSelection) async throws { try await session.changeSubscription(selection) }
+    func resumeAudio() async throws { try await session.resumeAudio() }
+    func recoverCaptions() async throws -> SpeechCaptionRecovery { try await session.recoverCaptions() }
+    func finishInput() async throws -> SpeechSourceFinish {
+        try await owner.finishOriginal(id, session); return try await session.finishInput()
+    }
+    func finishOriginal() async throws { try await owner.finishOriginal(id, session) }
+    func originalView() async throws -> BotaFlutterSpeechOriginalView {
+        let (view, rtc) = try owner.originalView(id, session)
+        return BotaFlutterSpeechOriginalView(enabled: view.enabled, capturing: view.capturing, finished: view.finished,
+            rtcAvailable: rtc, status: view.status, passages: view.passages)
+    }
+    func close() async throws { try await owner.close(id, session).value }
 }

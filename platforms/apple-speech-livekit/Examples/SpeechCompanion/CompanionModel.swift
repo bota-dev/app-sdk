@@ -49,12 +49,15 @@ final class CompanionModel: ObservableObject {
     @Published private(set) var mode: SpeechListeningMode = .translated
     @Published private(set) var busy: Set<String> = []
     @Published private(set) var state: SpeechState?
+    @Published private(set) var originalView = OriginalView()
     private let transport: @Sendable () -> any LabTransport
     private let requestMicrophone: @Sendable () async -> Bool
     private let media: @Sendable (SpeechMediaCallbacks) throws -> any SpeechMediaPort
+    private let originalFactory: (@MainActor (LabHost, LabJoin, @escaping @MainActor (OriginalView) -> Void) async throws -> any LabOriginalOwner)?
     private var generation = UUID()
     private var session: SpeechSession?
     private var host: LabHost?
+    private var original: (any LabOriginalOwner)?
     private var initial: LabJoin?
     private var retiredCaptionRevision: UInt32 = 0
     private var bootstrap: Task<LabJoin, any Error>?
@@ -64,20 +67,32 @@ final class CompanionModel: ObservableObject {
 
     init(transport: @escaping @Sendable () -> any LabTransport = { NativeLabTransport() },
          requestMicrophone: @escaping @Sendable () async -> Bool = { await AVCaptureDevice.requestAccess(for: .audio) },
-         media: @escaping @Sendable (SpeechMediaCallbacks) throws -> any SpeechMediaPort = { try LiveKitSpeechMedia.create(callbacks: $0) }) {
-        self.transport = transport; self.requestMicrophone = requestMicrophone; self.media = media
+         media: @escaping @Sendable (SpeechMediaCallbacks) throws -> any SpeechMediaPort = { try LiveKitSpeechMedia.create(callbacks: $0) },
+         originalFactory: (@MainActor (LabHost, LabJoin, @escaping @MainActor (OriginalView) -> Void) async throws -> any LabOriginalOwner)? = {
+             try await LabOriginal.create(host: $0, joined: $1, update: $2)
+         }) {
+        self.transport = transport; self.requestMicrophone = requestMicrophone; self.media = media; self.originalFactory = originalFactory
     }
     func join(origin: URL, role: String, code: String) async {
         guard !joining, !closing, !connected, !cleanupFailed, session == nil else { return }
         generation = UUID(); let owner = generation
         joining = true; notice = "Joining…"
         do {
-            let host = try LabHost(origin: origin, role: role, code: code, transport: transport())
+            let host = try LabHost(origin: origin, role: role, code: code, transport: transport(), originalCapable: originalFactory != nil)
             self.host = host
             let task = Task { try await host.join() }; bootstrap = task
             let value = try await task.value
             guard owner == generation else { return }
             bootstrap = nil; initial = value; retiredCaptionRevision = 0
+            if value.configuration.context.retention == .originalAudioAndText {
+                guard let originalFactory else { throw LabFailure.unsupportedSession }
+                let acquired = try await originalFactory(host, value) { [weak self] view in
+                    guard let self, generation == owner else { return }
+                    originalView = view; inputEnabled = view.capturing
+                }
+                guard generation == owner else { try await acquired.close(); return }
+                original = acquired
+            }
             language = value.configuration.subscription.selection.targetLanguage
             mode = value.configuration.subscription.selection.mode; languages = value.allowedLanguages
             let mailbox = CompanionMailbox(); self.mailbox = mailbox
@@ -90,7 +105,9 @@ final class CompanionModel: ObservableObject {
                     await self.leave(reason: "The display could not keep up. Join again.")
                 }
             }
-            let session = try SpeechSession(configuration: value.configuration, grant: value.grant, mediaFactory: media,
+            let selectedMedia: @Sendable (SpeechMediaCallbacks) throws -> any SpeechMediaPort
+            if let original { selectedMedia = { try original.media($0) } } else { selectedMedia = media }
+            let session = try SpeechSession(configuration: value.configuration, grant: value.grant, mediaFactory: selectedMedia,
                 host: host, observer: SpeechObserver(stateChanged: { mailbox.offer(.state($0)) },
                     caption: { mailbox.offer(.caption($0)) }, error: { mailbox.offer(.error($0)) }))
             self.session = session
@@ -105,15 +122,19 @@ final class CompanionModel: ObservableObject {
     func leave(reason: String = "Left the session.") async {
         if let retirement { _ = try? await retirement.value; return }
         generation = UUID()
-        let pending = bootstrap, session = session, host = host
-        bootstrap = nil; self.session = nil; self.host = nil; initial = nil
+        let pending = bootstrap, session = session, host = host, original = original
+        bootstrap = nil; self.session = nil; self.host = nil; self.original = nil; initial = nil
         pending?.cancel(); mailbox?.close(); mailbox = nil; pump?.cancel(); pump = nil
         connected = false; joining = false; closing = true; inputEnabled = false; listeningEnabled = false
-        pairs.removeAll(); state = nil; busy.removeAll(); notice = reason
+        pairs.removeAll(); state = nil; originalView = OriginalView(); busy.removeAll(); notice = reason
         let task = Task { @MainActor in
             await host?.close()
+            var failed = false
+            do { try await original?.finish() } catch { failed = true }
             _ = await pending?.result
-            try await session?.close()
+            do { try await session?.close() } catch { failed = true }
+            do { try await original?.close() } catch { failed = true }
+            if failed { throw LabFailure.unavailable }
         }
         retirement = task
         do { try await task.value }
@@ -122,6 +143,11 @@ final class CompanionModel: ObservableObject {
     }
     func setInput(_ enabled: Bool) async {
         guard !busy.contains("finish") else { return }
+        if !enabled, let original {
+            do { try await original.finish() } catch { notice = "Original capture needs recovery and remains on this phone." }
+            if !connected { return }
+        }
+        if enabled, original?.finished == true { return }
         let owner = generation
         if await run("input", { session in
             if enabled {
@@ -129,7 +155,8 @@ final class CompanionModel: ObservableObject {
                 guard owner == generation else { throw CancellationError() }
             }
             try await session.setInput(enabled)
-        }) { inputEnabled = enabled }
+            if enabled { try await original?.start() }
+        }) { inputEnabled = enabled && (original?.capturing ?? true) }
     }
     func setListening(_ enabled: Bool) async {
         if await run("listen", { try await $0.setListening(enabled) }) { listeningEnabled = enabled }
@@ -146,6 +173,9 @@ final class CompanionModel: ObservableObject {
         }
     }
     func finish() async {
+        guard !busy.contains("input") else { return }
+        do { try await original?.finish() } catch { notice = "Original capture needs recovery and remains on this phone." }
+        guard connected else { return }
         inputEnabled = false
         var status = "unavailable"
         if await run("finish", { status = try await $0.finishInput().status }) {
@@ -170,19 +200,26 @@ final class CompanionModel: ObservableObject {
             state = session.state; return true
         } catch {
             guard owner == generation else { return false }
-            if session.state.disconnect { await leave(reason: "The session ended. Join again with current authorization.") }
+            if session.state.disconnect, original?.rtcLost == true { rtcEnded() }
+            else if session.state.disconnect { await leave(reason: "The session ended. Join again with current authorization.") }
             else if error is CompanionFailure { notice = "Microphone permission is required. Enable it in system settings, then try again." }
             else { notice = "The action could not finish. Try again or leave the session." }
             return false
         }
+    }
+    private func rtcEnded() {
+        connected = false; listeningEnabled = false; inputEnabled = original?.capturing == true
+        notice = "Realtime audio disconnected. Your original capture remains independent; stop it when ready."
     }
     private func receive(_ event: CompanionEvent) async {
         switch event {
         case .state(let queued):
             let state = session?.state ?? queued
             self.state = state
-            if !state.canCapture { inputEnabled = false }
-            if state.disconnect { await leave(reason: "The session ended. Join again with current authorization.") }
+            inputEnabled = original?.capturing ?? (inputEnabled && state.canCapture)
+            if state.disconnect {
+                if original?.rtcLost == true { rtcEnded() } else { await leave(reason: "The session ended. Join again with current authorization.") }
+            }
         case .error(let error):
             if error == .playbackBlocked { notice = "Audio is paused. Select Resume audio." }
             else if error == .authorizationUnavailable { await leave(reason: "Authorization ended. Join again.") }

@@ -139,3 +139,29 @@ extern "C" JNIEXPORT void JNICALL
 Java_dev_bota_sdk_internal_jni_SpeechBindings_close(JNIEnv *, jobject, jlong handle) {
   bota_device_sdk_v1_speech_free(speech_from(handle));
 }
+
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_dev_bota_sdk_internal_jni_SpeechBindings_capture(JNIEnv *env, jobject, jbyteArray command) {
+  try {
+    Bytes bytes(env, command, 65536);
+    if (!bytes.valid()) return nullptr;
+    ErrorOwner error;
+    OutputOwner output;
+    const auto status = bota_device_sdk_v1_speech_capture(bytes.view(), &output.value, &error.value);
+    if (status != BOTA_DEVICE_SDK_V1_OK || output.value == nullptr) {
+      error.raise(env);
+      return nullptr;
+    }
+    BotaDeviceSdkSliceV1 view{};
+    if (bota_device_sdk_v1_speech_output_view(output.value, &view) != BOTA_DEVICE_SDK_V1_OK || view.len > 65536) {
+      fail(env, "invalid capture policy output");
+      return nullptr;
+    }
+    const auto result = env->NewByteArray(static_cast<jsize>(view.len));
+    if (result != nullptr && view.len > 0) env->SetByteArrayRegion(result, 0, static_cast<jsize>(view.len), reinterpret_cast<const jbyte *>(view.data));
+    return result;
+  } catch (...) {
+    fail(env, "capture policy allocation failed");
+    return nullptr;
+  }
+}

@@ -322,7 +322,8 @@ public class LiveKitSpeechMedia internal constructor(
 
         /**
          * Publish one host-authorized original PCM branch without opening a microphone or changing
-         * host audio focus/routing. The host must provision source_kind=host_external and keep its
+         * host audio focus/routing. Provision source_kind=host_external for external media or
+         * host_microphone for SpeechMicrophoneCapture, and keep the original owner's
          * conference audio session active. This does not qualify simultaneous host SDK/device use.
          */
         public fun createExternal(context: Context, callbacks: SpeechMediaCallbacks, input: ExternalPcmInput): LiveKitSpeechMedia {

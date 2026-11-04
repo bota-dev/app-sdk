@@ -546,19 +546,23 @@ for iOS/Android linking and microphone permissions, and call `registerGlobals()`
 once during host initialization before constructing any LiveKit rooms.
 
 The [internal conversation companion](../../tests/consumers/react-native-speech)
-uses the exact local SDK package and npm-locked vendor dependencies. It provides
+uses the exact local SDK package, generated JS session policy and the public
+Swift/Kotlin LiveKit media adapters through `/speech/native-media`. It provides
 A/B role login, paired original/translated captions, independent microphone and
 listening controls, language/mode selection, source finish and caption recovery.
 It shares the operator-only loopback proxy described in
 [the native companion setup](../../docs/parity/android-speech-session.md), with
-only `text_only` and `live_only` microphone sessions admitted. Project/provider
+`text_only`, `live_only` and explicit `speech_capture_pcm_v1` original sessions admitted. Project/provider
 credentials stay on the host; role codes and grants are transient JS control
-data. No PCM, device recording identity or original-audio archive is introduced.
+data. Original PCM and archive keys stay native. The same native microphone feeds
+RTC and durable encrypted storage. Independent stop/upload controls survive RTC
+failure; final text comes from verified original-file reprocessing. See the
+[original-capture contract](../../docs/parity/speech-original-capture.md).
 
 Run `bash tools/speech/test-react-native-companion.sh --android` or `--ios`
 from the repository root with Node 22 and the matching platform toolchain.
-The generated iOS Podfile includes the vendor's `livekit/podspecs` source and
-the normal CocoaPods CDN so the pinned `LiveKitWebRTC` dependency can resolve.
+The generated App links the optional native media adapter and its pinned vendor
+dependency. It does not install the separate RN WebRTC stack described above.
 `--js-only` runs the actual generated-policy consumer checks without native
 builds. The helper prepares ignored projects from the pinned React Native
 0.86.3 template; maintained App/native sources are under `src/` and `native/`.
@@ -574,9 +578,11 @@ entering background retires the JS owner, clears its 100-pair view immediately
 and joins pending host/media cleanup. Late authorization and permission replies
 cannot start capture; failed cleanup blocks re-entry until process restart.
 Changing languages clears the prior revision before requesting its replacement.
-Native HTTP also cancels on background/engine invalidation. This does not prove
-that a suspended JS thread or an independently destroyed vendor bridge has
-retired physical media: actual background/interruption/engine teardown, routes,
+Native ownership also retires media and original capture on background/engine
+invalidation and fences grant expiry independently of JS scheduling. The generic
+`createNativeSpeechMedia(callbacks, io)` adapter requires synchronous native
+mute/hold/silence fences and a joined `closeMedia`; capture ownership remains
+separate. Actual background/interruption/engine teardown, routes,
 duplex/AEC, real RTC/provider and host external-input qualification remain open.
 The internal App reserves one native audio session exclusively and must not be
 embedded alongside another uncoordinated room/player.

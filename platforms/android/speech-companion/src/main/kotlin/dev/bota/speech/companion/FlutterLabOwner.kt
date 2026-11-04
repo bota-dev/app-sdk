@@ -10,6 +10,7 @@ internal class FlutterLabOwner(
     private val media: (SpeechMediaCallbacks) -> SpeechMediaPort,
     private val transport: () -> LabTransport = { NativeLabTransport() },
     dispatcher: CoroutineDispatcher = Dispatchers.Main.immediate,
+    private val originalFactory: (suspend (LabHost, LabJoin, (OriginalView) -> Unit) -> LabOriginalOwner)? = null,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private var engine: String? = null
@@ -20,6 +21,8 @@ internal class FlutterLabOwner(
     private var bootstrap: Deferred<LabJoin>? = null
     private var retirement: Deferred<Unit>? = null
     private var failed = false
+    private var original: LabOriginalOwner? = null
+    private var originalDisplay = OriginalView()
 
     fun bindEngine(id: String) {
         if (engine == id) return
@@ -36,8 +39,20 @@ internal class FlutterLabOwner(
         if (id != engine || failed || host != null || bootstrap != null) throw LabFailure()
         val owner = UUID.randomUUID(); revision = owner
         try {
-            val host = LabHost(origin, role, code, transport()); this.host = host
-            val task = scope.async(start = CoroutineStart.LAZY) { host.join() }
+            val host = LabHost(origin, role, code, transport(), originalCapable = originalFactory != null); this.host = host
+            val task = scope.async(start = CoroutineStart.LAZY) {
+                val value = host.join()
+                if (value.configuration.context.retention == SpeechRetention.ORIGINAL_AUDIO_AND_TEXT) {
+                    val retained = (originalFactory ?: throw LabFailure())(host, value) {
+                        if (id == engine && owner == revision) originalDisplay = it
+                    }
+                    if (id != engine || owner != revision) {
+                        withContext(NonCancellable) { retained.close() }; throw LabFailure()
+                    }
+                    original = retained
+                }
+                value
+            }
             bootstrap = task; task.start()
             val value = task.await()
             if (id != engine || owner != revision) throw LabFailure()
@@ -60,19 +75,34 @@ internal class FlutterLabOwner(
         val value = joined ?: throw LabFailure()
         if (id != engine || failed || retirement?.isCompleted == false || session != null ||
             value.configuration.context.sessionId != sessionId) throw LabFailure()
-        return SpeechSession.create(value.configuration, value.grant, media, host ?: throw LabFailure(), observer).also { session = it }
+        val selected = original?.let { retained -> { callbacks: SpeechMediaCallbacks -> retained.media(callbacks) } } ?: media
+        return SpeechSession.create(value.configuration, value.grant, selected, host ?: throw LabFailure(), observer).also { session = it }
     }
+    private fun current(id: String, native: SpeechSession) {
+        if (!isCurrent(id) || session !== native) throw LabFailure()
+    }
+    suspend fun startOriginal(id: String, native: SpeechSession) { current(id, native); original?.start() }
+    suspend fun finishOriginal(id: String, native: SpeechSession) { current(id, native); original?.finish() }
+    fun originalView(id: String, native: SpeechSession): Pair<OriginalView, Boolean> {
+        current(id, native); return originalDisplay to (original?.rtcLost != true)
+    }
+    fun close(id: String, native: SpeechSession): Deferred<Unit> = if (session === native) leave(id) else CompletableDeferred(Unit)
     fun leave(id: String): Deferred<Unit> = if (id == engine) retire() else CompletableDeferred(Unit)
 
     private fun retire(): Deferred<Unit> {
         retirement?.let { if (!it.isCompleted || failed) return it }
         revision = UUID.randomUUID()
-        val pending = bootstrap; val native = session; val host = host
-        bootstrap = null; session = null; this.host = null; joined = null
+        val pending = bootstrap; val native = session; val host = host; val original = original
+        bootstrap = null; session = null; this.host = null; joined = null; this.original = null; originalDisplay = OriginalView()
         pending?.cancel(); host?.close()
         val task = scope.async(start = CoroutineStart.LAZY) {
-            try { pending?.join(); native?.close(); Unit }
-            catch (error: Exception) { failed = true; throw error }
+            var failure: Exception? = null
+            try { original?.finish() } catch (error: Exception) { failure = error }
+            pending?.join()
+            try { native?.close() } catch (error: Exception) { failure = error }
+            try { original?.close() } catch (error: Exception) { failure = error }
+            failure?.let { failed = true; throw it }
+            Unit
         }
         retirement = task; task.start()
         return task

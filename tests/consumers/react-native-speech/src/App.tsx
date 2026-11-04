@@ -1,22 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { AppState, NativeModules, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { AudioSession, setLogLevel } from '@livekit/react-native';
-import { Room, createLocalAudioTrack, LogLevel } from 'livekit-client';
-import { createLiveKitNativeMedia } from '@bota.dev/react-native-app-sdk/speech/livekit';
+import { createNativeSpeechMedia, type NativeSpeechMediaIO } from '@bota.dev/react-native-app-sdk/speech/native-media';
 import { Companion } from './controller';
 import type { NativeHost } from './host';
 
-const native = NativeModules.SpeechLabHost as NativeHost | undefined;
+const native = NativeModules.SpeechLabHost as (NativeHost & NativeSpeechMediaIO) | undefined;
 if (!native || ['request', 'cancel', 'microphonePermission'].some(name => typeof native[name as keyof NativeHost] !== 'function')) {
   throw new Error('Internal speech host is unavailable');
 }
 const companion = new Companion({ native,
-  mediaFactory: callbacks => createLiveKitNativeMedia(callbacks, {
-    roomFactory: options => new Room(options), createMicrophone: options => createLocalAudioTrack(options),
-    silenceVendorLogs: () => setLogLevel(LogLevel.silent), audioSession: AudioSession,
-    audioSessionOwnership: 'exclusive', restoreRemoteTrackVolume: 1, defaultOutput: 'earpiece',
-  }) });
+  mediaFactory: callbacks => createNativeSpeechMedia(callbacks, native) });
 const modes = ['translated', 'original', 'captions_only'] as const;
 const names: Record<string, string> = { zh: 'Chinese', en: 'English', ja: 'Japanese', ko: 'Korean', es: 'Spanish', fr: 'French', de: 'German' };
 function Button({ title, onPress, disabled = false, selected = false }: {
@@ -53,14 +47,15 @@ function Conversation() {
         autoComplete="off" textContentType="none" importantForAutofill="no" maxLength={128} />
       <View style={styles.row}><Button title="Join conversation" disabled={app.phase !== 'idle'} onPress={() => {
         const accessCode = code; setCode(''); void app.join(origin.trim(), role, accessCode);
-      }} /><Button title="Leave" disabled={!['joining', 'connected'].includes(app.phase)} onPress={() => { setCode(''); void app.leave(); }} /></View>
-      <Text style={styles.muted}>{app.joined ? app.joined.configuration.context.retention === 'text_only' ?
+      }} /><Button title="Leave" disabled={!['joining', 'connected', 'original'].includes(app.phase)} onPress={() => { setCode(''); void app.leave(); }} /></View>
+      <Text style={styles.muted}>{app.joined ? app.joined.configuration.context.retention === 'original_audio_and_text' ?
+        'Original audio is encrypted on this phone and retained until verified publication. Live captions remain provisional.' : app.joined.configuration.context.retention === 'text_only' ?
         'Text is retained under your host’s policy. No original audio archive. This view clears when you leave.' :
         'Live only. No original audio archive or saved caption history. This view clears when you leave.' :
         'Your host determines the recording policy before you join. Leaving the foreground closes this conversation.'}</Text>
     </View>
     <View style={styles.card}><Text style={styles.heading}>Speak and listen</Text>
-      <View style={styles.row}><Button title={app.state?.canCapture ? 'Mute microphone' : 'Start microphone'} disabled={locked || finish?.holdPublication}
+      <View style={styles.row}><Button title={app.state?.canCapture ? 'Mute microphone' : 'Start microphone'} disabled={locked || finish?.holdPublication || app.original?.finished}
         onPress={() => { void app.microphone(); }} /><Button title={app.listening ? 'Stop listening' : 'Start listening'} disabled={locked}
         onPress={() => { void app.listen(); }} /><Button title="Finish speaking" disabled={locked} onPress={() => { void app.finish(); }} /></View>
       <Text style={styles.muted}>{finish?.holdPublication ? `Input processing: ${finish.status}` : app.state?.canCapture ? 'Microphone is on' : 'Microphone is off'}</Text>
@@ -75,6 +70,12 @@ function Conversation() {
       <Text style={styles.muted}>{active ? app.state?.gap ? 'A gap was detected in live updates.' : `Caption history: ${app.state?.recovery.status}` : ''}</Text>
       {!!app.error && <Text accessibilityRole="alert" style={styles.error}>{app.error}</Text>}
     </View>
+    {app.original?.enabled && <View style={styles.card}>
+      <Text style={styles.heading}>Original recording</Text><Text style={styles.muted}>{app.original.status}</Text>
+      <Button title="Stop and save original" disabled={app.busy || app.original.finished || !['connected', 'original'].includes(app.phase)}
+        onPress={() => { void app.finishOriginal(); }} />
+      {app.original.passages.map((text, index) => <Text selectable key={index} style={styles.passage}>{text}</Text>)}
+    </View>}
     <View style={styles.card}><Text style={styles.heading}>Conversation</Text><Text style={styles.muted}>Most recent 100 passages</Text>
       {app.pairs.length === 0 && <Text style={styles.muted}>Captions will appear here when the other speaker talks.</Text>}
       {app.pairs.map(pair => <View key={pair.key} style={styles.passage}>

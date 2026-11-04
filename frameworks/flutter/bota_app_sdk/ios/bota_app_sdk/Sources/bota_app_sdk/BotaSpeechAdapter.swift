@@ -8,8 +8,24 @@ public typealias BotaFlutterSpeechFactory = @MainActor (
   _ sessionID: String, _ observer: SpeechObserver
 ) throws -> SpeechSession
 
+/// Display metadata only. Keys, audio and retry cursors remain native.
+public struct BotaFlutterSpeechOriginalView: Sendable {
+  public let enabled: Bool, capturing: Bool, finished: Bool, rtcAvailable: Bool
+  public let status: String, passages: [String]
+  public init(enabled: Bool = false, capturing: Bool = false, finished: Bool = false, rtcAvailable: Bool = true,
+              status: String = "", passages: [String] = []) {
+    self.enabled = enabled; self.capturing = capturing; self.finished = finished
+    self.rtcAvailable = rtcAvailable; self.status = status; self.passages = passages
+  }
+}
+public typealias BotaFlutterSpeechConnectionFactory = @MainActor (
+  _ sessionID: String, _ observer: SpeechObserver
+) throws -> any BotaFlutterSpeechConnection
+
+/// The native App composes RTC and independent original capture. close joins both;
+/// original controls remain callable after RTC media failure.
 @MainActor
-protocol FlutterSpeechSession: AnyObject {
+public protocol BotaFlutterSpeechConnection: AnyObject {
   var state: SpeechState { get }
   func ready() async throws
   func setInput(_ enabled: Bool) async throws
@@ -18,8 +34,15 @@ protocol FlutterSpeechSession: AnyObject {
   func resumeAudio() async throws
   func recoverCaptions() async throws -> SpeechCaptionRecovery
   func finishInput() async throws -> SpeechSourceFinish
+  func originalView() async throws -> BotaFlutterSpeechOriginalView
+  func finishOriginal() async throws
   func close() async throws
 }
+public extension BotaFlutterSpeechConnection {
+  func originalView() async throws -> BotaFlutterSpeechOriginalView { BotaFlutterSpeechOriginalView() }
+  func finishOriginal() async throws { throw SpeechError.sourceFinishUnavailable }
+}
+typealias FlutterSpeechSession = BotaFlutterSpeechConnection
 
 @MainActor
 final class NativeFlutterSpeechSession: FlutterSpeechSession {
@@ -163,6 +186,16 @@ final class BotaAppleSpeechAdapter: @preconcurrency BotaSpeechHostApi {
   func finishInput(connectionId: String) async throws -> BotaSpeechFinishMessage {
     try await call(connectionId) { Self.finish(try await $0.finishInput()) }
   }
+  func originalView(connectionId: String) async throws -> BotaSpeechOriginalMessage {
+    try await call(connectionId) { port in
+      let value = try await port.originalView()
+      guard value.status.utf8.count <= 1024, value.passages.count <= 64,
+            value.passages.reduce(0, { $0 + $1.utf8.count }) <= 327680 else { throw Self.failure("unavailable") }
+      return BotaSpeechOriginalMessage(enabled: value.enabled, capturing: value.capturing, finished: value.finished,
+          rtcAvailable: value.rtcAvailable, status: value.status, passages: value.passages)
+    }
+  }
+  func finishOriginal(connectionId: String) async throws { try await call(connectionId) { try await $0.finishOriginal() } }
   func close(connectionId: String) async throws {
     if let current, current.id == connectionId { try await beginClose(current).value }
     else if let closed, closed.id == connectionId { try await closed.task.value }

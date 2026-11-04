@@ -78,7 +78,7 @@ class _ConversationPageState extends State<ConversationPage>
                 const SizedBox(height: 16),
                 Text(model.notice, semanticsLabel: model.notice),
                 const SizedBox(height: 16),
-                if (!model.connected && !model.joining)
+                if (!model.active && !model.joining)
                   FilledButton(
                     onPressed: model.closing || model.cleanupFailed
                         ? null
@@ -86,7 +86,7 @@ class _ConversationPageState extends State<ConversationPage>
                     child: const Text('Join session'),
                   ),
                 if (model.joining) const LinearProgressIndicator(),
-                if (model.connected || model.joining)
+                if (model.active || model.joining)
                   OutlinedButton(
                     onPressed: model.leave,
                     child: const Text('Leave'),
@@ -175,6 +175,24 @@ class _ConversationPageState extends State<ConversationPage>
                               unawaited(model.select(model.language, value));
                           },
                   ),
+                ],
+                if (model.original?.enabled == true) ...[
+                  const SizedBox(height: 24),
+                  Text(
+                    'Original recording',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  Text(model.original!.status),
+                  OutlinedButton(
+                    onPressed:
+                        model.original!.finished ||
+                            model.busy.contains('original')
+                        ? null
+                        : model.finishOriginal,
+                    child: const Text('Stop and save original'),
+                  ),
+                  for (final passage in model.original!.passages)
+                    SelectableText(passage),
                 ],
                 const SizedBox(height: 24),
                 Text(

@@ -13,7 +13,7 @@ internal class LabJoin(val role: String, val peerRole: String, val peerId: Strin
 
 /** This example accepts only the operator's loopback role credential, never project/provider keys. */
 internal class LabHost(origin: String, private val role: String, code: String,
-    private val transport: LabTransport = NativeLabTransport()) : SpeechHostCallbacks {
+    private val transport: LabTransport = NativeLabTransport(), private val originalCapable: Boolean = false) : SpeechHostCallbacks {
     private val lock = Any()
     private val origin: String
     private var code = code
@@ -21,6 +21,8 @@ internal class LabHost(origin: String, private val role: String, code: String,
     private var joining = false
     private var joined: LabJoin? = null
     private var revision = 0
+    private var renewal: ((SpeechGrant) -> Unit)? = null
+    private var joinPayload: String? = null
     override val supportsCaptionRecovery = true
     override val supportsSourceFinish = true
 
@@ -37,12 +39,14 @@ internal class LabHost(origin: String, private val role: String, code: String,
     suspend fun join(): LabJoin {
         synchronized(lock) { active(); if (joined != null || joining) throw LabFailure(); joining = true }
         try {
-            val value = JSONObject(request("join", JSONObject()))
+            val payload = request("join", JSONObject().apply { if (originalCapable) put("captureProfile", "speech_capture_pcm_v1") })
+            val value = JSONObject(payload)
             val config = value.getJSONObject("configuration")
             val context = config.getJSONObject("context")
             val retention = when (context.getString("retention")) {
                 "text_only" -> SpeechRetention.TEXT_ONLY
                 "live_only" -> SpeechRetention.LIVE_ONLY
+                "original_audio_and_text" -> if (originalCapable) SpeechRetention.ORIGINAL_AUDIO_AND_TEXT else throw LabFailure()
                 else -> throw LabFailure()
             }
             val configuration = SpeechConfiguration(SpeechContext(context.getString("projectId"), context.getString("sessionId"),
@@ -56,13 +60,39 @@ internal class LabHost(origin: String, private val role: String, code: String,
                 configuration.subscription.selection.sourceParticipantIds != listOf(result.peerId) ||
                 configuration.subscription.selection.targetLanguage !in result.languages || result.languages.size !in 1..7 ||
                 result.languages.distinct().size != result.languages.size) throw LabFailure()
-            return synchronized(lock) { active(); joined = result; revision = configuration.subscription.revision; result }
+            return synchronized(lock) { active(); joined = result; joinPayload = payload; revision = configuration.subscription.revision; result }
         } finally { synchronized(lock) { joining = false } }
     }
     override suspend fun renewGrant(): SpeechGrant {
-        synchronized(lock) { active(); if (joined == null) throw LabFailure() }
-        return grant(JSONObject(request("grant", JSONObject())))
+        return grant(JSONObject(renewResponse()))
     }
+    fun takeJoinPayload(): String = synchronized(lock) {
+        active(); val value = joinPayload ?: throw LabFailure(); joinPayload = null; value
+    }
+    suspend fun renewResponse(): String {
+        synchronized(lock) { active(); if (joined == null) throw LabFailure() }
+        val payload = request("grant", JSONObject())
+        val value = grant(JSONObject(payload)); synchronized(lock) { renewal }?.invoke(value)
+        return payload
+    }
+    fun observeRenewal(observer: (SpeechGrant) -> Unit) { synchronized(lock) { active(); renewal = observer } }
+    suspend fun prepareCapture(id: String): ByteArray = request("capture_prepare", JSONObject().put("captureId", id)).toByteArray()
+    fun capture(id: String): SpeechCaptureHost = object : SpeechCaptureHost {
+        private fun body(captureId: String): JSONObject {
+            if (captureId != id) throw LabFailure()
+            return JSONObject().put("captureId", id)
+        }
+        override suspend fun status(captureId: String): ByteArray = request("capture_status", body(captureId)).toByteArray()
+        override suspend fun upload(captureId: String, packet: ByteArray): ByteArray =
+            request("capture_chunk", body(captureId).put("packet", JSONObject(packet.toString(Charsets.UTF_8)))).toByteArray()
+        override suspend fun complete(captureId: String, manifest: ByteArray): ByteArray =
+            request("capture_complete", body(captureId).put("packet", JSONObject(manifest.toString(Charsets.UTF_8)))).toByteArray()
+    }
+    suspend fun bindCapture(id: String, worker: Int, track: String) {
+        request("capture_bind", JSONObject().put("captureId", id).put("workerGeneration", worker).put("trackSid", track))
+    }
+    suspend fun captureTranscript(id: String, after: Int, digest: String?): JSONObject = JSONObject(request("capture_transcript",
+        JSONObject().put("captureId", id).put("afterSegment", after).apply { if (digest != null) put("resultSha256", digest) }))
     override suspend fun changeSubscription(selection: SpeechSelection): SpeechSubscription {
         val expected = synchronized(lock) {
             active(); val join = joined ?: throw LabFailure()
@@ -85,7 +115,7 @@ internal class LabHost(origin: String, private val role: String, code: String,
             .put("sourceId", request.sourceId ?: JSONObject.NULL).put("sourceEpoch", request.sourceEpoch ?: JSONObject.NULL))
     }
     fun close() {
-        synchronized(lock) { closed = true; code = ""; joined = null }
+        synchronized(lock) { closed = true; code = ""; joined = null; renewal = null; joinPayload = null }
         transport.close()
     }
     private fun active() { if (closed) throw LabFailure() }
@@ -117,7 +147,8 @@ internal class LabHost(origin: String, private val role: String, code: String,
                 else -> SpeechHostFailure.UNAVAILABLE
             })
         }
-        if (response.status != 200 && !(action == "finish" && response.status == 202)) throw SpeechHostException(SpeechHostFailure.UNAVAILABLE)
+        if (response.status != 200 && !(action == "finish" && response.status == 202) &&
+            !(action.startsWith("capture_") && response.status in listOf(201, 202))) throw SpeechHostException(SpeechHostFailure.UNAVAILABLE)
         return response.body
     }
     private fun JSONObject.integer(key: String): Int {

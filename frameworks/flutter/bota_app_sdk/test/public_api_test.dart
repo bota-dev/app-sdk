@@ -175,6 +175,7 @@ const _documentedBarrelExports = <String>{
   'BotaSpeechFinishedSource',
   'BotaSpeechListeningMode',
   'BotaSpeechObserver',
+  'BotaSpeechOriginalView',
   'BotaSpeechRecovery',
   'BotaSpeechSelection',
   'BotaSpeechSourceFinish',

@@ -6,6 +6,12 @@ public struct SpeechMediaCallbacks: Sendable {
     public let disconnected: @Sendable () -> Void
     public let failed: @Sendable () -> Void
     public let playbackBlocked: @Sendable () -> Void
+    public init(text: @escaping @Sendable (String, String) -> Void, trackRemoved: @escaping @Sendable (String) -> Void,
+                disconnected: @escaping @Sendable () -> Void, failed: @escaping @Sendable () -> Void,
+                playbackBlocked: @escaping @Sendable () -> Void) {
+        self.text = text; self.trackRemoved = trackRemoved; self.disconnected = disconnected
+        self.failed = failed; self.playbackBlocked = playbackBlocked
+    }
 }
 
 /// Native IO only. connect does not start capture; new receive tracks stay silent

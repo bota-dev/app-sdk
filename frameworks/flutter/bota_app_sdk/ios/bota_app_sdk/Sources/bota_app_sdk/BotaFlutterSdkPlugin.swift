@@ -61,4 +61,8 @@ public final class BotaFlutterSdkPlugin: NSObject, @preconcurrency FlutterPlugin
   public func setSpeechFactory(_ factory: @escaping BotaFlutterSpeechFactory) throws {
     try speech.setFactory { id, observer in NativeFlutterSpeechSession(try factory(id, observer)) }
   }
+  /// Install a native composition with independent original capture.
+  public func setSpeechConnectionFactory(_ factory: @escaping BotaFlutterSpeechConnectionFactory) throws {
+    try speech.setFactory(factory)
+  }
 }

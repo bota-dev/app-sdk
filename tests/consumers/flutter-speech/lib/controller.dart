@@ -30,6 +30,10 @@ class CompanionController extends ChangeNotifier {
   Object _owner = Object();
   BotaSpeechSession? _session;
   Future<void>? _retirement;
+  Timer? _originalTimer;
+  Future<void>? _originalRefresh;
+  BotaSpeechOriginalView? original;
+  bool get active => _session != null;
   bool _disposed = false;
   bool connected = false,
       joining = false,
@@ -51,7 +55,8 @@ class CompanionController extends ChangeNotifier {
   }
 
   Future<void> join() async {
-    if (_disposed || joining || connected || closing || cleanupFailed) return;
+    if (_disposed || joining || active || connected || closing || cleanupFailed)
+      return;
     final owner = _owner = Object();
     joining = true;
     notice = 'Joining…';
@@ -75,13 +80,9 @@ class CompanionController extends ChangeNotifier {
           onState: (value) {
             if (!identical(owner, _owner)) return;
             state = value;
-            if (!value.canCapture) input = false;
+            if (!value.canCapture && original?.enabled != true) input = false;
             if (value.disconnect) {
-              unawaited(
-                leave(
-                  'The session ended. Join again with current authorization.',
-                ),
-              );
+              if (_session != null) unawaited(_disconnected(owner));
             } else {
               _changed();
             }
@@ -112,6 +113,10 @@ class CompanionController extends ChangeNotifier {
       connected = true;
       joining = false;
       notice = 'Connected. Use headphones for your first session.';
+      await _refreshOriginal(owner);
+      if (!identical(owner, _owner)) return;
+      if (state?.disconnect == true) await _disconnected(owner);
+      _scheduleOriginal(owner);
       _changed();
     } catch (_) {
       if (identical(owner, _owner))
@@ -119,9 +124,83 @@ class CompanionController extends ChangeNotifier {
     }
   }
 
+  Future<void> _refreshOriginal(Object owner) {
+    final pending = _originalRefresh;
+    if (pending != null) return pending;
+    final session = _session;
+    if (session == null) return Future.value();
+    final operation = () async {
+      final value = await session.originalView();
+      if (!identical(owner, _owner)) return;
+      original = value;
+      if (value.enabled) input = value.capturing;
+      _changed();
+    }();
+    _originalRefresh = operation;
+    return operation.whenComplete(() {
+      if (identical(operation, _originalRefresh)) _originalRefresh = null;
+    });
+  }
+
+  void _scheduleOriginal(Object owner) {
+    if (!identical(owner, _owner) || _session == null) return;
+    _originalTimer?.cancel();
+    _originalTimer = Timer(const Duration(seconds: 2), () async {
+      try {
+        await _refreshOriginal(owner);
+      } catch (_) {
+        if (identical(owner, _owner)) {
+          notice =
+              'Original status is unavailable. You can still stop or leave.';
+          _changed();
+        }
+      }
+      _scheduleOriginal(owner);
+    });
+  }
+
+  Future<void> _disconnected(Object owner) async {
+    try {
+      await _refreshOriginal(owner);
+    } catch (_) {}
+    if (!identical(owner, _owner)) return;
+    if (original?.enabled == true && original?.rtcAvailable == false) {
+      connected = false;
+      listening = false;
+      input = original!.capturing;
+      notice =
+          'Realtime audio disconnected. Stop and save your original when ready.';
+      _changed();
+    } else {
+      await leave('The session ended. Join again with current authorization.');
+    }
+  }
+
+  Future<void> finishOriginal() async {
+    final session = _session, owner = _owner;
+    if (session == null || busy.contains('original')) return;
+    busy.add('original');
+    _changed();
+    try {
+      await session.finishOriginal();
+      await _refreshOriginal(owner);
+    } catch (_) {
+      if (identical(owner, _owner))
+        notice = 'Original capture needs recovery and remains on this phone.';
+    } finally {
+      if (identical(owner, _owner)) {
+        busy.remove('original');
+        _changed();
+      }
+    }
+  }
+
   Future<void> leave([String message = 'Left the session.']) {
     if (_retirement != null) return _retirement!;
     _owner = Object();
+    _originalTimer?.cancel();
+    _originalTimer = null;
+    final pendingOriginal = _originalRefresh;
     _session = null;
     connected = false;
     joining = false;
@@ -129,6 +208,7 @@ class CompanionController extends ChangeNotifier {
     input = false;
     listening = false;
     state = null;
+    original = null;
     pairs.clear();
     busy.clear();
     notice = message;
@@ -138,6 +218,9 @@ class CompanionController extends ChangeNotifier {
     () async {
       try {
         await Future.wait([_speech.close(), _native.leave()]);
+        try {
+          await pendingOriginal;
+        } catch (_) {}
       } catch (_) {
         cleanupFailed = true;
         notice =
@@ -167,7 +250,11 @@ class CompanionController extends ChangeNotifier {
     } catch (_) {
       if (identical(owner, _owner)) {
         if (session.isClosed || session.state?.disconnect == true) {
-          await leave('The session ended. Join again.');
+          if (session.isClosed) {
+            await leave('The session ended. Join again.');
+          } else {
+            await _disconnected(owner);
+          }
         } else {
           notice =
               'The action could not finish. Try again or leave the session.';

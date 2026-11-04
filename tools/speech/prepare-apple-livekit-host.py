@@ -37,10 +37,11 @@ for source in (root / "platforms/apple-speech-livekit/Tests/BotaSpeechLiveKitTes
     contents = source.read_text()
     owner = re.search(r"final class (\w+Checks)", contents).group(1)
     for method in re.findall(r"func (test\w+)\(\) async throws", contents):
-        calls += [f'write("RUN {method}")', f"try await {owner}().{method}()", f'write("PASS {method}")']
+        calls += [f'if filters.isEmpty || filters.contains(where: {{ "{method}".contains($0) }}) {{',
+                  f'write("RUN {method}")', f"try await {owner}().{method}()", f'write("PASS {method}")', "}"]
 (checks / "Runner.swift").write_text("import Foundation\nimport Darwin\n@main struct HostChecks {\n" +
     'static func write(_ text: String) { FileHandle.standardOutput.write(Data((text + "\\n").utf8)) }\n' +
-    "static func main() async { do {\n" + "\n".join(calls) +
+    'static func main() async { do {\nlet filters = (ProcessInfo.processInfo.environment["BOTA_SPEECH_CHECK_FILTER"] ?? "").split(separator: ",").map(String.init)\n' + "\n".join(calls) +
     '\n} catch { write("FAILED: \\(error)"); exit(1) }\n}\n}\n', encoding="utf-8")
 manifest = '''// swift-tools-version: 6.1
 import PackageDescription

@@ -2,6 +2,24 @@ import '../generated/bota_api.g.dart';
 
 enum BotaSpeechListeningMode { translated, original, captionsOnly }
 
+/// Bounded native display snapshot. Original upload and reconciliation remain
+/// native and independent from RTC. Passages contain final text and capture times;
+/// use the authorized backend transcript endpoint for the complete export.
+final class BotaSpeechOriginalView {
+  BotaSpeechOriginalView.fromMessage(BotaSpeechOriginalMessage value)
+    : enabled = value.enabled,
+      capturing = value.capturing,
+      finished = value.finished,
+      rtcAvailable = value.rtcAvailable,
+      status = value.status,
+      passages = List.unmodifiable(value.passages);
+  final bool enabled, capturing, finished, rtcAvailable;
+  final String status;
+  final List<String> passages;
+  @override
+  String toString() => 'BotaSpeechOriginalView(content redacted)';
+}
+
 final class BotaSpeechSelection {
   const BotaSpeechSelection({
     required this.targetLanguage,

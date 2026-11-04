@@ -55,6 +55,13 @@ export interface LiveKitWebDependencies {
     participantId: string; memberGeneration: number; track: MediaStreamTrack
     wrapTrack(ownedBranch: MediaStreamTrack): unknown | Promise<unknown>
   }
+  /** SDK-owned microphone capture shared with an independent original archive.
+   * Its participant remains host_microphone. The RTC adapter borrows the output
+   * and never stops its capture owner when the room disconnects. */
+  originalMicrophone?: {
+    participantId: string; memberGeneration: number; track: MediaStreamTrack
+    wrapTrack(ownedBranch: MediaStreamTrack): unknown | Promise<unknown>
+  }
   /** Optional browser factories. Each context is fresh and owned by this adapter. */
   createAudioContext?(): AudioContext
   createMediaStream?(tracks: MediaStreamTrack[]): MediaStream
@@ -68,7 +75,9 @@ function methods(value: unknown, names: readonly string[]): value is Record<stri
 
 /** Optional LiveKit Cloud candidate; inject the host's qualified LiveKit runtime. */
 export function createLiveKitWebMedia(callbacks: SpeechMediaCallbacks, dependencies: LiveKitWebDependencies): SpeechMediaPort {
-  const external = dependencies.externalInput && { ...dependencies.externalInput }
+  if (dependencies.externalInput && dependencies.originalMicrophone) throw new SpeechSessionError('invalid_input')
+  const borrowed = dependencies.externalInput ?? dependencies.originalMicrophone
+  const external = borrowed && { ...borrowed }
   if (external ? !external.participantId || !Number.isSafeInteger(external.memberGeneration) || external.memberGeneration < 1 ||
     !methods(external.track, ['stop']) || !external.track.id || external.track.kind !== 'audio' || external.track.readyState !== 'live' ||
     typeof external.wrapTrack !== 'function' : typeof dependencies.createMicrophone !== 'function')

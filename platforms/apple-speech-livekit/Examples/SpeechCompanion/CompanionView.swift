@@ -20,7 +20,7 @@ public struct CompanionView: View {
                     Text("Two speakers, separate languages. Use headphones for your first session.")
                         .font(.subheadline).foregroundStyle(.secondary)
                 }
-                if !model.connected {
+                if !model.connected && !model.originalView.enabled {
                     GroupBox("Join a conversation") {
                         VStack(alignment: .leading, spacing: 12) {
                             Picker("Your role", selection: $role) { Text("Speaker A").tag("a"); Text("Speaker B").tag("b") }
@@ -40,7 +40,7 @@ public struct CompanionView: View {
                     Circle().fill(model.connected ? green : Color.gray).frame(width: 8, height: 8).padding(.top, 5)
                     Text(model.notice).font(.subheadline).accessibilityAddTraits(.updatesFrequently)
                     Spacer(minLength: 0)
-                    if model.connected || model.joining {
+                    if model.connected || model.joining || model.originalView.enabled {
                         Button("Leave") { code = ""; Task { await model.leave() } }.buttonStyle(.bordered)
                     }
                 }
@@ -48,7 +48,7 @@ public struct CompanionView: View {
                     GroupBox("Your audio") {
                         VStack(alignment: .leading, spacing: 12) {
                             Toggle("Microphone", isOn: Binding(get: { model.inputEnabled }, set: { enabled in Task { await model.setInput(enabled) } }))
-                                .disabled(model.busy.contains("input") || model.busy.contains("finish"))
+                                .disabled(model.busy.contains("input") || model.busy.contains("finish") || model.originalView.finished)
                             Toggle("Listening", isOn: Binding(get: { model.listeningEnabled }, set: { enabled in Task { await model.setListening(enabled) } }))
                                 .disabled(model.busy.contains("listen"))
                             HStack {
@@ -78,6 +78,18 @@ public struct CompanionView: View {
                             }
                         }.padding(.top, 8)
                     }.disabled(model.busy.contains("selection"))
+                }
+                if model.originalView.enabled {
+                    GroupBox("Original archive") {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(model.originalView.status).font(.subheadline)
+                            Button("Stop and save original") { Task { await model.finish() } }
+                                .disabled(model.originalView.finished || model.busy.contains("input"))
+                            ForEach(Array(model.originalView.passages.enumerated()), id: \.offset) { _, text in
+                                Text(text).textSelection(.enabled)
+                            }
+                        }.frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
+                    }
                 }
                 HStack {
                     Text("Conversation").font(.title2.weight(.semibold))

@@ -69,7 +69,8 @@ export function createSpeechHost(config, dependencies = {}) {
       inFlight[role]++; owned = role
       const signal = AbortSignal.any([request.signal, AbortSignal.timeout(8_000)])
       let body
-      try { body = await json(request, 8192, signal) }
+      const maximumBody = url.pathname === '/speech-host/capture_chunk' ? 140000 : url.pathname === '/speech-host/capture_complete' ? 48000 : 8192
+      try { body = await json(request, maximumBody, signal) }
       catch (error) { if (error instanceof SyntaxError) fail(400, 'invalid_input'); throw error }
       const member = fixed.roles[role], peer = fixed.roles[role === 'a' ? 'b' : 'a']
       const memberPath = `${root}/participants/${member.participantId}`
@@ -88,11 +89,11 @@ export function createSpeechHost(config, dependencies = {}) {
         }
         return { value, status: response.status }
       }
-      async function snapshot(requirePeer = false) {
+      async function snapshot(requirePeer = false, originalCapable = true) {
         const { value } = await upstream(root)
         const session = value?.session
         if (session?.id !== fixed.sessionId || session.state !== 'active' ||
-            !['live_only', 'text_only'].includes(session.retention) || !Array.isArray(session.allowed_languages)) fail(409, 'unsupported_session')
+            !['live_only', 'text_only', ...(originalCapable ? ['original_audio_and_text'] : [])].includes(session.retention) || !Array.isArray(session.allowed_languages)) fail(409, 'unsupported_session')
         for (const expected of requirePeer ? [member, peer] : [member]) {
           const matches = value.participants?.filter(item => item.id === expected.participantId)
           const item = matches?.[0]
@@ -105,8 +106,9 @@ export function createSpeechHost(config, dependencies = {}) {
       let result, status = 200
       switch (url.pathname) {
         case '/speech-host/join': {
-          fields(body, [])
-          const view = await snapshot(true)
+          fields(body, ['captureProfile'])
+          if (body.captureProfile !== undefined && body.captureProfile !== 'speech_capture_pcm_v1') fail(400, 'invalid_input')
+          const view = await snapshot(true, body.captureProfile === 'speech_capture_pcm_v1')
           const matches = view.subscriptions?.filter(item => item.participant_id === member.participantId)
           if (matches?.length !== 1) fail(409, 'not_ready')
           const selected = subscription(matches[0], member, peer)
@@ -115,6 +117,69 @@ export function createSpeechHost(config, dependencies = {}) {
             allowedLanguages: view.session.allowed_languages, configuration: { context: { projectId: fixed.projectId,
               sessionId: fixed.sessionId, participantId: member.participantId, memberGeneration: member.memberGeneration,
               retention: view.session.retention, canPublish: true, canSubscribe: true }, subscription: selected }, grant }
+          break
+        }
+        case '/speech-host/capture_prepare':
+        case '/speech-host/capture_key':
+        case '/speech-host/capture_chunk':
+        case '/speech-host/capture_complete':
+        case '/speech-host/capture_status':
+        case '/speech-host/capture_transcript': {
+          const action = url.pathname.slice('/speech-host/capture_'.length)
+          fields(body, ['captureId', ...(action === 'chunk' || action === 'complete' ? ['packet'] :
+            action === 'status' ? ['afterSequence', 'afterGap'] : action === 'transcript' ? ['afterSegment', 'resultSha256'] : [])])
+          if (!uuid(body.captureId)) fail(400, 'invalid_input')
+          const capturePath = `${memberPath}/captures/${body.captureId}`
+          // The backend reauthorizes current ownership on every request, while
+          // archival remains independent of the RTC session's lifetime.
+          let response
+          if (action === 'status' || action === 'transcript') {
+            const query = new URLSearchParams({ member_generation: String(member.memberGeneration) })
+            if (body.afterSequence !== undefined) {
+              if (!Number.isInteger(body.afterSequence) || body.afterSequence < -1 || body.afterSequence > 14399) fail(400, 'invalid_input')
+              query.set('after_sequence', String(body.afterSequence))
+            }
+            if (body.afterGap !== undefined) {
+              if (!Number.isInteger(body.afterGap) || body.afterGap < 0 || body.afterGap > 14656) fail(400, 'invalid_input')
+              query.set('after_gap', String(body.afterGap))
+            }
+            if (body.afterSegment !== undefined) {
+              if (!Number.isInteger(body.afterSegment) || body.afterSegment < 0 || body.afterSegment > 100000) fail(400, 'invalid_input')
+              query.set('after_segment', String(body.afterSegment))
+            }
+            if (body.resultSha256 !== undefined) {
+              if (typeof body.resultSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(body.resultSha256)) fail(400, 'invalid_input')
+              query.set('result_sha256', body.resultSha256)
+            }
+            response = await upstream(`${capturePath}${action === 'transcript' ? '/transcript' : ''}?${query}`)
+          } else if (action === 'prepare') {
+            response = await upstream(`${memberPath}/captures`, { member_generation: member.memberGeneration,
+              capture_id: body.captureId, profile: 'speech_capture_pcm_v1' })
+          } else {
+            if (action !== 'key') {
+              fields(body.packet, action === 'chunk' ? ['nonce', 'ciphertext', 'header'] : ['nonce', 'ciphertext'])
+              if (typeof body.packet.nonce !== 'string' || body.packet.nonce.length !== 16 ||
+                typeof body.packet.ciphertext !== 'string' || body.packet.ciphertext.length > (action === 'chunk' ? 128024 : 43712)) fail(400, 'invalid_input')
+            }
+            response = await upstream(`${capturePath}/${action}`, { member_generation: member.memberGeneration,
+              ...(action === 'key' ? {} : { packet: body.packet }) })
+          }
+          result = response.value; status = response.status
+          break
+        }
+        case '/speech-host/capture_bind': {
+          fields(body, ['captureId', 'workerGeneration', 'trackSid'])
+          if (!uuid(body.captureId) || !integer(body.workerGeneration) || typeof body.trackSid !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(body.trackSid)) fail(400, 'invalid_input')
+          // Source registration can arrive after capture/publication or RTC retirement.
+          // The backend rechecks current member/recording authority and exact source identity.
+          const { value: view } = await upstream(root)
+          if (view?.session?.id !== fixed.sessionId || view.session.retention !== 'original_audio_and_text') fail(409, 'unsupported_session')
+          const sources = view.sources?.filter(item => item.participant_id === member.participantId &&
+            item.member_generation === member.memberGeneration && item.track_sid === body.trackSid)
+          if (sources?.length !== 1 || !uuid(sources[0].id) || !integer(sources[0].epoch)) fail(409, 'not_ready')
+          const response = await upstream(`${memberPath}/captures/${body.captureId}/bind`, { member_generation: member.memberGeneration,
+            source_id: sources[0].id, source_epoch: sources[0].epoch, worker_generation: body.workerGeneration, track_sid: body.trackSid })
+          result = response.value; status = response.status
           break
         }
         case '/speech-host/grant': {

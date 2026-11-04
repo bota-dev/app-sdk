@@ -58,4 +58,10 @@ public class BotaFlutterSdkPlugin : FlutterPlugin {
         val owner = checkNotNull(speech) { "Flutter engine is detached" }
         owner.setFactory { id, observer -> NativeFlutterSpeechSession(factory.create(id, observer)) }
     }
+    /** Install a native composition with independent original capture. */
+    public fun setSpeechConnectionFactory(factory: BotaFlutterSpeechConnectionFactory) {
+        check(Looper.myLooper() == Looper.getMainLooper()) { "Speech integration requires the main thread" }
+        speechShutdown?.let { check(it.isCompleted && !it.isCancelled) { "Previous speech cleanup has not succeeded" } }
+        checkNotNull(speech) { "Flutter engine is detached" }.setFactory { id, observer -> factory.create(id, observer) }
+    }
 }

@@ -1,7 +1,10 @@
 package dev.bota.speech.companion
 
 import android.Manifest
+import android.app.Activity
+import android.app.Application
 import android.content.pm.PackageManager
+import android.os.Bundle
 import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.*
 import com.facebook.react.modules.core.PermissionAwareActivity
@@ -10,7 +13,7 @@ import com.facebook.react.uimanager.ViewManager
 import java.net.URI
 import kotlinx.coroutines.*
 
-/** Internal loopback HTTP only. Media stays in the public RN LiveKit adapter. */
+/** App-owned native IO. Shared speech-session decisions remain in generated JS. */
 class SpeechLabHost(context: ReactApplicationContext) : ReactContextBaseJavaModule(context), LifecycleEventListener {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val transport = NativeLabTransport()
@@ -18,7 +21,21 @@ class SpeechLabHost(context: ReactApplicationContext) : ReactContextBaseJavaModu
     private var retired = false
     private var foreground = context.lifecycleState == LifecycleState.RESUMED
     private var revision = 0
-    init { context.addLifecycleEventListener(this) }
+    @Volatile private var owner: ReactNativeLabOwner? = null
+    private var closing: Deferred<Unit>? = null
+    private val application = context.applicationContext as Application
+    private val activityLifecycle = object : Application.ActivityLifecycleCallbacks {
+        override fun onActivityStopped(activity: Activity) {
+            if (activity === reactApplicationContext.currentActivity) scope.launch { foreground = false; closeOwner() }
+        }
+        override fun onActivityCreated(activity: Activity, state: Bundle?) {}
+        override fun onActivityStarted(activity: Activity) {}
+        override fun onActivityResumed(activity: Activity) {}
+        override fun onActivityPaused(activity: Activity) {}
+        override fun onActivitySaveInstanceState(activity: Activity, state: Bundle) {}
+        override fun onActivityDestroyed(activity: Activity) {}
+    }
+    init { context.addLifecycleEventListener(this); application.registerActivityLifecycleCallbacks(activityLifecycle) }
     override fun getName() = "SpeechLabHost"
 
     @ReactMethod
@@ -36,7 +53,16 @@ class SpeechLabHost(context: ReactApplicationContext) : ReactContextBaseJavaModu
             val ownRevision = revision
             val job = scope.launch(start = CoroutineStart.LAZY) {
                 try {
-                    val response = transport.send(LabRequest("$origin/speech-host/$action", mapOf(
+                    val response = if (action == "join") {
+                        closing?.await()
+                        if (owner != null) throw LabFailure()
+                        val acquired = ReactNativeLabOwner(reactApplicationContext, origin, role, code); owner = acquired
+                        try { LabResponse(200, acquired.prepare()) }
+                        catch (error: Exception) {
+                            withContext(NonCancellable) { acquired.close() }; if (owner === acquired) owner = null; throw error
+                        }
+                    } else if (action == "grant") LabResponse(200, (owner ?: throw LabFailure()).renew())
+                    else transport.send(LabRequest("$origin/speech-host/$action", mapOf(
                         "Content-Type" to "application/json", "Origin" to origin,
                         "X-Speech-Role" to role, "X-Speech-Code" to code), body))
                     ensureActive()
@@ -51,6 +77,36 @@ class SpeechLabHost(context: ReactApplicationContext) : ReactContextBaseJavaModu
     @ReactMethod
     fun cancel(id: String, promise: Promise) {
         scope.launch { requests[id]?.cancelAndJoin(); promise.resolve(null) }
+    }
+    private fun perform(promise: Promise, action: suspend (ReactNativeLabOwner) -> Any?) {
+        scope.launch {
+            try { if (retired || !foreground) throw LabFailure(); promise.resolve(action(owner ?: throw LabFailure())) }
+            catch (_: Exception) { promise.reject("unavailable", "Speech operation unavailable") }
+        }
+    }
+    @ReactMethod fun createMedia(sessionId: String, promise: Promise) = perform(promise) { it.createMedia(sessionId) }
+    @ReactMethod fun mediaCommand(handle: String, action: String, body: String, promise: Promise) = perform(promise) { it.command(handle, action, body) }
+    @ReactMethod(isBlockingSynchronousMethod = true) fun mediaFence(handle: String, action: String): Boolean = owner?.fence(handle, action) ?: true
+    @ReactMethod fun mediaEvents(handle: String, promise: Promise) = perform(promise) { it.events(handle) }
+    @ReactMethod fun closeMedia(handle: String, promise: Promise) {
+        scope.launch {
+            try { owner?.closeMedia(handle); promise.resolve(null) }
+            catch (_: Exception) { promise.reject("cleanup_failed", "Speech cleanup failed") }
+        }
+    }
+    @ReactMethod fun startOriginal(promise: Promise) = perform(promise) { it.startOriginal(); null }
+    @ReactMethod fun finishOriginal(promise: Promise) = perform(promise) { it.finishOriginal(); null }
+    @ReactMethod fun originalView(promise: Promise) = perform(promise) { it.originalView() }
+    private fun closeOwner(): Deferred<Unit> {
+        closing?.let { if (!it.isCompleted || it.isCancelled) return it }
+        val captured = owner; val pending = requests.values.toList(); retireRequests()
+        return scope.async(start = CoroutineStart.LAZY) {
+            try { captured?.close(); pending.joinAll() }
+            finally { if (owner === captured) owner = null }
+        }.also { closing = it; it.start() }
+    }
+    @ReactMethod fun closeSession(promise: Promise) {
+        scope.launch { try { closeOwner().await(); promise.resolve(null) } catch (_: Exception) { promise.reject("cleanup_failed", "Speech cleanup failed") } }
     }
     @ReactMethod
     fun microphonePermission(promise: Promise) {
@@ -71,12 +127,15 @@ class SpeechLabHost(context: ReactApplicationContext) : ReactContextBaseJavaModu
         }
     }
     private fun retireRequests() { revision++; requests.values.toList().forEach { it.cancel() } }
-    override fun onHostPause() { scope.launch { foreground = false; retireRequests() } }
+    // Permission dialogs pause a still-visible Activity. Retire physical IO when
+    // it stops; permission ownership is otherwise checked against the revision.
+    override fun onHostPause() { scope.launch { foreground = false } }
     override fun onHostResume() { scope.launch { foreground = true } }
-    override fun onHostDestroy() { scope.launch { foreground = false; retireRequests() } }
+    override fun onHostDestroy() { scope.launch { foreground = false; closeOwner() } }
     override fun invalidate() {
         reactApplicationContext.removeLifecycleEventListener(this)
-        scope.launch { retired = true; retireRequests(); transport.close(); scope.cancel() }
+        application.unregisterActivityLifecycleCallbacks(activityLifecycle)
+        scope.launch { retired = true; try { closeOwner().await() } finally { transport.close(); scope.cancel() } }
         super.invalidate()
     }
 }

@@ -21,39 +21,76 @@ actor LabHost: SpeechHostCallbacks {
     private var joining = false
     private var revision: UInt32 = 0
     private var closed = false
+    private let originalCapable: Bool
+    private var renewal: (@Sendable (SpeechGrant) -> Void)?
     nonisolated var supportsCaptionRecovery: Bool { true }
     nonisolated var supportsSourceFinish: Bool { true }
 
-    init(origin: URL, role: String, code: String, transport: any LabTransport = NativeLabTransport()) throws {
+    init(origin: URL, role: String, code: String, transport: any LabTransport = NativeLabTransport(), originalCapable: Bool = false) throws {
         guard origin.scheme == "http", origin.host == "127.0.0.1", origin.user == nil, origin.password == nil,
               origin.query == nil, origin.fragment == nil, ["", "/"].contains(origin.path),
               (1...65535).contains(origin.port ?? 80), ["a", "b"].contains(role),
               code.range(of: "^[A-Za-z0-9_-]{32,128}$", options: .regularExpression) != nil else {
             transport.close(); throw LabFailure.invalidConfiguration
         }
-        self.origin = origin; self.role = role; self.code = code; self.transport = transport
+        self.origin = origin; self.role = role; self.code = code; self.transport = transport; self.originalCapable = originalCapable
     }
     func join() async throws -> LabJoin {
         try active()
         guard joined == nil, !joining else { throw LabFailure.conflict }
         joining = true
         defer { joining = false }
-        let value = try JSONDecoder().decode(LabJoin.self, from: await request("join", body: Data("{}".utf8)))
+        let payload = try await request("join", body: Data((originalCapable ? "{\"captureProfile\":\"speech_capture_pcm_v1\"}" : "{}").utf8))
+        let value = try JSONDecoder().decode(LabJoin.self, from: payload)
         let context = value.configuration.context
         guard value.role == role, value.peer.role != role, ["a", "b"].contains(value.peer.role),
               value.peer.participantId != context.participantId,
               value.configuration.subscription.selection.sourceParticipantIds == [value.peer.participantId],
-              context.retention != .originalAudioAndText, context.canPublish, context.canSubscribe,
+              (originalCapable || context.retention != .originalAudioAndText), context.canPublish, context.canSubscribe,
               value.allowedLanguages.contains(value.configuration.subscription.selection.targetLanguage),
               Set(value.allowedLanguages).count == value.allowedLanguages.count, value.allowedLanguages.count <= 7 else {
             throw LabFailure.unsupportedSession
         }
-        try active(); joined = value; revision = value.configuration.subscription.revision
+        try active(); joined = value; joinPayload = payload; revision = value.configuration.subscription.revision
         return value
     }
     func renewGrant() async throws -> SpeechGrant {
+        try JSONDecoder().decode(SpeechGrant.self, from: await renewResponse())
+    }
+    private var joinPayload: Data?
+    func takeJoinPayload() throws -> Data {
+        try active(); guard let value = joinPayload else { throw LabFailure.closed }; joinPayload = nil; return value
+    }
+    func renewResponse() async throws -> Data {
         guard joined != nil else { throw LabFailure.closed }
-        return try JSONDecoder().decode(SpeechGrant.self, from: await request("grant", body: Data("{}".utf8)))
+        let payload = try await request("grant", body: Data("{}".utf8))
+        let value = try JSONDecoder().decode(SpeechGrant.self, from: payload)
+        renewal?(value); return payload
+    }
+    func observeRenewal(_ observer: @escaping @Sendable (SpeechGrant) -> Void) { renewal = observer }
+    func prepareCapture(_ id: String) async throws -> Data {
+        try await request("capture_prepare", body: JSONSerialization.data(withJSONObject: ["captureId": id]))
+    }
+    struct Capture: SpeechCaptureHost {
+        let host: LabHost, id: String
+        func status(captureId: String) async throws -> Data { try await host.captureRequest("status", expected: id, id: captureId) }
+        func upload(captureId: String, packet: Data) async throws -> Data { try await host.captureRequest("chunk", expected: id, id: captureId, packet: packet) }
+        func complete(captureId: String, manifest: Data) async throws -> Data { try await host.captureRequest("complete", expected: id, id: captureId, packet: manifest) }
+    }
+    nonisolated func capture(_ id: String) -> Capture { Capture(host: self, id: id) }
+    private func captureRequest(_ action: String, expected: String, id: String, packet: Data? = nil) async throws -> Data {
+        guard id == expected else { throw SpeechHostFailure.unauthorized }
+        var body: [String: Any] = ["captureId": id]
+        if let packet { body["packet"] = try JSONSerialization.jsonObject(with: packet) }
+        return try await request("capture_" + action, body: JSONSerialization.data(withJSONObject: body))
+    }
+    func bindCapture(_ id: String, worker: UInt32, track: String) async throws {
+        _ = try await request("capture_bind", body: JSONSerialization.data(withJSONObject: ["captureId": id, "workerGeneration": worker, "trackSid": track]))
+    }
+    func captureTranscript(_ id: String, after: Int, digest: String?) async throws -> Data {
+        var body: [String: Any] = ["captureId": id, "afterSegment": after]
+        if let digest { body["resultSha256"] = digest }
+        return try await request("capture_transcript", body: JSONSerialization.data(withJSONObject: body))
     }
     func changeSubscription(selection: SpeechSelection) async throws -> SpeechSubscription {
         guard let joined, selection.sourceParticipantIds == [joined.peer.participantId],
@@ -91,7 +128,7 @@ actor LabHost: SpeechHostCallbacks {
                 trackSid: input.trackSid, sourceId: input.sourceId, sourceEpoch: input.sourceEpoch)))
         } catch LabFailure.conflict { throw SpeechHostFailure.staleSource }
     }
-    func close() { closed = true; code = ""; joined = nil; transport.close() }
+    func close() { closed = true; code = ""; joined = nil; renewal = nil; joinPayload = nil; transport.close() }
     private func active() throws { try Task.checkCancellation(); if closed { throw LabFailure.closed } }
     private func own(_ project: String, _ session: String, _ participant: String, _ generation: UInt32) throws {
         guard let context = joined?.configuration.context, context.projectId == project, context.sessionId == session,
@@ -118,7 +155,8 @@ actor LabHost: SpeechHostCallbacks {
             }
             throw LabFailure.conflict
         }
-        guard response.status == 200 || (action == "finish" && response.status == 202) else { throw SpeechHostFailure.unavailable }
+        guard response.status == 200 || (action == "finish" && response.status == 202) ||
+              (action.hasPrefix("capture_") && [201, 202].contains(response.status)) else { throw SpeechHostFailure.unavailable }
         return response.body
     }
 }

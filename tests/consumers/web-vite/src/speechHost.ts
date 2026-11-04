@@ -1,5 +1,6 @@
 import { SpeechCaptionReadError, SpeechSessionError, SpeechSourceFinishError,
   type SpeechConfiguration, type SpeechGrant, type SpeechHostCallbacks, type SpeechSubscription } from '@bota.dev/web-app-sdk/speech'
+import type { SpeechCaptureHost, SpeechCapturePreparation } from '@bota.dev/web-app-sdk/speech/capture'
 
 export interface SpeechJoin {
   role: 'a' | 'b'
@@ -24,8 +25,18 @@ export function speechHost(role: string, code: string) {
     return await response.json() as T
   }
   return {
-    join: (signal: AbortSignal) => request<SpeechJoin>('join', {}, signal),
-    callbacks(initial: SpeechJoin, denied: () => void): SpeechHostCallbacks {
+    join: (signal: AbortSignal, originalCapable = false) => request<SpeechJoin>('join', originalCapable ? { captureProfile: 'speech_capture_pcm_v1' } : {}, signal),
+    prepareCapture: (captureId: string, signal: AbortSignal) => request<SpeechCapturePreparation>('capture_prepare', { captureId }, signal),
+    capture(captureId: string): SpeechCaptureHost {
+      return { upload: (packet, signal) => request('capture_chunk', { captureId, packet }, signal),
+        complete: (packet, signal) => request('capture_complete', { captureId, packet }, signal),
+        status: signal => request('capture_status', { captureId }, signal) }
+    },
+    bindCapture: (captureId: string, workerGeneration: number, trackSid: string, signal: AbortSignal) =>
+      request('capture_bind', { captureId, workerGeneration, trackSid }, signal),
+    captureTranscript: (captureId: string, afterSegment: number, resultSha256: string | undefined, signal: AbortSignal) =>
+      request<Record<string, unknown>>('capture_transcript', { captureId, afterSegment, resultSha256 }, signal),
+    callbacks(initial: SpeechJoin, denied: () => void, renewed?: (grant: SpeechGrant) => void): SpeechHostCallbacks {
       let revision = initial.configuration.subscription.revision
       const { context } = initial.configuration
       function own(request: { projectId: string; sessionId: string; participantId: string; memberGeneration: number }) {
@@ -48,7 +59,10 @@ export function speechHost(role: string, code: string) {
             throw error
           }
         },
-        renewGrant: signal => request<SpeechGrant>('grant', {}, signal),
+        renewGrant: async signal => {
+          const grant = await request<SpeechGrant>('grant', {}, signal)
+          renewed?.(grant); return grant
+        },
         async readCaptions(input, signal) {
           if (!own(input)) throw new SpeechCaptionReadError('unauthorized')
           try {

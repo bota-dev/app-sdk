@@ -85,6 +85,48 @@ fn output(owner: *mut BotaDeviceSdkSpeechOutputV1) -> Value {
 }
 
 #[test]
+fn capture_metadata_abi_matches_rust_and_releases_owned_output() {
+    let command = json!({"op":"create","captureId":"10000000-0000-4000-8000-000000000001",
+        "recordingId":"rec_fixture","retention":"original_audio_and_text"})
+    .to_string();
+    let mut owned = ptr::null_mut();
+    let mut error = ptr::null_mut();
+    assert_eq!(
+        unsafe {
+            bota_device_sdk_v1_speech_capture(bytes(command.as_bytes()), &mut owned, &mut error)
+        },
+        BotaDeviceSdkStatusV1::Ok
+    );
+    assert!(error.is_null());
+    let expected: Value = serde_json::from_str(
+        &bota_device_sdk_core::speech::capture::dispatch_json(&command).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(output(owned), expected);
+    unsafe { bota_device_sdk_v1_speech_output_free(owned) };
+    for invalid in [
+        vec![0xff],
+        vec![b'x'; 65537],
+        b"{\"op\":\"create\",\"data_key\":\"must-not-leak\"}".to_vec(),
+    ] {
+        owned = ptr::null_mut();
+        assert_eq!(
+            unsafe { bota_device_sdk_v1_speech_capture(bytes(&invalid), &mut owned, &mut error) },
+            BotaDeviceSdkStatusV1::OperationFailed
+        );
+        assert!(owned.is_null());
+        let mut view = BotaDeviceSdkErrorViewV1::default();
+        assert_eq!(
+            unsafe { bota_device_sdk_v1_error_view(error, &mut view) },
+            BotaDeviceSdkStatusV1::Ok
+        );
+        assert_eq!(view.detail.len, 0);
+        unsafe { bota_device_sdk_v1_error_free(error) };
+        error = ptr::null_mut();
+    }
+}
+
+#[test]
 fn native_projection_matches_shared_duplex_revision_and_finish_decisions() {
     let f = fixture();
     let native = Native::new(&f);

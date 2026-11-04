@@ -25,17 +25,31 @@ public fun interface BotaFlutterSpeechFactory {
     public fun create(sessionId: String, observer: SpeechObserver): SpeechSession
 }
 
-internal interface FlutterSpeechSession {
-    val state: SpeechState
-    suspend fun ready()
-    suspend fun setInput(enabled: Boolean)
-    suspend fun setListening(enabled: Boolean)
-    suspend fun changeSubscription(selection: SpeechSelection)
-    suspend fun resumeAudio()
-    suspend fun recoverCaptions(): SpeechCaptionRecovery
-    suspend fun finishInput(): SpeechSourceFinish
-    suspend fun close()
+/** Native display metadata only; audio, scoped keys and retry cursors stay native. */
+public data class BotaFlutterSpeechOriginalView(public val enabled: Boolean = false, public val capturing: Boolean = false,
+    public val finished: Boolean = false, public val rtcAvailable: Boolean = true, public val status: String = "",
+    public val passages: List<String> = emptyList()) {
+    override fun toString(): String = "BotaFlutterSpeechOriginalView(content redacted)"
 }
+public fun interface BotaFlutterSpeechConnectionFactory {
+    public fun create(sessionId: String, observer: SpeechObserver): BotaFlutterSpeechConnection
+}
+/** A native App may compose RTC with an independent original owner. close must
+ * join both; original controls remain callable after RTC media failure. */
+public interface BotaFlutterSpeechConnection {
+    public val state: SpeechState
+    public suspend fun ready()
+    public suspend fun setInput(enabled: Boolean)
+    public suspend fun setListening(enabled: Boolean)
+    public suspend fun changeSubscription(selection: SpeechSelection)
+    public suspend fun resumeAudio()
+    public suspend fun recoverCaptions(): SpeechCaptionRecovery
+    public suspend fun finishInput(): SpeechSourceFinish
+    public suspend fun originalView(): BotaFlutterSpeechOriginalView = BotaFlutterSpeechOriginalView()
+    public suspend fun finishOriginal(): Unit = throw SpeechSessionException(SpeechErrorCode.SOURCE_FINISH_UNAVAILABLE)
+    public suspend fun close()
+}
+internal typealias FlutterSpeechSession = BotaFlutterSpeechConnection
 
 internal class NativeFlutterSpeechSession(private val session: SpeechSession) : FlutterSpeechSession {
     override val state: SpeechState get() = session.state.value
@@ -123,6 +137,12 @@ internal class BotaAndroidSpeechAdapter(
     override suspend fun resumeAudio(connectionId: String): Unit = call(connectionId) { it.resumeAudio() }
     override suspend fun recoverCaptions(connectionId: String): BotaSpeechRecoveryMessage = call(connectionId) { recovery(it.recoverCaptions()) }
     override suspend fun finishInput(connectionId: String): BotaSpeechFinishMessage = call(connectionId) { finish(it.finishInput()) }
+    override suspend fun originalView(connectionId: String): BotaSpeechOriginalMessage = call(connectionId) {
+        val value = it.originalView()
+        if (value.status.toByteArray().size > 1024 || value.passages.size > 64 || value.passages.sumOf { text -> text.toByteArray().size } > 327680) throw failure("unavailable")
+        BotaSpeechOriginalMessage(value.enabled, value.capturing, value.finished, value.rtcAvailable, value.status, value.passages.toList())
+    }
+    override suspend fun finishOriginal(connectionId: String): Unit = call(connectionId) { it.finishOriginal() }
     override suspend fun close(connectionId: String): Unit = withContext(dispatcher) {
         val slot = current
         if (slot != null && slot.id == connectionId) beginClose(slot).await()

@@ -36,6 +36,27 @@ fn invalid() -> DeviceSdkError {
     DeviceSdkError::new(ErrorCode::InvalidInput, Operation::Validate, false)
 }
 
+#[unsafe(no_mangle)]
+/// # Safety
+/// Input must be readable for this call. Output slots must be writable, distinct
+/// and empty. Only bounded capture metadata is accepted; free the output once.
+pub unsafe extern "C" fn bota_device_sdk_v1_speech_capture(
+    command: BotaDeviceSdkSliceV1,
+    out_json: *mut *mut BotaDeviceSdkSpeechOutputV1,
+    out_error: *mut *mut BotaDeviceSdkErrorV1,
+) -> BotaDeviceSdkStatusV1 {
+    // The same bounded UTF-8 and panic-contained output boundary as speech IO.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
+    unsafe {
+        result(out_json, out_error, || {
+            let json = bota_device_sdk_core::speech::capture::dispatch_json(text(command, 65536)?)?;
+            Ok(BotaDeviceSdkSpeechOutputV1 {
+                json: json.into_bytes(),
+            })
+        })
+    }
+}
+
 // Caller guarantees that a bounded, non-empty slice is readable for this call.
 unsafe fn text<'a>(input: BotaDeviceSdkSliceV1, limit: u64) -> Result<&'a str, DeviceSdkError> {
     if input.len > limit {

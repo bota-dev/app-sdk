@@ -30,7 +30,7 @@ internal class NativeSpeechPolicy(
     }
 }
 
-private object SpeechBindings {
+internal object SpeechBindings {
     init {
         System.loadLibrary("bota_device_sdk_ffi")
         System.loadLibrary("bota_android_jni")
@@ -40,4 +40,5 @@ private object SpeechBindings {
     external fun create(configuration: ByteArray, grant: ByteArray, nowMs: Long): Long
     external fun step(handle: Long, command: ByteArray, nowMs: Long): ByteArray
     external fun close(handle: Long)
+    external fun capture(command: ByteArray): ByteArray
 }

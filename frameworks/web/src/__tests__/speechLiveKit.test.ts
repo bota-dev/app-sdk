@@ -94,7 +94,7 @@ function audioGraph(original: MediaStreamTrack, branch: unknown) {
   } }
 }
 
-test('external Web input publishes an owned audio branch and never stops or mutes the host track', async () => {
+for (const inputKind of ['externalInput', 'originalMicrophone'] as const) test(`${inputKind} publishes an owned audio branch and never stops or mutes the capture track`, async () => {
   const f = fake(), signal = new AbortController().signal
   let originalStops = 0, cloneStops = 0, microphoneCalls = 0
   const branch = { id: 'branch', kind: 'audio', readyState: 'live', enabled: true, stop() { if (this.readyState !== 'ended') cloneStops++; this.readyState = 'ended' } }
@@ -103,8 +103,8 @@ test('external Web input publishes an owned audio branch and never stops or mute
   const graph = audioGraph(original, branch)
   const port = createLiveKitWebMedia(f.callbacks, { ...f.deps, ...graph.deps,
     createMicrophone: async () => { microphoneCalls++; return f.local },
-    externalInput: { participantId: grant.participant_id, memberGeneration: 1, track: original,
-      wrapTrack: track => ({ mediaStreamTrack: track, stop: () => track.stop() }) },
+    [inputKind]: { participantId: grant.participant_id, memberGeneration: 1, track: original,
+      wrapTrack: (track: MediaStreamTrack) => ({ mediaStreamTrack: track, stop: () => track.stop() }) },
   })
   await port.connect(grant, signal); await port.setMicrophone(true, signal)
   assert.equal(f.published, 1); assert.equal(microphoneCalls, 0)

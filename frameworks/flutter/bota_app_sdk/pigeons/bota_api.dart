@@ -1115,6 +1115,23 @@ class BotaSpeechCaptionMessage {
   String text;
 }
 
+class BotaSpeechOriginalMessage {
+  BotaSpeechOriginalMessage({
+    required this.enabled,
+    required this.capturing,
+    required this.finished,
+    required this.rtcAvailable,
+    required this.status,
+    required this.passages,
+  });
+  bool enabled;
+  bool capturing;
+  bool finished;
+  bool rtcAvailable;
+  String status;
+  List<String> passages;
+}
+
 class BotaSpeechEventMessage {
   BotaSpeechEventMessage({
     required this.connectionId,
@@ -1147,6 +1164,10 @@ abstract class BotaSpeechHostApi {
   BotaSpeechRecoveryMessage recoverCaptions(String connectionId);
   @async
   BotaSpeechFinishMessage finishInput(String connectionId);
+  @async
+  BotaSpeechOriginalMessage originalView(String connectionId);
+  @async
+  void finishOriginal(String connectionId);
   @async
   void close(String connectionId);
   @async
