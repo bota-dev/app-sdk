@@ -27,12 +27,14 @@ def screen():
     (output / 'window.xml').write_bytes(data)
     return ET.fromstring(data)
 
-def wait_for(predicate):
+def wait_for(predicate, scroll=False):
     deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
         tree = screen()
         if predicate(tree):
             return tree
+        if scroll:
+            run('shell', 'input', 'swipe', str(width // 2), str(height * 3 // 4), str(width // 2), str(height // 3), '400')
         time.sleep(1)
     raise RuntimeError('The bundled conversation App did not reach the expected screen')
 
@@ -102,12 +104,10 @@ try:
     run('shell', 'input', 'text', 'x' * 32)
     run('shell', 'input', 'keyevent', 'BACK')
     tap(control('Join conversation'))
-    # The error is below the listening controls on smaller screens.
-    for _ in range(4):
-        run('shell', 'input', 'swipe', str(width // 2), str(height * 3 // 4), str(width // 2), str(height // 3), '400')
-    wait_for(lambda value: any('Could not join.' in node.get('text', '') + node.get('content-desc', '') for node in value.iter('node')))
-    if not received_join.is_set():
+    if not received_join.wait(timeout=15):
         raise RuntimeError('The conversation App did not send the native loopback join request')
+    # The error is below the listening controls on smaller screens.
+    wait_for(lambda value: any('Could not join.' in node.get('text', '') + node.get('content-desc', '') for node in value.iter('node')), scroll=True)
     (output / 'unavailable-host.png').write_bytes(run('exec-out', 'screencap', '-p'))
     run('shell', 'input', 'keyevent', 'HOME')
     print('Bundled RN App rendered, sent the native loopback join request, handled HTTP 503 and accepted background navigation. No media was started.')
@@ -125,6 +125,7 @@ except BaseException:
             pass
     raise
 finally:
+    (output / 'host-observation.json').write_text(json.dumps({'originalProfileJoinReceived': received_join.is_set()}) + '\n')
     try:
         run('shell', 'am', 'force-stop', package)
         run('reverse', '--remove', 'tcp:4173')
