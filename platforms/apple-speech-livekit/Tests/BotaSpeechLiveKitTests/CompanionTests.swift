@@ -37,6 +37,56 @@ private final class LabFixture: LabTransport, @unchecked Sendable {
 final class CompanionChecks: @unchecked Sendable {
     private let origin = URL(string: "http://127.0.0.1:4173")!
     private let code = String(repeating: "a", count: 40)
+    @MainActor
+    func testFlutterPreparationIsNativeAndConsumedByOnlyItsEngine() async throws {
+        let transport = LabFixture(try body()), room = FakeRoom(), output = FakeOutput()
+        let owner = FlutterLabOwner(transport: { transport }, media: { try LiveKitSpeechMedia(room: room, output: output, callbacks: $0) })
+        owner.bindEngine("engine")
+        let display = try await owner.prepare("engine", origin: origin, role: "a", code: code)
+        try require(Set(display.keys) == Set(["sessionId", "role", "peerRole", "peerId", "languages", "language", "mode"]))
+        let id = display["sessionId"] as! String
+        do { _ = try owner.create("old", sessionId: id, observer: SpeechObserver()); throw CheckFailure(message: "Foreign engine accepted") }
+        catch LabFailure.conflict {}
+        let session = try owner.create("engine", sessionId: id, observer: SpeechObserver())
+        try await session.ready(); try await session.setInput(true)
+        do { _ = try owner.create("engine", sessionId: id, observer: SpeechObserver()); throw CheckFailure(message: "Preparation reused") }
+        catch LabFailure.conflict {}
+        try await owner.leave("engine").value
+        try require(!owner.isCurrent("engine"))
+    }
+    @MainActor
+    func testFlutterEngineReplacementRetiresLateBootstrap() async throws {
+        let transport = LabFixture(try body()); transport.holdFirst = true
+        let owner = FlutterLabOwner(transport: { transport }, media: { _ in throw CheckFailure(message: "Retired bootstrap created media") })
+        owner.bindEngine("old")
+        let joining = Task { _ = try await owner.prepare("old", origin: origin, role: "a", code: code) }
+        try await transport.entered.wait(); owner.bindEngine("new")
+        do { _ = try await joining.value; throw CheckFailure(message: "Retired bootstrap survived") }
+        catch is CancellationError {} catch is LabFailure {}
+        let display = try await owner.prepare("new", origin: origin, role: "a", code: code)
+        try require(display["role"] as? String == "a")
+        let permissionOwner = owner.permissionOwner("new")!
+        try await owner.leave("old").value
+        try require(owner.acceptsPermission("new", owner: permissionOwner))
+        try await owner.leave("new").value
+        try require(!owner.acceptsPermission("new", owner: permissionOwner))
+    }
+    @MainActor
+    func testFlutterCleanupFailurePreventsNewEngineAdmission() async throws {
+        let transport = LabFixture(try body()), room = FakeRoom(), output = FakeOutput()
+        room.releaseFails = true
+        let owner = FlutterLabOwner(transport: { transport }, media: { try LiveKitSpeechMedia(room: room, output: output, callbacks: $0) })
+        owner.bindEngine("first")
+        let display = try await owner.prepare("first", origin: origin, role: "a", code: code)
+        let session = try owner.create("first", sessionId: display["sessionId"] as! String, observer: SpeechObserver())
+        try await session.ready()
+        do { try await owner.leave("first").value; throw CheckFailure(message: "Cleanup failure lost") }
+        catch SpeechError.cleanupFailed {}
+        let count = transport.requests.count; owner.bindEngine("second")
+        do { _ = try await owner.prepare("second", origin: origin, role: "a", code: code); throw CheckFailure(message: "Failed cleanup accepted another engine") }
+        catch LabFailure.closed {}
+        try require(transport.requests.count == count)
+    }
     private func body(retention: String = "text_only") throws -> Data {
         var root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         while !FileManager.default.fileExists(atPath: root.appendingPathComponent("protocol/speech-session/client-v1.json").path) {

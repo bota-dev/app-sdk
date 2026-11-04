@@ -13,6 +13,12 @@ tracked separately.
 
 ## Unreleased
 
+- Add an internal Flutter conversation companion using native-prepared grants
+  and Apple/Android LiveKit factories, with paired captions and independent
+  input/listening. Engine replacement joins cleanup and rejects late permission
+  replies. Credentials and audio stay outside Dart; real RTC, original archival,
+  physical qualification and public release remain separate.
+
 - Add an optional Android conversation companion with native Rust/JNI session
   ownership, a bounded loopback HTTP host, A/B roles, paired captions and
   independent input/listening. Its internal debug APK keeps consent and cleanup

@@ -1,6 +1,9 @@
 import XCTest
 
 final class CompanionTests: XCTestCase, @unchecked Sendable {
+    func testFlutterPreparation() async throws { try await CompanionChecks().testFlutterPreparationIsNativeAndConsumedByOnlyItsEngine() }
+    func testFlutterRetirement() async throws { try await CompanionChecks().testFlutterEngineReplacementRetiresLateBootstrap() }
+    func testFlutterCleanupFailure() async throws { try await CompanionChecks().testFlutterCleanupFailurePreventsNewEngineAdmission() }
     func testJoin() async throws { try await CompanionChecks().testCompanionJoinsOnlyTheLoopbackRoleWithoutProjectCredentials() }
     func testAdmission() async throws { try await CompanionChecks().testCompanionRefusesUnsupportedRetentionAndForeignOriginsBeforeCapture() }
     func testRetirement() async throws { try await CompanionChecks().testCompanionRetirementRejectsLateBootstrap() }

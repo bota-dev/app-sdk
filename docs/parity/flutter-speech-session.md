@@ -1,8 +1,9 @@
 # Flutter speech session ownership
 
 Status: unpublished Phase 3 source candidate for Flutter iOS 15+ and Android
-API 26+. The Dart API and native plugin bridges are implemented; actual
-Flutter/media/backend integration and package/device qualification remain open.
+API 26+. The Dart API, native plugin bridges and loopback conversation App
+integration are implemented in source; real RTC/backend media and package/device
+qualification remain open.
 This does not add Flutter Web or desktop support, publish a package, or enable
 the backend feature. The single end-to-end checklist remains in the internal
 Realtime Speech Design, under Phase 3 evidence and unresolved release choices.
@@ -99,11 +100,45 @@ a successful method return as a verified archive or a complete ASR tail.
   replacement. Explicitly destroy the speech client even when separately
   destroying the Bluetooth client.
 
+## Native conversation companion
+
+The maintained App files in `tests/consumers/flutter-speech/` consume the public
+Dart facade and actual native speech factory on iOS and Android. Native login
+dialogs collect the loopback host, A/B role and access code. The native owner
+prepares the short-lived grant before Dart starts the exact session; a second
+engine or session cannot consume it. Only display metadata returns to Dart.
+The existing loopback operator setup in the [Web guide](../../frameworks/web/README.md#two-speaker-browser-companion)
+applies unchanged. The App refuses original-audio retention before capture.
+
+The UI provides paired captions, independent microphone/listening controls,
+language/mode selection, source finish, recovery and audio resume. Its volatile
+view keeps at most 100 pairs and clears old revisions before language changes.
+Native permission replies are bound to the active engine and preparation;
+background departure retires native media even without a Dart acknowledgement.
+Engine replacement waits for pending bootstrap and native cleanup. A cleanup
+failure blocks new engines until the process restarts.
+
+Run `bash tools/speech/test-flutter-companion.sh --android` for the internal
+debug APK, `--ios` on a full Xcode installation for the unsigned iOS App, or
+`--all` for both. `--dart-only` runs the locked App analysis and controller tests.
+The helper generates a disposable platform project and links fresh local native
+artifacts without changing public package pins. It prints that project path and
+preserves outputs in `target/flutter-speech-companion/`. iOS uses SwiftPM with a
+single local `app-sdk` identity for both the plugin and optional media adapter.
+Use an explicitly selected Android device with an ADB loopback reverse, or the
+operator host's iOS Simulator. Physical iPhone login requires an authenticated
+host integration. No backend, provider or device session is started by building.
+
+This source consumer does not enable original archival, provide production host
+authentication or qualify real RTC/provider delivery. The optional Android
+dependency redistribution limitation in the [Android guide](android-speech-session.md)
+also applies. Its debug artifacts do not enter the synchronized public release.
+
 ## Verification and conformance
 
 | Requirement | Source evidence | Remaining acceptance |
 | --- | --- | --- |
-| RTC-M04 / G3: Flutter native ownership, no audio over Pigeon | Generated typed channels, native `SpeechSession` wrappers, unchanged Rust/native media ownership | Actual iOS/Android Flutter App with the selected native media adapter |
+| RTC-M04 / G3: Flutter native ownership, no audio over Pigeon | Generated typed channels, native `SpeechSession` wrappers, native-prepared companion App and optional LiveKit factories | Exact App builds and actual RTC/provider media on iOS/Android |
 | RTC-O03 / RTC-M02–03: independent controls and languages | Dart channel round-trip and native delegate checks | Real concurrent capture/playback and personalized receiving languages |
 | RTC-X02–03: retirement, source finish and recovery | Correlation fencing, joined close, stable failure, typed finish/recovery, dropped late callbacks | Actual backend authority, RTP tails, expiry/revocation and network recovery |
 | RTC-X03: bounded queues and cancellation | Slow-Dart overflow, cancelled waiter, synchronous factory overflow and late/duplicate reply regressions | Physical lifecycle, route changes, prolonged degraded links |

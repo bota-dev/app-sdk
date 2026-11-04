@@ -696,6 +696,17 @@ jobs:
         id: package
         run: tools/flutter/package-release.sh --ci
 
+      - name: Build native-backed Flutter speech companion
+        run: bash tools/speech/test-flutter-companion.sh --all
+
+      - name: Upload internal Flutter speech companion
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: flutter-speech-companion-${{ github.sha }}
+          path: target/flutter-speech-companion/
+          if-no-files-found: error
+          compression-level: 0
+
       - name: Verify preserved Flutter candidate
         if: steps.package.outputs.candidate-ready == 'true'
         run: |
