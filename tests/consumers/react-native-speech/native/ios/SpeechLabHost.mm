@@ -1,0 +1,15 @@
+#import <React/RCTBridgeModule.h>
+@interface RCT_EXTERN_MODULE(SpeechLabHost, NSObject)
+RCT_EXTERN_METHOD(request:(NSString *)id origin:(NSString *)origin role:(NSString *)role code:(NSString *)code action:(NSString *)action body:(NSString *)body resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(cancel:(NSString *)id resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(microphonePermission:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(createMedia:(NSString *)sessionId resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(mediaCommand:(NSString *)handle action:(NSString *)action body:(NSString *)body resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN__BLOCKING_SYNCHRONOUS_METHOD(mediaFence:(NSString *)handle action:(NSString *)action)
+RCT_EXTERN_METHOD(mediaEvents:(NSString *)handle resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(closeMedia:(NSString *)handle resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(startOriginal:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(finishOriginal:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(originalView:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(closeSession:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)
+@end

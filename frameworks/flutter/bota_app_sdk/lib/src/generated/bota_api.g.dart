@@ -4099,6 +4099,691 @@ class BotaClientContextMessage {
   }
 }
 
+class BotaSpeechSelectionMessage {
+  BotaSpeechSelectionMessage({
+    required this.targetLanguage,
+    required this.mode,
+    required this.sourceParticipantIds,
+  });
+
+  String targetLanguage;
+
+  String mode;
+
+  List<String> sourceParticipantIds;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      targetLanguage,
+      mode,
+      sourceParticipantIds,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static BotaSpeechSelectionMessage decode(Object result) {
+    result as List<Object?>;
+    return BotaSpeechSelectionMessage(
+      targetLanguage: result[0]! as String,
+      mode: result[1]! as String,
+      sourceParticipantIds: (result[2]! as List<Object?>).cast<String>(),
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! BotaSpeechSelectionMessage || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(targetLanguage, other.targetLanguage) && _deepEquals(mode, other.mode) && _deepEquals(sourceParticipantIds, other.sourceParticipantIds);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'BotaSpeechSelectionMessage(targetLanguage: $targetLanguage, mode: $mode, sourceParticipantIds: $sourceParticipantIds)';
+  }
+}
+
+class BotaSpeechTrackMessage {
+  BotaSpeechTrackMessage({
+    required this.mediaTrackSid,
+    required this.sourceId,
+    required this.sourceEpoch,
+    required this.sourceParticipantId,
+    required this.origin,
+    this.outputId,
+  });
+
+  String mediaTrackSid;
+
+  String sourceId;
+
+  String sourceEpoch;
+
+  String sourceParticipantId;
+
+  String origin;
+
+  String? outputId;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      mediaTrackSid,
+      sourceId,
+      sourceEpoch,
+      sourceParticipantId,
+      origin,
+      outputId,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static BotaSpeechTrackMessage decode(Object result) {
+    result as List<Object?>;
+    return BotaSpeechTrackMessage(
+      mediaTrackSid: result[0]! as String,
+      sourceId: result[1]! as String,
+      sourceEpoch: result[2]! as String,
+      sourceParticipantId: result[3]! as String,
+      origin: result[4]! as String,
+      outputId: result[5] as String?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! BotaSpeechTrackMessage || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(mediaTrackSid, other.mediaTrackSid) && _deepEquals(sourceId, other.sourceId) && _deepEquals(sourceEpoch, other.sourceEpoch) && _deepEquals(sourceParticipantId, other.sourceParticipantId) && _deepEquals(origin, other.origin) && _deepEquals(outputId, other.outputId);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'BotaSpeechTrackMessage(mediaTrackSid: $mediaTrackSid, sourceId: $sourceId, sourceEpoch: $sourceEpoch, sourceParticipantId: $sourceParticipantId, origin: $origin, outputId: $outputId)';
+  }
+}
+
+class BotaSpeechRecoveryMessage {
+  BotaSpeechRecoveryMessage({
+    required this.status,
+    required this.hasMore,
+  });
+
+  String status;
+
+  bool hasMore;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      status,
+      hasMore,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static BotaSpeechRecoveryMessage decode(Object result) {
+    result as List<Object?>;
+    return BotaSpeechRecoveryMessage(
+      status: result[0]! as String,
+      hasMore: result[1]! as bool,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! BotaSpeechRecoveryMessage || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(status, other.status) && _deepEquals(hasMore, other.hasMore);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'BotaSpeechRecoveryMessage(status: $status, hasMore: $hasMore)';
+  }
+}
+
+class BotaSpeechFinishedSourceMessage {
+  BotaSpeechFinishedSourceMessage({
+    required this.id,
+    required this.epoch,
+    required this.participantId,
+    required this.memberGeneration,
+    required this.trackSid,
+    required this.state,
+    required this.finishState,
+    required this.workerGeneration,
+    this.sequence,
+    this.samples,
+  });
+
+  String id;
+
+  String epoch;
+
+  String participantId;
+
+  int memberGeneration;
+
+  String trackSid;
+
+  String state;
+
+  String finishState;
+
+  int workerGeneration;
+
+  String? sequence;
+
+  String? samples;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      id,
+      epoch,
+      participantId,
+      memberGeneration,
+      trackSid,
+      state,
+      finishState,
+      workerGeneration,
+      sequence,
+      samples,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static BotaSpeechFinishedSourceMessage decode(Object result) {
+    result as List<Object?>;
+    return BotaSpeechFinishedSourceMessage(
+      id: result[0]! as String,
+      epoch: result[1]! as String,
+      participantId: result[2]! as String,
+      memberGeneration: result[3]! as int,
+      trackSid: result[4]! as String,
+      state: result[5]! as String,
+      finishState: result[6]! as String,
+      workerGeneration: result[7]! as int,
+      sequence: result[8] as String?,
+      samples: result[9] as String?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! BotaSpeechFinishedSourceMessage || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(id, other.id) && _deepEquals(epoch, other.epoch) && _deepEquals(participantId, other.participantId) && _deepEquals(memberGeneration, other.memberGeneration) && _deepEquals(trackSid, other.trackSid) && _deepEquals(state, other.state) && _deepEquals(finishState, other.finishState) && _deepEquals(workerGeneration, other.workerGeneration) && _deepEquals(sequence, other.sequence) && _deepEquals(samples, other.samples);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'BotaSpeechFinishedSourceMessage(id: $id, epoch: $epoch, participantId: $participantId, memberGeneration: $memberGeneration, trackSid: $trackSid, state: $state, finishState: $finishState, workerGeneration: $workerGeneration, sequence: $sequence, samples: $samples)';
+  }
+}
+
+class BotaSpeechFinishMessage {
+  BotaSpeechFinishMessage({
+    required this.status,
+    required this.holdPublication,
+    this.trackSid,
+    this.source,
+  });
+
+  String status;
+
+  bool holdPublication;
+
+  String? trackSid;
+
+  BotaSpeechFinishedSourceMessage? source;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      status,
+      holdPublication,
+      trackSid,
+      source,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static BotaSpeechFinishMessage decode(Object result) {
+    result as List<Object?>;
+    return BotaSpeechFinishMessage(
+      status: result[0]! as String,
+      holdPublication: result[1]! as bool,
+      trackSid: result[2] as String?,
+      source: result[3] as BotaSpeechFinishedSourceMessage?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! BotaSpeechFinishMessage || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(status, other.status) && _deepEquals(holdPublication, other.holdPublication) && _deepEquals(trackSid, other.trackSid) && _deepEquals(source, other.source);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'BotaSpeechFinishMessage(status: $status, holdPublication: $holdPublication, trackSid: $trackSid, source: $source)';
+  }
+}
+
+class BotaSpeechStateMessage {
+  BotaSpeechStateMessage({
+    required this.connected,
+    required this.disconnect,
+    required this.canCapture,
+    required this.canPlay,
+    required this.subscriptionRevision,
+    required this.changeId,
+    required this.clearGeneration,
+    required this.clearPlayback,
+    required this.expiresAtMs,
+    required this.gap,
+    required this.tracks,
+    required this.recovery,
+    required this.sourceFinish,
+  });
+
+  bool connected;
+
+  bool disconnect;
+
+  bool canCapture;
+
+  bool canPlay;
+
+  int subscriptionRevision;
+
+  int changeId;
+
+  int clearGeneration;
+
+  bool clearPlayback;
+
+  int expiresAtMs;
+
+  bool gap;
+
+  List<BotaSpeechTrackMessage> tracks;
+
+  BotaSpeechRecoveryMessage recovery;
+
+  BotaSpeechFinishMessage sourceFinish;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      connected,
+      disconnect,
+      canCapture,
+      canPlay,
+      subscriptionRevision,
+      changeId,
+      clearGeneration,
+      clearPlayback,
+      expiresAtMs,
+      gap,
+      tracks,
+      recovery,
+      sourceFinish,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static BotaSpeechStateMessage decode(Object result) {
+    result as List<Object?>;
+    return BotaSpeechStateMessage(
+      connected: result[0]! as bool,
+      disconnect: result[1]! as bool,
+      canCapture: result[2]! as bool,
+      canPlay: result[3]! as bool,
+      subscriptionRevision: result[4]! as int,
+      changeId: result[5]! as int,
+      clearGeneration: result[6]! as int,
+      clearPlayback: result[7]! as bool,
+      expiresAtMs: result[8]! as int,
+      gap: result[9]! as bool,
+      tracks: (result[10]! as List<Object?>).cast<BotaSpeechTrackMessage>(),
+      recovery: result[11]! as BotaSpeechRecoveryMessage,
+      sourceFinish: result[12]! as BotaSpeechFinishMessage,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! BotaSpeechStateMessage || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(connected, other.connected) && _deepEquals(disconnect, other.disconnect) && _deepEquals(canCapture, other.canCapture) && _deepEquals(canPlay, other.canPlay) && _deepEquals(subscriptionRevision, other.subscriptionRevision) && _deepEquals(changeId, other.changeId) && _deepEquals(clearGeneration, other.clearGeneration) && _deepEquals(clearPlayback, other.clearPlayback) && _deepEquals(expiresAtMs, other.expiresAtMs) && _deepEquals(gap, other.gap) && _deepEquals(tracks, other.tracks) && _deepEquals(recovery, other.recovery) && _deepEquals(sourceFinish, other.sourceFinish);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'BotaSpeechStateMessage(connected: $connected, disconnect: $disconnect, canCapture: $canCapture, canPlay: $canPlay, subscriptionRevision: $subscriptionRevision, changeId: $changeId, clearGeneration: $clearGeneration, clearPlayback: $clearPlayback, expiresAtMs: $expiresAtMs, gap: $gap, tracks: $tracks, recovery: $recovery, sourceFinish: $sourceFinish)';
+  }
+}
+
+class BotaSpeechCaptionMessage {
+  BotaSpeechCaptionMessage({
+    required this.key,
+    required this.origin,
+    required this.isFinal,
+    required this.subscriptionRevision,
+    this.sequence,
+    required this.sourceId,
+    required this.sourceEpoch,
+    required this.sourceParticipantId,
+    required this.sourceMemberGeneration,
+    required this.unitId,
+    required this.sourceFirstSeq,
+    required this.sourceLastSeq,
+    required this.startMs,
+    required this.endMs,
+    required this.sourceLanguage,
+    this.targetLanguage,
+    required this.text,
+  });
+
+  String key;
+
+  String origin;
+
+  bool isFinal;
+
+  int subscriptionRevision;
+
+  String? sequence;
+
+  String sourceId;
+
+  String sourceEpoch;
+
+  String sourceParticipantId;
+
+  int sourceMemberGeneration;
+
+  String unitId;
+
+  String sourceFirstSeq;
+
+  String sourceLastSeq;
+
+  double startMs;
+
+  double endMs;
+
+  String sourceLanguage;
+
+  String? targetLanguage;
+
+  String text;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      key,
+      origin,
+      isFinal,
+      subscriptionRevision,
+      sequence,
+      sourceId,
+      sourceEpoch,
+      sourceParticipantId,
+      sourceMemberGeneration,
+      unitId,
+      sourceFirstSeq,
+      sourceLastSeq,
+      startMs,
+      endMs,
+      sourceLanguage,
+      targetLanguage,
+      text,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static BotaSpeechCaptionMessage decode(Object result) {
+    result as List<Object?>;
+    return BotaSpeechCaptionMessage(
+      key: result[0]! as String,
+      origin: result[1]! as String,
+      isFinal: result[2]! as bool,
+      subscriptionRevision: result[3]! as int,
+      sequence: result[4] as String?,
+      sourceId: result[5]! as String,
+      sourceEpoch: result[6]! as String,
+      sourceParticipantId: result[7]! as String,
+      sourceMemberGeneration: result[8]! as int,
+      unitId: result[9]! as String,
+      sourceFirstSeq: result[10]! as String,
+      sourceLastSeq: result[11]! as String,
+      startMs: result[12]! as double,
+      endMs: result[13]! as double,
+      sourceLanguage: result[14]! as String,
+      targetLanguage: result[15] as String?,
+      text: result[16]! as String,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! BotaSpeechCaptionMessage || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(key, other.key) && _deepEquals(origin, other.origin) && _deepEquals(isFinal, other.isFinal) && _deepEquals(subscriptionRevision, other.subscriptionRevision) && _deepEquals(sequence, other.sequence) && _deepEquals(sourceId, other.sourceId) && _deepEquals(sourceEpoch, other.sourceEpoch) && _deepEquals(sourceParticipantId, other.sourceParticipantId) && _deepEquals(sourceMemberGeneration, other.sourceMemberGeneration) && _deepEquals(unitId, other.unitId) && _deepEquals(sourceFirstSeq, other.sourceFirstSeq) && _deepEquals(sourceLastSeq, other.sourceLastSeq) && _deepEquals(startMs, other.startMs) && _deepEquals(endMs, other.endMs) && _deepEquals(sourceLanguage, other.sourceLanguage) && _deepEquals(targetLanguage, other.targetLanguage) && _deepEquals(text, other.text);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'BotaSpeechCaptionMessage(key: $key, origin: $origin, isFinal: $isFinal, subscriptionRevision: $subscriptionRevision, sequence: $sequence, sourceId: $sourceId, sourceEpoch: $sourceEpoch, sourceParticipantId: $sourceParticipantId, sourceMemberGeneration: $sourceMemberGeneration, unitId: $unitId, sourceFirstSeq: $sourceFirstSeq, sourceLastSeq: $sourceLastSeq, startMs: $startMs, endMs: $endMs, sourceLanguage: $sourceLanguage, targetLanguage: $targetLanguage, text: $text)';
+  }
+}
+
+class BotaSpeechOriginalMessage {
+  BotaSpeechOriginalMessage({
+    required this.enabled,
+    required this.capturing,
+    required this.finished,
+    required this.rtcAvailable,
+    required this.status,
+    required this.passages,
+  });
+
+  bool enabled;
+
+  bool capturing;
+
+  bool finished;
+
+  bool rtcAvailable;
+
+  String status;
+
+  List<String> passages;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      enabled,
+      capturing,
+      finished,
+      rtcAvailable,
+      status,
+      passages,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static BotaSpeechOriginalMessage decode(Object result) {
+    result as List<Object?>;
+    return BotaSpeechOriginalMessage(
+      enabled: result[0]! as bool,
+      capturing: result[1]! as bool,
+      finished: result[2]! as bool,
+      rtcAvailable: result[3]! as bool,
+      status: result[4]! as String,
+      passages: (result[5]! as List<Object?>).cast<String>(),
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! BotaSpeechOriginalMessage || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(enabled, other.enabled) && _deepEquals(capturing, other.capturing) && _deepEquals(finished, other.finished) && _deepEquals(rtcAvailable, other.rtcAvailable) && _deepEquals(status, other.status) && _deepEquals(passages, other.passages);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'BotaSpeechOriginalMessage(enabled: $enabled, capturing: $capturing, finished: $finished, rtcAvailable: $rtcAvailable, status: $status, passages: $passages)';
+  }
+}
+
+class BotaSpeechEventMessage {
+  BotaSpeechEventMessage({
+    required this.connectionId,
+    this.state,
+    this.caption,
+    this.errorCode,
+  });
+
+  String connectionId;
+
+  BotaSpeechStateMessage? state;
+
+  BotaSpeechCaptionMessage? caption;
+
+  String? errorCode;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      connectionId,
+      state,
+      caption,
+      errorCode,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static BotaSpeechEventMessage decode(Object result) {
+    result as List<Object?>;
+    return BotaSpeechEventMessage(
+      connectionId: result[0]! as String,
+      state: result[1] as BotaSpeechStateMessage?,
+      caption: result[2] as BotaSpeechCaptionMessage?,
+      errorCode: result[3] as String?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! BotaSpeechEventMessage || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(connectionId, other.connectionId) && _deepEquals(state, other.state) && _deepEquals(caption, other.caption) && _deepEquals(errorCode, other.errorCode);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'BotaSpeechEventMessage(connectionId: $connectionId, state: $state, caption: $caption, errorCode: $errorCode)';
+  }
+}
+
 
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
@@ -4332,6 +5017,33 @@ class _PigeonCodec extends StandardMessageCodec {
     }    else if (value is BotaClientContextMessage) {
       buffer.putUint8(203);
       writeValue(buffer, value.encode());
+    }    else if (value is BotaSpeechSelectionMessage) {
+      buffer.putUint8(204);
+      writeValue(buffer, value.encode());
+    }    else if (value is BotaSpeechTrackMessage) {
+      buffer.putUint8(205);
+      writeValue(buffer, value.encode());
+    }    else if (value is BotaSpeechRecoveryMessage) {
+      buffer.putUint8(206);
+      writeValue(buffer, value.encode());
+    }    else if (value is BotaSpeechFinishedSourceMessage) {
+      buffer.putUint8(207);
+      writeValue(buffer, value.encode());
+    }    else if (value is BotaSpeechFinishMessage) {
+      buffer.putUint8(208);
+      writeValue(buffer, value.encode());
+    }    else if (value is BotaSpeechStateMessage) {
+      buffer.putUint8(209);
+      writeValue(buffer, value.encode());
+    }    else if (value is BotaSpeechCaptionMessage) {
+      buffer.putUint8(210);
+      writeValue(buffer, value.encode());
+    }    else if (value is BotaSpeechOriginalMessage) {
+      buffer.putUint8(211);
+      writeValue(buffer, value.encode());
+    }    else if (value is BotaSpeechEventMessage) {
+      buffer.putUint8(212);
+      writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
     }
@@ -4492,6 +5204,24 @@ class _PigeonCodec extends StandardMessageCodec {
         return BotaEventMessage.decode(readValue(buffer)!);
       case 203:
         return BotaClientContextMessage.decode(readValue(buffer)!);
+      case 204:
+        return BotaSpeechSelectionMessage.decode(readValue(buffer)!);
+      case 205:
+        return BotaSpeechTrackMessage.decode(readValue(buffer)!);
+      case 206:
+        return BotaSpeechRecoveryMessage.decode(readValue(buffer)!);
+      case 207:
+        return BotaSpeechFinishedSourceMessage.decode(readValue(buffer)!);
+      case 208:
+        return BotaSpeechFinishMessage.decode(readValue(buffer)!);
+      case 209:
+        return BotaSpeechStateMessage.decode(readValue(buffer)!);
+      case 210:
+        return BotaSpeechCaptionMessage.decode(readValue(buffer)!);
+      case 211:
+        return BotaSpeechOriginalMessage.decode(readValue(buffer)!);
+      case 212:
+        return BotaSpeechEventMessage.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
     }
@@ -5211,6 +5941,253 @@ abstract class BotaFlutterApi {
           try {
             final BotaFactoryResetResultAcknowledgementMessage output = await api.persistFactoryResetResult(arg_request);
             return wrapResponse(result: output);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          }          catch (e) {
+            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
+          }
+        });
+      }
+    }
+  }
+}
+
+class BotaSpeechHostApi {
+  /// Constructor for [BotaSpeechHostApi]. The [binaryMessenger] named argument is
+  /// available for dependency injection. If it is left null, the default
+  /// BinaryMessenger will be used which routes to the host platform.
+  BotaSpeechHostApi({BinaryMessenger? binaryMessenger, String messageChannelSuffix = ''})
+      : pigeonVar_binaryMessenger = binaryMessenger,
+        pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty ? '.$messageChannelSuffix' : '';
+  final BinaryMessenger? pigeonVar_binaryMessenger;
+
+  static const MessageCodec<Object?> pigeonChannelCodec = _PigeonCodec();
+
+  final String pigeonVar_messageChannelSuffix;
+
+  Future<BotaSpeechStateMessage> start(String connectionId, String sessionId) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bota_flutter_sdk.BotaSpeechHostApi.start$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[connectionId, sessionId]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as BotaSpeechStateMessage;
+  }
+
+  Future<void> setInput(String connectionId, bool enabled) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bota_flutter_sdk.BotaSpeechHostApi.setInput$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[connectionId, enabled]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  Future<void> setListening(String connectionId, bool enabled) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bota_flutter_sdk.BotaSpeechHostApi.setListening$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[connectionId, enabled]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  Future<void> changeSubscription(String connectionId, BotaSpeechSelectionMessage selection) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bota_flutter_sdk.BotaSpeechHostApi.changeSubscription$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[connectionId, selection]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  Future<void> resumeAudio(String connectionId) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bota_flutter_sdk.BotaSpeechHostApi.resumeAudio$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[connectionId]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  Future<BotaSpeechRecoveryMessage> recoverCaptions(String connectionId) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bota_flutter_sdk.BotaSpeechHostApi.recoverCaptions$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[connectionId]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as BotaSpeechRecoveryMessage;
+  }
+
+  Future<BotaSpeechFinishMessage> finishInput(String connectionId) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bota_flutter_sdk.BotaSpeechHostApi.finishInput$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[connectionId]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as BotaSpeechFinishMessage;
+  }
+
+  Future<BotaSpeechOriginalMessage> originalView(String connectionId) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bota_flutter_sdk.BotaSpeechHostApi.originalView$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[connectionId]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as BotaSpeechOriginalMessage;
+  }
+
+  Future<void> finishOriginal(String connectionId) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bota_flutter_sdk.BotaSpeechHostApi.finishOriginal$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[connectionId]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  Future<void> close(String connectionId) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bota_flutter_sdk.BotaSpeechHostApi.close$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[connectionId]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  Future<void> destroy() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bota_flutter_sdk.BotaSpeechHostApi.destroy$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+}
+
+abstract class BotaSpeechFlutterApi {
+  static const MessageCodec<Object?> pigeonChannelCodec = _PigeonCodec();
+
+  Future<void> onEvent(BotaSpeechEventMessage event);
+
+  static void setUp(BotaSpeechFlutterApi? api, {BinaryMessenger? binaryMessenger, String messageChannelSuffix = '',}) {
+    messageChannelSuffix = messageChannelSuffix.isNotEmpty ? '.$messageChannelSuffix' : '';
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+          'dev.flutter.pigeon.bota_flutter_sdk.BotaSpeechFlutterApi.onEvent$messageChannelSuffix', pigeonChannelCodec,
+          binaryMessenger: binaryMessenger);
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final BotaSpeechEventMessage arg_event = args[0]! as BotaSpeechEventMessage;
+          try {
+            await api.onEvent(arg_event);
+            return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);
           }          catch (e) {

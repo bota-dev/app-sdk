@@ -55,12 +55,26 @@ fn c_header_exposes_no_rust_layout_or_async_runtime_types() {
         "Pin<",
         "tokio",
         "WorkflowEngine",
-        "json",
-        "JSON",
     ] {
         assert!(
             !HEADER.contains(forbidden),
             "C header exposes forbidden Rust detail: {forbidden}"
         );
     }
+}
+
+#[test]
+fn workflow_abi_remains_typed_and_speech_has_an_independent_bounded_projection() {
+    // The legacy generic JSON workflow spike remains forbidden. The optional
+    // speech module projects the existing cross-platform metadata contract and
+    // must not replace or enter the typed BLE workflow engine.
+    let (workflow, speech) = HEADER
+        .split_once("/* Optional shared speech policy.")
+        .unwrap();
+    assert!(!workflow.contains("json"));
+    assert!(!workflow.contains("JSON"));
+    assert!(!speech.contains("BotaDeviceSdkEngineV1"));
+    assert!(speech.contains("typedef struct BotaDeviceSdkSpeechV1 BotaDeviceSdkSpeechV1;"));
+    assert!(speech.contains("configuration and\n * grant <= 32 KiB; command <= 896 KiB"));
+    assert!(speech.contains("bota_device_sdk_v1_speech_output_free"));
 }

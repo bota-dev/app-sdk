@@ -968,3 +968,214 @@ abstract class BotaFlutterApi {
     BotaFactoryResetResultRequestMessage request,
   );
 }
+
+// Native speech sessions own media, credentials and Rust policy. These channels
+// carry only control values and validated presentation metadata.
+class BotaSpeechSelectionMessage {
+  BotaSpeechSelectionMessage({
+    required this.targetLanguage,
+    required this.mode,
+    required this.sourceParticipantIds,
+  });
+  String targetLanguage;
+  // Keep mode on this new DTO so adding speech does not renumber legacy codec
+  // enums/types. Native adapters decode this into the existing speech enum.
+  String mode;
+  List<String> sourceParticipantIds;
+}
+
+class BotaSpeechTrackMessage {
+  BotaSpeechTrackMessage({
+    required this.mediaTrackSid,
+    required this.sourceId,
+    required this.sourceEpoch,
+    required this.sourceParticipantId,
+    required this.origin,
+    this.outputId,
+  });
+  String mediaTrackSid;
+  String sourceId;
+  String sourceEpoch;
+  String sourceParticipantId;
+  String origin;
+  String? outputId;
+}
+
+class BotaSpeechRecoveryMessage {
+  BotaSpeechRecoveryMessage({required this.status, required this.hasMore});
+  String status;
+  bool hasMore;
+}
+
+class BotaSpeechFinishedSourceMessage {
+  BotaSpeechFinishedSourceMessage({
+    required this.id,
+    required this.epoch,
+    required this.participantId,
+    required this.memberGeneration,
+    required this.trackSid,
+    required this.state,
+    required this.finishState,
+    required this.workerGeneration,
+    this.sequence,
+    this.samples,
+  });
+  String id;
+  String epoch;
+  String participantId;
+  int memberGeneration;
+  String trackSid;
+  String state;
+  String finishState;
+  int workerGeneration;
+  String? sequence;
+  String? samples;
+}
+
+class BotaSpeechFinishMessage {
+  BotaSpeechFinishMessage({
+    required this.status,
+    required this.holdPublication,
+    this.trackSid,
+    this.source,
+  });
+  String status;
+  bool holdPublication;
+  String? trackSid;
+  BotaSpeechFinishedSourceMessage? source;
+}
+
+class BotaSpeechStateMessage {
+  BotaSpeechStateMessage({
+    required this.connected,
+    required this.disconnect,
+    required this.canCapture,
+    required this.canPlay,
+    required this.subscriptionRevision,
+    required this.changeId,
+    required this.clearGeneration,
+    required this.clearPlayback,
+    required this.expiresAtMs,
+    required this.gap,
+    required this.tracks,
+    required this.recovery,
+    required this.sourceFinish,
+  });
+  bool connected;
+  bool disconnect;
+  bool canCapture;
+  bool canPlay;
+  int subscriptionRevision;
+  int changeId;
+  int clearGeneration;
+  bool clearPlayback;
+  int expiresAtMs;
+  bool gap;
+  List<BotaSpeechTrackMessage> tracks;
+  BotaSpeechRecoveryMessage recovery;
+  BotaSpeechFinishMessage sourceFinish;
+}
+
+class BotaSpeechCaptionMessage {
+  BotaSpeechCaptionMessage({
+    required this.key,
+    required this.origin,
+    required this.isFinal,
+    required this.subscriptionRevision,
+    this.sequence,
+    required this.sourceId,
+    required this.sourceEpoch,
+    required this.sourceParticipantId,
+    required this.sourceMemberGeneration,
+    required this.unitId,
+    required this.sourceFirstSeq,
+    required this.sourceLastSeq,
+    required this.startMs,
+    required this.endMs,
+    required this.sourceLanguage,
+    this.targetLanguage,
+    required this.text,
+  });
+  String key;
+  String origin;
+  bool isFinal;
+  int subscriptionRevision;
+  String? sequence;
+  String sourceId;
+  String sourceEpoch;
+  String sourceParticipantId;
+  int sourceMemberGeneration;
+  String unitId;
+  String sourceFirstSeq;
+  String sourceLastSeq;
+  double startMs;
+  double endMs;
+  String sourceLanguage;
+  String? targetLanguage;
+  String text;
+}
+
+class BotaSpeechOriginalMessage {
+  BotaSpeechOriginalMessage({
+    required this.enabled,
+    required this.capturing,
+    required this.finished,
+    required this.rtcAvailable,
+    required this.status,
+    required this.passages,
+  });
+  bool enabled;
+  bool capturing;
+  bool finished;
+  bool rtcAvailable;
+  String status;
+  List<String> passages;
+}
+
+class BotaSpeechEventMessage {
+  BotaSpeechEventMessage({
+    required this.connectionId,
+    this.state,
+    this.caption,
+    this.errorCode,
+  });
+  String connectionId;
+  BotaSpeechStateMessage? state;
+  BotaSpeechCaptionMessage? caption;
+  String? errorCode;
+}
+
+@HostApi()
+abstract class BotaSpeechHostApi {
+  @async
+  BotaSpeechStateMessage start(String connectionId, String sessionId);
+  @async
+  void setInput(String connectionId, bool enabled);
+  @async
+  void setListening(String connectionId, bool enabled);
+  @async
+  void changeSubscription(
+    String connectionId,
+    BotaSpeechSelectionMessage selection,
+  );
+  @async
+  void resumeAudio(String connectionId);
+  @async
+  BotaSpeechRecoveryMessage recoverCaptions(String connectionId);
+  @async
+  BotaSpeechFinishMessage finishInput(String connectionId);
+  @async
+  BotaSpeechOriginalMessage originalView(String connectionId);
+  @async
+  void finishOriginal(String connectionId);
+  @async
+  void close(String connectionId);
+  @async
+  void destroy();
+}
+
+@FlutterApi()
+abstract class BotaSpeechFlutterApi {
+  @asyncCallback
+  void onEvent(BotaSpeechEventMessage event);
+}

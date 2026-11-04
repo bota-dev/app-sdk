@@ -15,6 +15,7 @@ mod local_wifi;
 mod native_v2;
 mod planners;
 mod recording_upload;
+mod speech;
 mod v2;
 mod wifi_provisioning;
 

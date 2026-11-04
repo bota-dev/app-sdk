@@ -1,0 +1,36 @@
+{
+  "name": "bota-speech-companion",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "tsc -p tsconfig.test.json && node --test test/*.test.cjs",
+    "start": "react-native start"
+  },
+  "dependencies": {
+    "@bota.dev/react-native-app-sdk": "file:../../../frameworks/react-native",
+    "buffer": "6.0.3",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "5.11.1"
+  },
+  "devDependencies": {
+    "@babel/core": "7.29.7",
+    "@babel/runtime": "7.29.7",
+    "@react-native-community/cli": "20.1.0",
+    "@react-native-community/cli-platform-android": "20.1.0",
+    "@react-native-community/cli-platform-ios": "20.1.0",
+    "@react-native-community/template": "0.86.3",
+    "@react-native/babel-preset": "0.86.3",
+    "@react-native/metro-config": "0.86.3",
+    "@types/react": "19.2.17",
+    "typescript": "6.0.3"
+  },
+  "overrides": {
+    "react-dom": "$react-dom"
+  },
+  "engines": {
+    "node": ">=22.11.0"
+  }
+}

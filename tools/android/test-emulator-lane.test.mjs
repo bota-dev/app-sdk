@@ -34,6 +34,24 @@ const executeWithDeadline = (path, arguments_, options, deadlineMilliseconds) =>
     });
   });
 
+test('speech-only admission rejects a missing APK and conflicting lane selection before boot', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'bota-speech-lane-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const apk = join(directory, 'fixture.apk');
+  await writeFile(apk, 'synthetic fixture');
+  for (const arguments_ of [
+    ['--api', '35', '--speech-only'],
+    ['--api', '26', '--speech-only', '--speech-companion-apk', apk],
+    ['--api', '35', '--public-only', '--speech-only', '--speech-companion-apk', apk],
+  ]) {
+    const result = await executeWithDeadline('tools/android/test-emulator-lane.sh', arguments_,
+      { cwd: process.cwd(), env: { ...process.env, ANDROID_SDK_ROOT: directory } }, 5_000);
+    assert.equal(result.timedOut, false);
+    assert.equal(result.code, 2);
+    assert.match(result.stderr, /--speech-only requires API 35/);
+  }
+});
+
 test('reports emulator output when the process exits before ADB connects', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'bota-emulator-lane-'));
   t.after(() => rm(directory, { recursive: true, force: true }));

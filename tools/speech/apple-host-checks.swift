@@ -1,0 +1,42 @@
+import Foundation
+
+@main private struct AppleSpeechHostChecks {
+    static func main() async throws {
+        guard CommandLine.arguments.count == 2 else { fatalError("Expected the canonical speech fixture") }
+        let checks = SpeechSessionChecks(fixtureURL: URL(fileURLWithPath: CommandLine.arguments[1]))
+        try await checks.testDuplexLanguageChangeWaitsForCurrentHttpWorkerAndClear()
+        print("PASS testDuplexLanguageChangeWaitsForCurrentHttpWorkerAndClear")
+        try await checks.testSupersededHttpCannotReplaceNewLanguage()
+        print("PASS testSupersededHttpCannotReplaceNewLanguage")
+        try await checks.testCancelledCaptureClosesAndJoinsLateAcquisition()
+        print("PASS testCancelledCaptureClosesAndJoinsLateAcquisition")
+        try await checks.testFinishHoldsPendingPublicationThenDrainsWhileListening()
+        print("PASS testFinishHoldsPendingPublicationThenDrainsWhileListening")
+        try await checks.testCaptionRecoveryUsesSharedCursorAndPreservesUnicode()
+        print("PASS testCaptionRecoveryUsesSharedCursorAndPreservesUnicode")
+        try await checks.testAuthorizationRevocationAndExpiryRetireMedia()
+        print("PASS testAuthorizationRevocationAndExpiryRetireMedia")
+        try await checks.testFailedConnectionPreservesStableErrorAndSingleClose()
+        print("PASS testFailedConnectionPreservesStableErrorAndSingleClose")
+        try await checks.testFailedCleanupRemainsFailedForEveryCaller()
+        print("PASS testFailedCleanupRemainsFailedForEveryCaller")
+        try await checks.testNoPublicationIsNotCompletedAsr()
+        print("PASS testNoPublicationIsNotCompletedAsr")
+        try await checks.testBoundedCallDoesNotJoinAnUncooperativeNativeTask()
+        print("PASS testBoundedCallDoesNotJoinAnUncooperativeNativeTask")
+        try await checks.testRetiredCaptionRequestDoesNotBlockOrPublishIntoNewRevision()
+        print("PASS testRetiredCaptionRequestDoesNotBlockOrPublishIntoNewRevision")
+        try await checks.testMalformedCaptionBodyIsRejectedByRust()
+        print("PASS testMalformedCaptionBodyIsRejectedByRust")
+        try await checks.testConcurrentFinishSharesAuthorityAndRejectsHeldInput()
+        print("PASS testConcurrentFinishSharesAuthorityAndRejectsHeldInput")
+        try await checks.testHttpFirstAndStaleClearCannotResumeCurrentAudio()
+        print("PASS testHttpFirstAndStaleClearCannotResumeCurrentAudio")
+        try await checks.testCancellingCloseWaiterDoesNotCancelActualCleanup()
+        print("PASS testCancellingCloseWaiterDoesNotCancelActualCleanup")
+        try await checks.testCloseCancelsResumeBeforeCleanupSettles()
+        print("PASS testCloseCancelsResumeBeforeCleanupSettles")
+        try await checks.testCancellationBeforeTaskStartRetiresCompletionOwnershipExactlyOnce()
+        print("PASS testCancellationBeforeTaskStartRetiresCompletionOwnershipExactlyOnce")
+    }
+}

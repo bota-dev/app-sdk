@@ -1,3 +1,14 @@
+## Unreleased
+
+- Add native-owned speech sessions with typed Dart controls, captions and state,
+  independent input/listening, source finish and caption recovery.
+- Bound native event delivery and retire sessions on engine teardown; retain
+  stable cleanup failures and keep credentials/audio outside Pigeon/Dart.
+- Share the public speech client within each engine isolate so repeated
+  construction preserves active callbacks and terminal destruction.
+- Require native host integration. Published package, actual media and physical
+  Flutter App qualification remain separate.
+
 ## 2.0.0-beta.23 (unreleased)
 
 - Prepare the synchronized SDK release containing connected Pin/Note model normalization and discovered WiFi service capabilities for Android/iOS React Native consumers.

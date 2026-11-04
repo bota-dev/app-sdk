@@ -1,0 +1,69 @@
+{
+  "description": "Synthetic interoperability vector. Public test key; never use for real capture.",
+  "profile": "speech_capture_pcm_v1",
+  "captureId": "10000000-0000-4000-8000-000000000003",
+  "recordingId": "rec_capture_vector",
+  "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+  "chunks": [
+    {
+      "packet": {
+        "header": {
+          "sequence": 0,
+          "clockId": "20000000-0000-4000-8000-000000000001",
+          "firstSample": 480,
+          "samples": 4,
+          "archiveSample": 0
+        },
+        "nonce": "AAECAwQFBgcICQoL",
+        "ciphertext": "RwIpZMVlPeSEqBfCj2EbKzPYCK6ELeEX"
+      },
+      "pcmHex": "0000ff7f0080ffff",
+      "aad": "Ym90YS5zcGVlY2guY2FwdHVyZS5jaHVuay52MQAQAAAAAABAAIAAAAAAAAADIAAAAAAAQACAAAAAAAAAAQAAAAAAAAAAAAAB4AAAAAQAAAAAAAAAAA==",
+      "sha256": "7ea63d074faa9ccda3225a191491ca9077496a8e12f149e1753d68c5f8720014"
+    },
+    {
+      "packet": {
+        "header": {
+          "sequence": 1,
+          "clockId": "20000000-0000-4000-8000-000000000002",
+          "firstSample": 0,
+          "samples": 2,
+          "archiveSample": 4
+        },
+        "nonce": "DA0ODxAREhMUFRYX",
+        "ciphertext": "mf6XJ8KlawR46rAWmQI/bpOMMRs="
+      },
+      "pcmHex": "0100feff",
+      "aad": "Ym90YS5zcGVlY2guY2FwdHVyZS5jaHVuay52MQAQAAAAAABAAIAAAAAAAAADIAAAAAAAQACAAAAAAAAAAgAAAAEAAAAAAAAAAAAAAAIAAAAAAAAABA==",
+      "sha256": "8074612d9be9b6da556753638c3f0ca60394cc7a27754f3c950c59f67e16dabc"
+    }
+  ],
+  "manifest": {
+    "value": {
+      "protocolVersion": 1,
+      "captureId": "10000000-0000-4000-8000-000000000003",
+      "totalChunks": 2,
+      "archiveSamples": 6,
+      "chainSha256": "cde98f17e941b64d2dae1379aefb1373fe8eb637b91a802a1cf0964e4c23c2d1",
+      "clocks": [
+        {
+          "id": "20000000-0000-4000-8000-000000000001",
+          "samples": 1000,
+          "endKnown": true
+        },
+        {
+          "id": "20000000-0000-4000-8000-000000000002",
+          "samples": 2,
+          "endKnown": false
+        }
+      ]
+    },
+    "plaintext": "eyJwcm90b2NvbFZlcnNpb24iOjEsImNhcHR1cmVJZCI6IjEwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMyIsInRvdGFsQ2h1bmtzIjoyLCJhcmNoaXZlU2FtcGxlcyI6NiwiY2hhaW5TaGEyNTYiOiJjZGU5OGYxN2U5NDFiNjRkMmRhZTEzNzlhZWZiMTM3M2ZlOGViNjM3YjkxYTgwMmExY2YwOTY0ZTRjMjNjMmQxIiwiY2xvY2tzIjpbeyJpZCI6IjIwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMSIsInNhbXBsZXMiOjEwMDAsImVuZEtub3duIjp0cnVlfSx7ImlkIjoiMjAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAyIiwic2FtcGxlcyI6MiwiZW5kS25vd24iOmZhbHNlfV19",
+    "aad": "Ym90YS5zcGVlY2guY2FwdHVyZS5tYW5pZmVzdC52MQAQAAAAAABAAIAAAAAAAAAD",
+    "packet": {
+      "nonce": "GBkaGxwdHh8gISIj",
+      "ciphertext": "aD0wYrQ9Cixub+usIaipIX7bwHe3cJZlEwNV8ul2pkhITR/rk7gU7JbBxBOV73v4yQfeZvVUO5xLE1ChnQ+GBQ76p2cRx09DgXuRJxP/IhwJ+L7o5jhBGj2xo3h+jyEVs2pB1OOSi5+IHc6jpKL0TaWw3lxyhv4n3j1rC/OxcovSAHMrz7CKnzt5gUqWa8H+NEvE9h3QGQszTiqK+VeSmnqWFZp4hD0Jm2VjqDzrjeVqBj+tdMG2f1BxCZZGpI/a8ti7c7evJN+fFolxX34y3Zq5QjyF83JERFJaCKjWd4PfnFfhMg3UWAd7Mknp8aT6OghITT5kR1OaAyaZDGv1Dh/OO5a3SKMklWzwOpjl5REb4xV7YBEHY6nNNzrCMfe96gM627X7CHPq8snsYSW/B0+KxFnvVMMRysNYTiIJDj/Yk6jI6atz+ImfSMhN4vDxEtfPu1AQiwW1sZvNWw6huxZgAr1TFoNTHKbGlhP3wg=="
+    },
+    "sha256": "4fc4fe84f736aebcd567d579e5c53438499de84b8e2df3e1b8b24398208e1332"
+  }
+}

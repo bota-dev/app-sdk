@@ -14,6 +14,7 @@ mod upload_profile;
 pub use byo_upload::*;
 pub use device::*;
 pub use discovery::*;
+pub(crate) use managed_upload::date as parse_rfc3339_millis;
 pub use managed_upload::*;
 pub use ota::*;
 pub use provisioning::*;

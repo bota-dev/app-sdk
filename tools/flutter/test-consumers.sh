@@ -209,6 +209,11 @@ if ! grep -Eq "<version>$sdk_version</version>" "$android_pom"; then
   exit 1
 fi
 
+# These exact native candidates were built above in this invocation. Execute
+# adapter lifecycle checks before the ordinary application consumers below.
+"$workspace_root/tools/flutter/test-apple-adapter.sh" --unit-only --reuse-xcframework
+"$workspace_root/tools/flutter/test-android-adapter.sh" --reuse-native
+
 "$workspace_root/tools/flutter/run-flutter.sh" create \
   --no-pub \
   --platforms=ios,android \

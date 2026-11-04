@@ -1,0 +1,19 @@
+name: bota_speech_companion
+description: Internal Flutter consumer of native Bota speech sessions.
+publish_to: none
+version: 0.1.0+1
+environment:
+  sdk: ">=3.11.0 <4.0.0"
+dependencies:
+  bota_app_sdk:
+    path: ../../../frameworks/flutter/bota_app_sdk
+  flutter:
+    sdk: flutter
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: 6.0.0
+flutter:
+  uses-material-design: true
+  config:
+    enable-swift-package-manager: true

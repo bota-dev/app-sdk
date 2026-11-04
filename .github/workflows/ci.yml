@@ -292,9 +292,15 @@ jobs:
         run: cargo install wasm-bindgen-cli --version 0.2.128 --locked
 
       - name: Install Web gate dependencies and pinned Chromium browser
+        timeout-minutes: 15
         run: |
           npx --yes "npm@$NPM_CLI_VERSION" ci
           npx --yes "npm@$NPM_CLI_VERSION" ci --prefix tests/consumers/web-vite
+          sudo tee /etc/apt/apt.conf.d/99-bota-ci-timeouts >/dev/null <<'EOF'
+          Acquire::http::Timeout "30";
+          Acquire::https::Timeout "30";
+          Acquire::Retries "2";
+          EOF
           tests/consumers/web-vite/node_modules/.bin/playwright install --with-deps chromium
 
       - name: Verify Web package and packed consumer
@@ -399,20 +405,48 @@ jobs:
           tools/android/test-consumer.sh --compile-only \
             --repository target/android-m2
 
+      - name: Verify optional Android LiveKit speech adapter
+        timeout-minutes: 15
+        run: bash tools/speech/test-android-livekit.sh
+
+      - name: Verify native Android speech companion
+        timeout-minutes: 15
+        run: bash tools/speech/test-android-companion.sh
+
+      - name: Preserve internal Android speech companion
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-speech-companion-${{ github.sha }}
+          path: platforms/android/speech-companion/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
       - name: Retain Android JVM failure reports
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: android-junit-failure-${{ github.sha }}-${{ github.run_attempt }}
-          path: platforms/android/sdk/build/test-results/testDebugUnitTest/*.xml
+          path: |
+            platforms/android/sdk/build/test-results/testDebugUnitTest/*.xml
+            platforms/android/speech-livekit/build/test-results/testDebugUnitTest/*.xml
+            platforms/android/speech-companion/build/test-results/testDebugUnitTest/*.xml
           if-no-files-found: warn
           retention-days: 7
-
       - name: Inspect packaged native libraries
         run: tools/android/inspect-aar.sh "target/android-release/bota-app-sdk-$(sed -n 's/^version = "\([^"]*\)"$/\1/p' sdk-version.toml).aar"
 
       - name: Test React Native Android adapter consumer
         run: tools/react-native/test-android-adapter.sh --repository target/android-m2
+
+      - name: Build React Native speech companion with bundled JavaScript
+        run: bash tools/speech/test-react-native-companion.sh --android
+
+      - name: Upload internal React Native Android speech companion
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: react-native-speech-companion-android-${{ github.sha }}
+          path: target/react-native-speech-companion/
+          if-no-files-found: error
+          compression-level: 0
 
       - name: Test native encrypted upload backend recovery
         run: node tools/react-native/test-upload-backend-android.mjs
@@ -421,7 +455,15 @@ jobs:
         run: tools/android/test-emulator-lane.sh --api 26
 
       - name: Test API 35 Bluetooth permissions and consumers
-        run: tools/android/test-emulator-lane.sh --api 35
+        run: tools/android/test-emulator-lane.sh --api 35 --speech-companion-apk target/react-native-speech-companion/react-native-speech-companion.apk
+
+      - name: Retain React Native speech App startup evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: react-native-speech-startup-${{ github.sha }}
+          path: target/react-native-speech-smoke/
+          if-no-files-found: ignore
 
       - name: Upload non-publishing Android evidence
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -496,6 +538,19 @@ jobs:
         working-directory: frameworks/react-native
         run: bundle _2.6.9_ exec npm run test:apple:integration
 
+      - name: Build React Native iOS speech companion with bundled JavaScript
+        env:
+          BUNDLE_GEMFILE: ${{ github.workspace }}/frameworks/react-native/Gemfile
+        run: bash tools/speech/test-react-native-companion.sh --ios
+
+      - name: Upload internal React Native iOS speech companion
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: react-native-speech-companion-ios-${{ github.sha }}
+          path: target/react-native-speech-companion/
+          if-no-files-found: error
+          compression-level: 0
+
   apple:
     name: Apple package and consumer
     runs-on: macos-15
@@ -523,6 +578,28 @@ jobs:
 
       - name: Test Apple package and XCFramework
         run: tools/apple/test-package.sh -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
+
+      - name: Verify native original capture and encrypted recovery
+        run: bash tools/speech/test-apple-capture.sh
+
+      - name: Verify optional Apple LiveKit speech adapter
+        timeout-minutes: 20
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+        run: bash tools/speech/test-apple-livekit.sh -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
+
+      - name: Build Apple speech companion for iOS and macOS
+        timeout-minutes: 20
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+        run: bash tools/speech/build-apple-livekit-ios.sh
+
+      - name: Preserve internal Apple speech companion Apps
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: apple-speech-companion-${{ github.sha }}
+          path: target/apple-speech-companion/*.zip
+          if-no-files-found: error
 
       - name: Test independent Watch HTTP controls and source consumer
         run: bash tools/apple/test-watch-control.sh
@@ -653,6 +730,17 @@ jobs:
       - name: Verify Flutter package and build candidate when releasable
         id: package
         run: tools/flutter/package-release.sh --ci
+
+      - name: Build native-backed Flutter speech companion
+        run: bash tools/speech/test-flutter-companion.sh --all
+
+      - name: Upload internal Flutter speech companion
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: flutter-speech-companion-${{ github.sha }}
+          path: target/flutter-speech-companion/
+          if-no-files-found: error
+          compression-level: 0
 
       - name: Verify preserved Flutter candidate
         if: steps.package.outputs.candidate-ready == 'true'

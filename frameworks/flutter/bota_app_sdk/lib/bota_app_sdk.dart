@@ -1,4 +1,18 @@
 export 'src/client.dart' show BotaConfiguration, BotaDeviceClient;
+export 'src/speech/client.dart' show BotaSpeechClient, BotaSpeechSession;
+export 'src/speech/models.dart'
+    show
+        BotaSpeechCaption,
+        BotaSpeechException,
+        BotaSpeechFinishedSource,
+        BotaSpeechListeningMode,
+        BotaSpeechObserver,
+        BotaSpeechOriginalView,
+        BotaSpeechRecovery,
+        BotaSpeechSelection,
+        BotaSpeechSourceFinish,
+        BotaSpeechState,
+        BotaSpeechTrack;
 export 'src/client_presence.dart' show SdkClientContext, BotaClientPresence;
 export 'src/errors.dart' show BotaErrorCode, BotaOperation, BotaSdkException;
 export 'src/managers.dart'

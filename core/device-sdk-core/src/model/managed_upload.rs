@@ -1403,7 +1403,7 @@ fn document(v: &str, size: usize, expected: Option<&str>) -> Result<Vec<u8>> {
     Ok(out)
 }
 // RFC3339 UTC/offset parsing is shared policy; hosts supply only their clock.
-fn date(v: &str) -> Result<u64> {
+pub(crate) fn date(v: &str) -> Result<u64> {
     let invalid = || ManagedUploadError::InvalidDocument;
     if v.len() < 20 {
         return Err(invalid());

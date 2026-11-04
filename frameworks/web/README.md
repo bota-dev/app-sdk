@@ -641,6 +641,286 @@ Browser capabilities are reported independently by
 before device mutation with a stable SDK error. Web Bluetooth permission alone
 is never treated as device identity or backend authorization.
 
+## Optional speech sessions (unreleased source preview)
+
+The separate `@bota.dev/web-app-sdk/speech` entry accepts host-authorized session
+configuration and short-lived media grants. It does not use the Bluetooth
+connection, upload journal, or Bota project API keys. It runs the shared Rust
+speech policy through WASM. No published package or live RTC qualification is
+implied by this source preview.
+
+The host backend owns session admission, subscription updates and grant renewal.
+Map its responses to `SpeechConfiguration`, `SpeechSubscription` and
+`SpeechGrant`; do not infer those permissions in the browser. The synthetic
+[protocol fixture](../../protocol/speech-session/client-v1.json) documents the
+candidate shape without real credentials.
+
+```ts
+import { Room, createLocalAudioTrack, setLogLevel, LogLevel } from 'livekit-client'
+import { createWebSpeechSession } from '@bota.dev/web-app-sdk/speech'
+import { createLiveKitWebMedia } from '@bota.dev/web-app-sdk/speech/livekit'
+
+const speech = await createWebSpeechSession({
+  configuration, // Authorized host snapshot, including this listener's subscription.
+  grant,         // Short-lived member grant from the host backend.
+  host: {
+    changeSubscription: (selection, signal) => host.changeSpeechSubscription(selection, signal),
+    renewGrant: signal => host.renewSpeechGrant(signal),
+    readCaptions: (request, signal) => host.readSpeechCaptions(request, signal),
+  },
+  mediaFactory: callbacks => createLiveKitWebMedia(callbacks, {
+    roomFactory: options => new Room(options),
+    createMicrophone: options => createLocalAudioTrack(options),
+    silenceVendorLogs: () => setLogLevel(LogLevel.silent),
+  }),
+  onEvent: event => showSpeechEvent(event),
+  onCaption: caption => upsertCaption(caption.key, caption),
+  onError: error => showSpeechStatus(error.code),
+})
+await speech.ready
+await speech.setMicrophone(true)
+await speech.setListening(true)
+// Invoke resumeAudio directly from the user's gesture when autoplay is blocked.
+await speech.resumeAudio()
+// A language change keeps capture active and fences old playback.
+await speech.changeSubscription({ targetLanguage: 'ja', mode: 'translated', sourceParticipantIds })
+// On leave, logout, or tenant change, await terminal cleanup.
+await speech.close()
+```
+
+The candidate adapter is exercised against LiveKit client `2.23.0`. Supply its
+public factories from the host's installed runtime; supplier declaration files
+are not part of the Bota public type surface. LiveKit's current declarations
+have strict exact-optional incompatibilities, so the host must separately qualify
+its vendor import/build configuration. The example disables vendor logs in the
+shared JavaScript realm; integrate that with the host's logging policy.
+
+The adapter captures the microphone by default, or accepts one authorized
+external participant track through `externalInput`. The customer backend must
+first admit that participant with `source_kind: 'host_external'`. The adapter
+checks the supplied participant/member generation against the grant and derives
+an independent track from the original's rendered audio using its own Web Audio
+context. Host mute remains authoritative; a direct track clone would bypass
+later changes to the original's `enabled` state. It never mutes or stops the host
+original. Supply the vendor's public wrapper for that exact owned branch:
+
+```ts
+externalInput: {
+  participantId: grant.participant_id,
+  memberGeneration: grant.member_generation,
+  track: authorizedOriginalAudioTrack,
+  wrapTrack: ownedBranch => new LocalAudioTrack(ownedBranch, undefined, true),
+}
+```
+
+Import `LocalAudioTrack` from the host's `livekit-client`. The input must be a live
+audio track for that one speaker; a mixed conference track cannot establish
+per-person identity. No `createMicrophone` factory is needed for external input.
+Start input from a user gesture where browser audio activation requires it.
+If the owned audio context cannot run, input fails without a microphone fallback.
+Optional browser factories must return a fresh context owned solely by Bota;
+input retirement closes that context and stops its destination track.
+Use `setInput(true)` and `finishInput()` for either source kind; these are aliases
+of the existing shared-policy microphone controls, not separate state machines.
+The existing `microphoneEnabled` state field and media-port names are unchanged.
+Closing joins late acquisition, publication and connection work before resolving.
+Host-specific capture clocks, original archive correlation and real RTC remain
+qualification work.
+Microphone capture starts only on an explicit call; listening, microphone mute
+and subscription changes are independent. A successful subscription callback
+acknowledges desired state, not audible playback: the worker-applied revision and
+actual old-buffer clearing must also complete. Sender completion does not cut off
+the listener's trailing audio. `close()` is terminal; reconnect requires a new
+authorized session owner. Errors expose fixed codes, not vendor responses or
+credentials. The SDK retains no transcript history.
+
+For normal source completion, call `await speech.finishMicrophone()`. It silences
+new microphone input immediately, keeps the exact publication while the server
+processes its accepted tail, and leaves listening connected. After a terminal
+result it unpublishes that input; await this method before enabling a new
+microphone publication. Ordinary mute/unpublish and `close()` remain interruption
+paths. The optional LiveKit adapter implements the required `holdMicrophone` and
+`microphonePublication` port capabilities, including late acquisition/publication.
+
+Supply optional `host.finishSource(request, signal)` through an authenticated
+customer proxy. On the first request, `sourceId` and `sourceEpoch` are null: resolve
+exactly one registered source from the session's `sources`, matching the actual
+signed-in publisher, member generation, current worker generation and local
+`trackSid`. A source not registered yet is temporarily unavailable. Never select
+the latest or another speaker's source. POST its exact identity to
+`/v1/speech-sessions/:id/participants/:participantId/sources/:sourceId/finish` with
+`member_generation`, `worker_generation`, `source_epoch` and `track_sid`, and return
+the response JSON unchanged. Later requests carry the pinned source ID/epoch and
+must reuse them. Client-provided IDs are not authorization; project keys stay in
+the proxy. Map denied, stale and temporary outcomes to `SpeechSourceFinishError`
+codes `unauthorized`, `stale_source` and `unavailable`, and honor cancellation.
+
+`state.sourceFinish` reports preparation, requested/draining and terminal states.
+`no_source` means no local publication existed, not completed ASR. Shared Rust
+checks returned ownership, worker/source identity, transitions and immutable
+boundary counters. It polls at one-second intervals with a 90-second processing
+deadline; each host request has a five-second timeout. Concurrent calls share one
+operation. An unavailable outcome preserves the muted publication and pinned
+identity for explicit `finishMicrophone()` reconciliation or terminal `close()`;
+it cannot resume capture or silently choose a new source. Authorization loss
+closes the owner. `completed` covers server processing, not successful translation
+for every listener, actual hearing or original-archive completeness. The helper
+rejects unsupported ports/proxies before changing capture.
+
+`readCaptions` is optional and calls the customer's authenticated backend proxy,
+which forwards the current session/member/subscription and opaque cursor to the
+caption endpoint. Return its JSON body unchanged; map denied authorization to
+`SpeechCaptionReadError('unauthorized')`, an obsolete subscription/cursor to
+`SpeechCaptionReadError('stale_subscription')`, and temporary failures to
+`SpeechCaptionReadError('unavailable')`. Keep project keys on that backend.
+The proxy must also authorize the actual signed-in listener; client-supplied IDs
+are not authorization. Abort the request when its signal is cancelled.
+
+Shared Rust validates each entire page before emitting `onCaption` updates. It
+requests eight records at a time, waits 250 ms between backfill pages, polls an
+exhausted cursor every two seconds, and backs off five seconds after temporary
+failure. `recoverCaptions()` joins the current page or requests an immediate retry;
+it does not wait for the entire meeting history. Polling and caption recovery do
+not synthesize or play audio. Temporary read failures leave capture running;
+explicit authorization denial closes the owner. A stale subscription stops old
+playback until the host supplies a newly authorized selection.
+
+Use `onCaption` for both live and recovered text and upsert by its stable `key`,
+keeping confirmed text final. The SDK retains only 1,024 recent identity hashes,
+not complete text history; apps must keep their own idempotent view and never
+replace a final record with an interim one after eviction or reconnect. Do not
+append the same caption again from `onEvent`. State snapshots exclude content.
+Language changes cancel the old read and discard its cursor; late responses are
+ignored. A fresh authorized owner starts recovery from the beginning, and the
+stable keys allow the app to merge that history. Live-only sessions report
+`unavailable` without invoking the recovery callback; keep their UI text volatile.
+
+Web media still follows LiveKit Cloud's region routing; the public JS client has
+no adapter-level switch to disable initial regional fallback. Qualify the Cloud
+project's permitted regions before enabling a cohort. Browser autoplay, AEC,
+device changes, network loss, TURN, archive correlation and real-provider latency
+need separate runtime qualification. This module does not establish original
+audio archival or device-speaker support.
+
+### Two-speaker browser companion
+
+The source-only [conversation page](../../tests/consumers/web-vite/speech.html)
+uses the packed Web SDK, its actual Rust/Wasm policy and the public LiveKit
+`2.23.0` factories. It provides A/B roles, paired original/translated captions,
+independent microphone and listening controls, receiving-language/mode changes,
+autoplay recovery, normal source finish and joined terminal cleanup. It starts
+with both capture and listening off. Changing roles requires leaving first;
+another tab's receiving preference remains independent.
+
+The [loopback host](../../tools/web/serve-speech.mjs) is an operator lab example,
+not a deployed authentication service. It serves the built page only on
+`127.0.0.1` and proxies the existing speech control API. Each independent access
+code maps to one pre-admitted participant UUID and fixed member generation.
+The browser cannot choose another participant, project, source set or API origin.
+Project credentials stay in the Node process; only that role's short-lived grant
+reaches the SDK. Requests are bounded, cancellable, no-store and not retried
+after an uncertain mutation. Production hosts must replace the lab codes with
+their signed-in principal and fresh membership authorization.
+
+Before running the lab, the authorized host must create an active, media-ready
+session with two current `host_microphone` participants and initial subscriptions
+that each select only the other participant. Both must have publish/subscribe
+permission. Receiving languages must be included in the session's allowed set.
+This example accepts `text_only`, `live_only`, and explicitly negotiated
+`original_audio_and_text` sessions. Original mode requires the dedicated host
+capture backend profile and durable browser storage. Unsupported storage,
+external sources and replaced members are refused; retention never changes
+silently. Clients without the capture capability still reject original mode.
+
+From the repository root, build and verify the packed consumer with the pinned
+Node/Rust/Web toolchain, then load the operator configuration from a private,
+untracked environment file:
+
+```sh
+npm run web:verify
+node --env-file=/absolute/path/to/private-speech-lab.env tools/web/serve-speech.mjs
+```
+
+| Environment variable | Required value |
+| --- | --- |
+| `BOTA_SPEECH_API_ORIGIN` | The explicitly selected Bota API origin; HTTPS, or HTTP on `127.0.0.1` for a disposable local backend. |
+| `BOTA_SPEECH_API_KEY` | A server-side credential with `speech_sessions:read` and `speech_sessions:write`. Original mode also requires `recordings:read`, `recordings:write` and `transcriptions:read`. Never use a `VITE_` variable for this value. |
+| `BOTA_SPEECH_PROJECT_ID`, `BOTA_SPEECH_SESSION_ID` | The same authorized project and already-created session. |
+| `BOTA_SPEECH_A_PARTICIPANT_ID`, `BOTA_SPEECH_B_PARTICIPANT_ID` | Two distinct admitted participant UUIDs. |
+| `BOTA_SPEECH_A_MEMBER_GENERATION`, `BOTA_SPEECH_B_MEMBER_GENERATION` | Their exact current positive member generations. |
+| `BOTA_SPEECH_A_CODE`, `BOTA_SPEECH_B_CODE` | Independent random access codes, each 32–128 characters, shared only with the intended lab operator. |
+| `BOTA_SPEECH_PORT` | Optional loopback port; defaults to `4173`. |
+
+Open the printed loopback URL, choose the assigned role and enter its access code.
+Join does not start the microphone. Use **Start microphone** and **Start listening**
+independently; **Finish speaking** holds the exact publication until the SDK
+reports processing completion or an explicit unavailable/interrupted outcome.
+Listening remains connected. **Leave** interrupts remaining work, clears the
+volatile caption view and joins cleanup. An uncertain cleanup disables a new
+owner until the tab is closed. A revision conflict requires leaving and reading a
+fresh authorized snapshot, rather than overwriting another preference.
+Explicit authorization denial during a preference update immediately retires
+the owner and clears the view; temporary preference failures retain independent
+capture and require reconciliation before another change.
+
+The view keeps at most 100 paired passages in memory, renders text as text, and
+does not persist captions, grants, cursors or access codes in browser storage.
+Text retention remains a backend session policy; input processing completion does
+not mean translated audio was heard or an original archive was verified.
+Separate browser tabs do not separate physical speakers: use qualified independent
+inputs/devices, or explicitly change role between turns on a shared microphone.
+Headset, AEC, overlapping speech and real cloud behavior remain qualification work.
+
+The existing packed-consumer browser gate exercises this same view and real
+Rust/Wasm policy through synthetic HTTP/media boundaries. Its separate
+`speech-check.html` harness is not served by the operator host. A normal-entry
+check loads the actual vendor bundle without opening media or contacting a host.
+Host regressions also cover real loopback HTTP, role/origin isolation, immutable
+member binding, exact source finish, cancellation and bounded admission.
+These checks do not establish encoded RTC delivery, ASR/MT/TTS quality, measured
+latency, production login, device acceptance or any other SDK family's App adoption.
+
+### Independent original capture (unreleased)
+
+The optional `@bota.dev/web-app-sdk/speech/capture` entry owns an authenticated
+encrypted journal in IndexedDB and a non-extractable WebCrypto key. Import a
+capture-scoped preparation from the authenticated host using
+`createWebSpeechCapture({ scope, prepared })`. The scope must include the current
+account/project/session/member generation. Web Locks prevent two tabs from
+recovering the same capture concurrently; persistent storage is required.
+`recoverWebSpeechCapture` seals an interrupted clock with an explicit unknown
+tail. It never resumes a crashed capture as though no samples were lost.
+
+`@bota.dev/web-app-sdk/speech/capture-input` supplies
+`createWebSpeechCaptureInput({ archive })`. Call `start()` only after explicit
+capture consent. One microphone and one 48 kHz AudioWorklet produce the same
+quantized PCM16 for RTC and encrypted archival. Supply its borrowed output track
+as `originalMicrophone` to the LiveKit adapter; the participant remains
+`host_microphone`. RTC owns only a derived branch. `stop()` closes the current
+capture clock; `finish()` seals the original manifest. Bound durable writes never
+block RTC: dropped positions become exact gaps. An interrupted render thread
+records an unknown tail. Serve the packaged `speechCaptureWorklet.js` as a
+same-origin asset under the host CSP; Vite consumers should disable asset
+inlining or supply an explicit worklet URL.
+
+Call `archive.flush(host, signal)` for one bounded upload pass and schedule
+foreground retries independently from RTC. Per-part acknowledgements retain
+local ciphertext. Only the exact published/verified receipt permits atomic local
+audio deletion and key retirement. Completed identity metadata remains available
+through `listWebSpeechCaptureReceipts` for later authorized text retrieval.
+`close()` cancels IO and releases ownership while preserving unfinished originals.
+No closed-tab or background execution is promised.
+
+The browser companion starts one explicit original per join. **Stop and save
+original** seals it; rejoin for a new recording. A failed live connection does not
+stop original capture while its existing host grant remains valid. Grant expiry
+stops the microphone, and independently authorized archive upload may continue.
+Rejoining recovers encrypted pending originals for the same scope. The original
+panel distinguishes stored-audio verification, capture gaps and final text
+alignment. Final text is independently reprocessed from verified original bytes,
+with exact sample intervals and discontinuities; it does not assert RTP clock
+synchronization. Live captions remain provisional for this purpose.
+
 ## Physical acceptance
 
 Automated Chromium uses deterministic fake Bluetooth and storage boundaries;

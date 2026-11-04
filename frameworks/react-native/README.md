@@ -460,3 +460,241 @@ The actual Android App candidate builds with this configuration; its generated
 schema contains only the WiFi IO module. Profile-2 control and App source are
 implemented; public release adoption, iOS target compilation and external
 firmware acceptance remain pending. See [installation and limitations](../../docs/parity/local-wifi.md#standalone-native-packaging).
+
+### Optional speech sessions (unreleased source preview)
+
+`@bota.dev/react-native-app-sdk/speech` exports `createNativeSpeechSession`.
+It executes the shared Rust speech policy as generated JavaScript, separately
+from the device/BLE workflow. The host supplies an authorized configuration,
+short-lived grant, `changeSubscription` and `renewGrant` callbacks, and a
+`SpeechMediaPort` factory. Project/provider secrets never enter this module.
+
+The media port owns native capture, RTC, playback and audio-session integration;
+raw microphone/playback samples do not cross the generated-core boundary.
+Only bounded captions, metadata and control commands reach Rust. `setMicrophone`, `setListening`,
+`changeSubscription`, `resumeAudio` and terminal `close` have the same host
+orchestration as the Web entry. Await `ready` before interacting and await
+`close` when leaving, logging out or changing tenant. A port must synchronously
+silence/mute on request, discard old buffers before acknowledging a clear, and
+fence late callbacks after cancellation. It cannot infer playback permission
+from a room or track name.
+
+`finishMicrophone()` uses the same shared Rust policy and IO orchestration as Web.
+It immediately silences new input, keeps the exact publication for the server's
+accepted tail and preserves listening. Await its terminal result before starting
+another microphone publication. Ordinary mute/unpublish and `close()` remain
+interruption paths. The optional native LiveKit adapter supplies `holdMicrophone`
+and `microphonePublication`, including a late microphone acquisition or publish
+acknowledgement; finishing capture does not stop its shared audio session.
+
+Supply `host.finishSource(request, signal)` through the customer's authenticated
+proxy. Resolve the actual signed-in publisher's unique registered source by
+session, member/worker generations and `trackSid` when `sourceId`/`sourceEpoch`
+are null. A source not registered yet is temporarily unavailable. POST the exact
+source to `/v1/speech-sessions/:id/participants/:participantId/sources/:sourceId/finish`
+with `member_generation`, `worker_generation`, `source_epoch` and `track_sid`;
+return the response JSON unchanged. Later requests pin source ID/epoch, so neither
+the proxy nor the app may substitute the latest source. Map errors with exported
+`SpeechSourceFinishError` (`unauthorized`, `stale_source`, `unavailable`). Honor
+cancellation and retain project keys exclusively in the proxy.
+
+`state.sourceFinish` keeps source processing separate from listening and archive
+completion. Rust validates source/worker identity, transitions and boundary
+counters, polls at one-second intervals and bounds processing to 90 seconds;
+individual proxy requests time out after five seconds. Duplicate calls share one
+operation. `no_source` does not claim ASR completion. An unavailable result keeps
+the publication muted and its identity pinned for explicit reconciliation through
+`finishMicrophone()` or terminal `close()`. A stale source cannot be silently
+replaced, and authorization loss closes the owner. `completed` is server processing
+only, not evidence that all listeners heard their translation or the archive is
+complete. Unsupported ports/proxies reject before changing capture.
+
+Optional `readCaptions(request, signal)` uses the customer's authenticated backend
+proxy to read confirmed captions for the current member and subscription. The
+proxy authorizes the signed-in listener, forwards the cursor and requested limit,
+and returns the response JSON unchanged. Map authorization denial, stale
+subscription/cursor and temporary failures using exported `SpeechCaptionReadError`
+codes `unauthorized`, `stale_subscription` and `unavailable`. Honor cancellation;
+never put project keys in the app. The shared policy requests eight records per
+page, backfills at 250 ms intervals, polls an exhausted cursor every two seconds
+and retries temporary failures after five seconds. `recoverCaptions()` joins one
+pending page or requests an immediate retry, independently of capture/playback.
+
+`onCaption` carries both live and recovered updates with a stable `key`. Upsert by
+that key and never replace confirmed text with an interim record. The core stores
+only 1,024 recent identity hashes; the app owns the idempotent text view, including
+deduplication after a fresh authorized owner re-reads history. Do not append the
+same text from `onEvent`. State snapshots exclude caption content. A language
+change cancels the old request and resets the cursor; stale replies are ignored.
+Live-only sessions never read retained history and report `unavailable`; their
+visible text remains volatile. Recovery never requests TTS or replays audio.
+
+The facade and optional native LiveKit media adapter are source candidates.
+An internal conversation App consumes these entries; production App adoption,
+platform audio sessions and physical duplex qualification remain separate work.
+Do not advertise this as an available published SDK or a qualified mobile
+interpreter. Existing recording/upload ownership and receipt-based cleanup
+remain unchanged.
+
+#### Native LiveKit media candidate
+
+The separate `@bota.dev/react-native-app-sdk/speech/livekit` entry exports
+`createLiveKitNativeMedia`. The host installs and initializes LiveKit's native
+dependencies; the Bota package does not autoinstall another WebRTC runtime.
+The public API contract was checked against `@livekit/react-native` 3.1.0,
+`@livekit/react-native-webrtc` 150.1.1 and `livekit-client` 2.23.0. Those version
+numbers identify the candidate, not a qualified native binary or device matrix.
+Follow the [vendor's native setup](https://docs.livekit.io/transport/sdk-platforms/react-native/)
+for iOS/Android linking and microphone permissions, and call `registerGlobals()`
+once during host initialization before constructing any LiveKit rooms.
+
+The [internal conversation companion](../../tests/consumers/react-native-speech)
+uses the exact local SDK package, generated JS session policy and the public
+Swift/Kotlin LiveKit media adapters through `/speech/native-media`. It provides
+A/B role login, paired original/translated captions, independent microphone and
+listening controls, language/mode selection, source finish and caption recovery.
+It shares the operator-only loopback proxy described in
+[the native companion setup](../../docs/parity/android-speech-session.md), with
+`text_only`, `live_only` and explicit `speech_capture_pcm_v1` original sessions admitted. Project/provider
+credentials stay on the host; role codes and grants are transient JS control
+data. Original PCM and archive keys stay native. The same native microphone feeds
+RTC and durable encrypted storage. Independent stop/upload controls survive RTC
+failure; final text comes from verified original-file reprocessing. See the
+[original-capture contract](../../docs/parity/speech-original-capture.md).
+
+Run `bash tools/speech/test-react-native-companion.sh --android` or `--ios`
+from the repository root with Node 22 and the matching platform toolchain.
+The generated App links the optional native media adapter and its pinned vendor
+dependency. It does not install the separate RN WebRTC stack described above.
+`--js-only` runs the actual generated-policy consumer checks without native
+builds. The helper prepares ignored projects from the pinned React Native
+0.86.3 template; maintained App/native sources are under `src/` and `native/`.
+The outputs in `target/react-native-speech-companion/` contain bundled JavaScript
+and use release configuration without Metro/development reload. The Android APK
+uses a disposable internal test key and arm64/x86_64 binaries; the unsigned iOS
+bundle requires normal signing before device installation. Neither is a public
+SDK release. Android uses `adb reverse tcp:4173 tcp:4173` for the default host;
+an iOS device needs an operator-provided loopback tunnel to that same host.
+
+The Android build checks the actual ARM64/x86_64 compilation databases before
+preserving an APK. The App and safe-area component must use the same Fabric
+property-layout definitions; mismatched definitions can compile successfully
+but corrupt native memory at startup. The pinned safe-area dependency uses
+React Native's shared compiler options. Full CI also starts the bundled App
+on API 35 and verifies its native loopback HTTP path, including original-capture
+profile admission and a handled unavailable-host response. The separate Android
+startup workflow can replay a preserved same-repository CI APK and retains
+App-scoped runtime logs, crash records and screenshots on failure.
+
+Native HTTP reuses the companion's bounded, no-redirect transport. Leaving or
+entering background retires the JS owner, clears its 100-pair view immediately
+and joins pending host/media cleanup. Late authorization and permission replies
+cannot start capture; failed cleanup blocks re-entry until process restart.
+Changing languages clears the prior revision before requesting its replacement.
+Native ownership also retires media and original capture on background/engine
+invalidation and fences grant expiry independently of JS scheduling. The generic
+`createNativeSpeechMedia(callbacks, io)` adapter requires synchronous native
+mute/hold/silence fences and a joined `closeMedia`; capture ownership remains
+separate. Actual background/interruption/engine teardown, routes,
+duplex/AEC, real RTC/provider and host external-input qualification remain open.
+The internal App reserves one native audio session exclusively and must not be
+embedded alongside another uncoordinated room/player.
+
+```ts
+import { AudioSession, registerGlobals, setLogLevel } from '@livekit/react-native'
+import { Room, createLocalAudioTrack, LogLevel } from 'livekit-client'
+import { createNativeSpeechSession } from '@bota.dev/react-native-app-sdk/speech'
+import { createLiveKitNativeMedia } from '@bota.dev/react-native-app-sdk/speech/livekit'
+
+// Once during app initialization, with the host's audio-session ownership policy.
+registerGlobals()
+const speech = createNativeSpeechSession({
+  configuration,
+  grant,
+  host: authorizedSpeechCallbacks,
+  mediaFactory: callbacks => createLiveKitNativeMedia(callbacks, {
+    roomFactory: options => new Room(options),
+    createMicrophone: options => createLocalAudioTrack(options),
+    silenceVendorLogs: () => setLogLevel(LogLevel.silent),
+    audioSession: AudioSession,
+    audioSessionOwnership: 'exclusive',
+    restoreRemoteTrackVolume: hostKnownPreviousDefaultVolume,
+    defaultOutput: 'earpiece',
+  }),
+  onCaption: caption => upsertCaption(caption.key, caption),
+  onError: error => showSpeechStatus(error.code),
+})
+await speech.ready
+await speech.setMicrophone(true)
+await speech.setListening(true)
+// Await this on leave/logout/tenant change and when the host retires foreground ownership.
+await speech.close()
+```
+
+With `audioSessionOwnership: 'exclusive'`, the host reserves the native audio session exclusively;
+it cannot run alongside another room/player that independently changes LiveKit's
+global defaults. Pass the actual singleton `AudioSession`, not a fresh wrapper.
+The host supplies its known prior incoming-track volume because LiveKit does not
+expose a public getter. New incoming tracks default to zero volume before room
+connection, and only approved processor/track identities are unmuted. Bluetooth
+and wired headsets precede the selected speaker/earpiece fallback. Permission
+to publish still does not start the microphone until `setMicrophone(true)`.
+
+Listening changes mute and unsubscribe old tracks without stopping capture or
+the native audio session. Buffer-clear acknowledgement waits for the exact
+old track's unsubscribe. Cleanup joins late audio-session start, room connection,
+microphone acquisition and publication before releasing global ownership. Failed
+cleanup leaves native state uncertain and refuses a new owner on that runtime;
+do not treat a cleanup error as proof that all physical audio has stopped.
+Disconnect/reconnecting events retire the owner instead of silently reusing old
+authority. The host must manage interruption/background policy and must not retry
+uncertain native cleanup by constructing another wrapper. `resumeAudio()` has no
+browser autoplay action on this connected native adapter.
+
+An existing conference can instead set `audioSessionOwnership: 'host'` and supply
+an `audioSession` implementing `acquireMutedPlayback(signal)`. It returns a lease
+with `release(): Promise<void>`. The host coordinator owns native routing, focus,
+activation and global incoming-track defaults; it must ensure Bota's new receive
+tracks are muted **before native playout**, while preserving its own conference's
+audio. For LiveKit, the public default-volume setter affects all newly received
+tracks in that runtime, so the host must explicitly manage its other rooms too.
+Do not implement this port as an acknowledgement-only callback or let another
+uncoordinated owner change these global settings. Bota never calls global
+configure/start/stop/volume methods in host mode. It releases only its lease after
+its room and late media work settle. Uncertain cleanup retains the lease; the
+host must reconcile it before granting a replacement. An aborted acquisition that
+later succeeds still returns its releasable lease.
+
+For authorized external input, admit the speaker as `host_external` on the backend
+and supply a separate owned branch from the host's supported media bridge:
+
+```ts
+audioSessionOwnership: 'host',
+audioSession: conferenceAudioCoordinator,
+externalInput: {
+  participantId: grant.participant_id,
+  memberGeneration: grant.member_generation,
+  sourceTrack: authorizedOriginalMediaStreamTrack,
+  createOwnedTrack: signal => meetingMediaBridge.createIndependentAudioTrack(signal),
+},
+```
+
+`createOwnedTrack` must return a fresh public LiveKit `LocalAudioTrack` whose
+underlying audio track has a different ID and independent enabled/stop lifecycle.
+It transfers that branch to Bota and must preserve upstream host mute and source
+termination in the samples it supplies. An independent lifecycle does not permit
+bypassing the host microphone mute. Rewrapping the same original is rejected without
+mutating it. The native WebRTC implementation's `clone()` is not assumed available;
+the host must provide a qualified bridge, and must not silently fall back to a
+second microphone or mixed system audio. No microphone factory is needed in this
+mode. `setInput` and `finishInput` alias the same Rust-owned workflow as
+`setMicrophone` and `finishMicrophone`; finish keeps listening and retires only
+Bota's branch. Participant/member mismatches fail before audio lease acquisition.
+These ports provide source integration, not an automatic bridge for every meeting
+vendor. Qualify the actual host bridge/coordinator and consuming App.
+
+LiveKit Cloud region routing has the same qualification constraint as the Web
+candidate. Native linkage, focus interruptions, Bluetooth changes, physical buffer
+tails, AEC/double-talk and end-to-end latency still need acceptance. Authorized
+external input and host audio coordination now have source adapters, while actual
+vendor linkage, host integration and physical coexistence remain unqualified.
