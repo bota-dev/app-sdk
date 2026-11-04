@@ -50,7 +50,7 @@ const UPDATE_OPERATIONS = {
   startRecordingStateUpdates: ['recording', 'SERVICE_BOTA_CONTROL', 'CHAR_RECORDING_STATUS',
     'decodeRecordingState', 'onRecordingStateUpdated'],
   startWiFiStatusUpdates: ['wifi', 'SERVICE_BOTA_WIFI_CONFIG', 'CHAR_WIFI_STATUS',
-    'decodeWiFiStatus', 'onWiFiStatusUpdated'],
+    'decodeWiFiStatusEvent', 'onWiFiStatusUpdated'],
 } as const;
 
 /** BLE integration only. Packet formats and Bota response policy are supplied by Rust. */
@@ -240,6 +240,7 @@ export class JsDeviceControls {
       case 'requestStartRecording':
       case 'requestStopRecording':
         return this.recordingControl(operation === 'requestStartRecording' ? 'start' : 'stop', args[1], connection, context);
+      case 'configureSecureWiFi':
       case 'configureWiFi':
         return this.configureWiFi(json(args[1]), json(args[2]), json(args[3]), connection, context);
       case 'disconnectWiFi':
@@ -350,18 +351,40 @@ export class JsDeviceControls {
 
   private async configureWiFi(ssid: JsValue, password: JsValue, grant: unknown,
     connection: JsControlConnection, context: JsHostContext): Promise<JsValue> {
-    const credentials = bytes(this.codec('encodeWiFiCredentials', { ssid, password }));
-    const encodedGrant = grant === undefined ? null : bytes(this.codec('encodeWiFiGrant', {
-      grant: json(grant), capacity: this.capacity(connection),
-    }));
+    let authority: Record<string, JsValue>;
+    try { authority = record(typeof grant === 'string' ? JSON.parse(grant) : json(grant)); }
+    catch { throw controlError('invalid_input', context.operation); }
+    const expiry = typeof authority.expiresAt === 'string' ? Date.parse(authority.expiresAt) : NaN;
+    if (authority.format !== 'bota-wifi-config-v2' || !Number.isFinite(expiry) || expiry <= Date.now()) {
+      throw controlError('invalid_input', context.operation);
+    }
+    const capability = await this.step(connection, context, () => this.options.ports.ble.read(
+      this.address('SERVICE_BOTA_WIFI_CONFIG', 'CHAR_WIFI_GRANT', connection), context));
+    this.codec('wifiProvisioning', { Capability: { bytes: publicBytes(capability) } });
+    const nonce = await this.decodeRead('decodeHex', 'SERVICE_BOTA_AUTH', 'CHAR_AUTH_NONCE', connection, context, { length: 16 });
+    const prepared = record(this.codec('wifiProvisioning', { Create: {
+      grant: authority, ssid, password, nonce, serial: connection.device.serialNumber, capacity: this.capacity(connection),
+    } }));
+    const id = prepared.id!;
+    const credentials = bytes(prepared.credentials);
+    const chunks = array(prepared.chunks).map(value => bytes(value));
     try {
-      return await this.withResult('SERVICE_BOTA_WIFI_CONFIG', 'CHAR_WIFI_CREDENTIAL', connection, context,
-        value => this.codec('decodeWiFiConfigResult', { bytes: publicBytes(value) }), async beginResults => {
-          if (encodedGrant) await this.writeBytes(encodedGrant, 'SERVICE_BOTA_WIFI_CONFIG', 'CHAR_WIFI_GRANT', connection, context);
+      return await this.withResult('SERVICE_BOTA_WIFI_CONFIG', 'CHAR_WIFI_STATUS', connection, context,
+        value => {
+          const wire = publicBytes(value);
+          // Ordinary connection-state events are not configuration receipts.
+          if (wire[0] !== 0xb2) return null;
+          return this.codec('wifiProvisioning', { Result: { id, bytes: wire } });
+        }, async beginResults => {
           beginResults();
+          for (const chunk of chunks) await this.writeBytes(chunk, 'SERVICE_BOTA_WIFI_CONFIG', 'CHAR_WIFI_GRANT', connection, context);
+          if (Date.now() >= expiry) throw controlError('invalid_input', context.operation);
           await this.writeBytes(credentials, 'SERVICE_BOTA_WIFI_CONFIG', 'CHAR_WIFI_CREDENTIAL', connection, context);
         });
-    } finally { credentials.fill(0); encodedGrant?.fill(0); }
+    } finally {
+      credentials.fill(0); for (const chunk of chunks) chunk.fill(0);
+      this.codec('wifiProvisioning', { Free: { id } });
+    }
   }
 
   private async scanWiFi(connection: JsControlConnection, context: JsHostContext): Promise<JsValue> {
@@ -450,7 +473,8 @@ export class JsDeviceControls {
       if (!owner || owner.closing || this.closed) return;
       try {
         this.requireOwner(connection, context);
-        this.options.emit(event, this.codec(decoder, { bytes: publicBytes(value), timestampMs: Date.now() }));
+        const decoded = this.codec(decoder, { bytes: publicBytes(value), timestampMs: Date.now() });
+        if (decoded !== null) this.options.emit(event, decoded);
       } catch { void this.closeObserver(key, owner).catch(() => undefined); }
     }, context, error => {
       this.markCleanupFailure(error, context);

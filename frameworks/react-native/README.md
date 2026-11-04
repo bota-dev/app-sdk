@@ -160,7 +160,10 @@ import remains a compatibility gap outside the modern key target.
 
 Generated firmware update uses the canonical Rust OTA/reboot recovery loop.
 `firmwareRecovery.timeoutMs` can narrow its budget; `delayMs` is legacy-adapter
-behavior only. Fresh serial/version readback proves installation; an ACK cannot.
+behavior only. In generated JS mode, the first verified reboot/reconnect phase
+starts one recovery window; download/transfer time does not consume it and
+retries do not reset it. Fresh serial/version readback proves installation;
+an ACK cannot.
 Custom v2 providers use `readEncryptedUploadV2AuthNonce(operationId)` and the
 operation-scoped `registerEncryptedUploadV2Material`/`releaseEncryptedUploadV2Material`
 registry. Managed v2/BYO/status factories use supplied scoped HTTP effects.

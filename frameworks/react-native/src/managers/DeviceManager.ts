@@ -620,6 +620,11 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     await this.client.provisioning.writeConnectionSettings(device, settings);
   }
 
+  /** Secure-only entry point used to prevent older packages from sending plaintext. */
+  async configureSecureWiFi(deviceId: string, credentials: WiFiCredentials, grant: WiFiConfigGrant): Promise<WiFiConfigResult> {
+    return this.configureWiFi(deviceId, credentials, grant);
+  }
+
   async configureWiFi(
     deviceId: string,
     credentials: WiFiCredentials,
@@ -632,6 +637,7 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     );
   }
 
+  /** @deprecated Use configureSecureWiFi with empty credentials and a disconnect grant. */
   async disconnectWiFi(deviceId: string): Promise<WiFiConfigResult> {
     return this.client.wifi.disconnect(this.requireConnected(deviceId));
   }

@@ -18,6 +18,7 @@ const MAX_LOG_PENDING_BYTES: usize = 64 * 1024;
 #[derive(Default)]
 pub(crate) struct CodecState {
     speech: crate::speech::SpeechClients,
+    wifi_provisioning: crate::wifi_provisioning::WifiProvisioningCodecs,
     local_wifi: crate::local_wifi::LocalWifiCodecs,
     logs: BTreeMap<String, LogState>,
     diagnostics: BTreeMap<String, DeviceDiagnosticsDecoder>,
@@ -257,6 +258,9 @@ impl CodecState {
         if name == "speechSession" {
             return self.speech.call(value);
         }
+        if name == "wifiProvisioning" {
+            return self.wifi_provisioning.call(value);
+        }
         if name == "localWifiTransfer" {
             return self.local_wifi.call(value);
         }
@@ -463,6 +467,14 @@ impl CodecState {
             "decodeWiFiConfigResult" => output(&dto::decode_wifi_config_result_dto(
                 &input::<Bytes>(value)?.bytes,
             )?),
+            "decodeWiFiStatusEvent" => {
+                let bytes = input::<Bytes>(value)?.bytes;
+                if bytes.len() == 29 && bytes[0] == 0xb2 && bytes[1] == 2 {
+                    output(&())
+                } else {
+                    output(&dto::decode_wifi_status_dto(&bytes)?)
+                }
+            }
             "decodeWiFiStatus" => {
                 output(&dto::decode_wifi_status_dto(&input::<Bytes>(value)?.bytes)?)
             }
@@ -1301,15 +1313,13 @@ mod tests {
             serde_json::from_slice::<Vec<u8>>(&bytes).unwrap(),
             encode_time_sync(1_700_000_000_123, -480).unwrap()
         );
-        let bytes = codecs
-            .execute(
-                "encodeWiFiCredentials",
-                object!({"ssid":"fixture","password":"password"}),
-            )
-            .unwrap();
-        assert_eq!(
-            serde_json::from_slice::<Vec<u8>>(&bytes).unwrap(),
-            encode_wifi_credentials("fixture", "password").unwrap()
+        assert!(
+            codecs
+                .execute(
+                    "encodeWiFiCredentials",
+                    object!({"ssid":"fixture","password":"password"})
+                )
+                .is_err()
         );
         assert!(
             codecs
