@@ -118,6 +118,23 @@ class SpeechCaptureArchiveTest {
         assertEquals(manifest.getString("aad"), aad.getString("aad"))
     }
 
+    @Test fun revokedMicrophonePermissionStopsThePumpAndPreservesRecovery(): Unit = runBlocking {
+        val capture = "10000000-0000-4000-8000-000000000007"
+        val keys = Keys(); val root = RuntimeEnvironment.getApplication().noBackupFilesDir
+        val archive = SpeechCaptureArchive.create("revoked-microphone", preparation(capture), root, keys)
+        val failure = runCatching {
+            SpeechMicrophoneCapture.start(archive, 1500, { error("Unexpected RTC frame") },
+                {}, { throw SecurityException("Permission revoked after admission") }, { 1000 }, { 0 })
+        }.exceptionOrNull()
+        assertTrue(failure is SpeechCaptureException)
+        assertEquals(SpeechCaptureError.UNAUTHORIZED, (failure as SpeechCaptureException).error)
+        assertEquals(0L, archive.snapshot().archiveSamples)
+        archive.close()
+        val recovered = SpeechCaptureArchive.recover("revoked-microphone", capture, root, keys)
+        assertEquals(0L, recovered.snapshot().archiveSamples)
+        assertEquals(1, keys.count); recovered.close()
+    }
+
     @Test fun microphoneFeedsSameBytesToRtcAndDiskAndStopsAtAuthorizationExpiry(): Unit = runBlocking {
         val capture = "10000000-0000-4000-8000-000000000004"
         val keys = Keys(); val root = RuntimeEnvironment.getApplication().noBackupFilesDir

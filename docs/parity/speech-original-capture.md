@@ -38,6 +38,11 @@ timer. The host must supply microphone permission, audio routing and scope-corre
 grant renewal; the reusable microphone owner does not change global audio focus
 or the Apple audio-session category.
 
+Android hosts using original capture must declare `RECORD_AUDIO` and obtain the
+runtime grant. The base SDK does not add microphone permission to other consumers.
+The capture owner checks permission again on its IO thread and maps revocation
+during recorder creation to `UNAUTHORIZED`, retaining the recoverable archive.
+
 ## Public integration surfaces
 
 | Family | Source entry and owner | Independent original control |
@@ -94,11 +99,12 @@ available on the backend capture transcript endpoint. If provider admission cann
 | One original source, independent branches | Native microphone conversion/fork and Web AudioWorklet graph; native encrypted PCM equality checks | Source implementation; physical route, AEC, interruptions and device timing require qualification. |
 | Durable encrypted retry and exact deletion | Real SQLite/WebCrypto journals, canonical AES fixtures, packaged browser AudioWorklet/IndexedDB recovery, mismatched-receipt and late-HTTP checks | Component behavior checked; process-kill, storage pressure and actual secure-store/device acceptance remain. |
 | Capture timeline and final text | Shared Rust clock policy; backend migration/store/service; canonical ciphertext through real PostgreSQL publication and sample mapping | Original-file reprocessing policy implemented; actual provider output and full application presentation require end-to-end validation. |
-| Five SDK families | Public source entries and consuming companions for Web, Apple, Android, Flutter and RN | Generated JS, Pigeon and native API contracts are synchronized. Local native/JS/Dart consumers and the packaged browser path are checked; full iOS and device qualification remain. |
+| Five SDK families | Public source entries and consuming companions for Web, Apple, Android, Flutter and RN | Generated JS, Pigeon and native API contracts are synchronized. Local native/JS/Dart consumers and the packaged browser path are checked; final-source hosted builds and physical device qualification are separate gates. |
 | Distinct capture, RTC and publication outcomes | Independent original controls, native expiry fencing, source finish, bounded final-text polling, unavailable-ASR state and explicit gaps | Component checks do not establish G1–G6 completion. No cohort or release is enabled by this change. |
 
 The compound-engineering skill was unavailable, so this review directly compares
 the implementation with RTC-O04 / RTC-X01 / G4 and five-family ownership
-requirements. Full Xcode/iOS builds, real microphones and audio routes, two-person
+requirements. Final-source hosted builds must include complete Xcode/iOS consumers.
+Real microphones and audio routes, two-person
 RTC/ASR/translation/TTS, long-duration/concurrency behavior and optional vendor
 redistribution approval remain separate checks. Local composed regression covers the completed source and generated contracts; it does not complete the physical/provider/release gates in the single cross-repository checklist.

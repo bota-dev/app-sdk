@@ -1,6 +1,7 @@
 package dev.bota.sdk.speech
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.media.AudioFormat
@@ -30,15 +31,25 @@ internal interface SpeechMicrophoneSource {
     val route: Int
     fun close()
 }
-private class AndroidSpeechMicrophone : SpeechMicrophoneSource {
+// The optional capture host declares RECORD_AUDIO. Check it again on the IO
+// thread and handle revocation; the base SDK must not add microphone permission.
+@SuppressLint("MissingPermission")
+private class AndroidSpeechMicrophone(context: Context) : SpeechMicrophoneSource {
     private val recorder: AudioRecord
     private val echo: AcousticEchoCanceler?
     init {
+        if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            throw SecurityException("Microphone permission is unavailable")
+        }
         val minimum = AudioRecord.getMinBufferSize(48000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         if (minimum <= 0 || minimum > 96000) throw SpeechCaptureException(SpeechCaptureError.UNAVAILABLE)
-        recorder = AudioRecord.Builder().setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
-            .setAudioFormat(AudioFormat.Builder().setSampleRate(48000).setChannelMask(AudioFormat.CHANNEL_IN_MONO)
-                .setEncoding(AudioFormat.ENCODING_PCM_16BIT).build()).setBufferSizeInBytes(maxOf(minimum, 9600)).build()
+        recorder = try {
+            AudioRecord.Builder().setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
+                .setAudioFormat(AudioFormat.Builder().setSampleRate(48000).setChannelMask(AudioFormat.CHANNEL_IN_MONO)
+                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT).build()).setBufferSizeInBytes(maxOf(minimum, 9600)).build()
+        } catch (error: SecurityException) {
+            throw SpeechCaptureException(SpeechCaptureError.UNAUTHORIZED)
+        }
         var effect: AcousticEchoCanceler? = null
         try {
             if (recorder.state != AudioRecord.STATE_INITIALIZED) throw SpeechCaptureException(SpeechCaptureError.UNAVAILABLE)
@@ -77,12 +88,13 @@ public class SpeechMicrophoneCapture private constructor(
     private lateinit var reader: Deferred<Unit>
 
     public companion object {
+        /** The host must declare RECORD_AUDIO and obtain its runtime grant. */
         public suspend fun start(context: Context, archive: SpeechCaptureArchive, expiresAt: Instant,
             rtcFrame: (ByteArray) -> Unit, ended: (SpeechCaptureEnd) -> Unit = {}): SpeechMicrophoneCapture {
             if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                 throw SpeechCaptureException(SpeechCaptureError.UNAUTHORIZED)
             }
-            return start(archive, expiresAt.toEpochMilli(), rtcFrame, ended, { AndroidSpeechMicrophone() })
+            return start(archive, expiresAt.toEpochMilli(), rtcFrame, ended, { AndroidSpeechMicrophone(context) })
         }
         internal suspend fun start(archive: SpeechCaptureArchive, expiresAt: Long, rtcFrame: (ByteArray) -> Unit,
             ended: (SpeechCaptureEnd) -> Unit, open: () -> SpeechMicrophoneSource,
@@ -104,7 +116,8 @@ public class SpeechMicrophoneCapture private constructor(
             } catch (error: Exception) {
                 runCatching { source?.close() }; pump.stop(endKnown = false)
                 if (error is CancellationException) throw error
-                throw SpeechCaptureException(SpeechCaptureError.UNAVAILABLE)
+                if (error is SpeechCaptureException) throw error
+                throw SpeechCaptureException(if (error is SecurityException) SpeechCaptureError.UNAUTHORIZED else SpeechCaptureError.UNAVAILABLE)
             }
             } } catch (error: Throwable) { withContext(NonCancellable) { acquired?.interruptAndStop() }; throw error }
         }
