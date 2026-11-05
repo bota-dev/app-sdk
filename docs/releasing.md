@@ -335,14 +335,15 @@ artifact. An uncertain push outcome requires reading the actual index before
 retrying.
 
 A new specification is staged on a unique publication branch and submitted as a
-pull request in the SDK repository for that exact commit. Validate Specs,
-Title/body-only PR edits skip runner allocation under a noncanonical check name
-and a separate concurrency group; they cannot replace or cancel the required
-source `Scan`. Base retargets and unknown edit payloads still scan. GitHub may
-display the unevaluated name expression for a skipped job.
+pull request in the SDK repository for that exact commit.
 
-Dependency licenses and Scan, plus existing required repository checks, must
-pass on the exact head. Organization policy requires an independent approval
+Every PR event, including title/body-only edits, runs the real required `Scan`.
+Title/body-only edits use a separate concurrency group so they cannot cancel
+an active source scan. Base retargets and unknown edit payloads retain the
+source concurrency group.
+
+Validate Specs, dependency licenses and Scan, plus existing required repository
+checks, must pass on the exact head. Organization policy requires an independent approval
 of the latest push before an authorized maintainer merges it. The publisher
 waits for the actual merge and verifies the public specification on `main`.
 It must not approve or merge its own pull request, update `main` directly or
