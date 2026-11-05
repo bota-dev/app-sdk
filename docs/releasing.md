@@ -336,6 +336,11 @@ retrying.
 
 A new specification is staged on a unique publication branch and submitted as a
 pull request in the SDK repository for that exact commit. Validate Specs,
+Title/body-only PR edits skip runner allocation under a noncanonical check name
+and a separate concurrency group; they cannot replace or cancel the required
+source `Scan`. Base retargets and unknown edit payloads still scan. GitHub may
+display the unevaluated name expression for a skipped job.
+
 Dependency licenses and Scan, plus existing required repository checks, must
 pass on the exact head. Organization policy requires an independent approval
 of the latest push before an authorized maintainer merges it. The publisher
