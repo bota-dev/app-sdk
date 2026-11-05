@@ -83,6 +83,33 @@ function host(mode = 'success', version = 2) {
   connection:()=>({device,generation}),gatt:(_ctx,body)=>body(),emit(){}});
  return {core,controls,context,device,writes,meta,removed:()=>removed};
 }
+for (const [version, vector] of [[2, v], [3, JSON.parse(readFileSync(new URL('../../../../../protocol/wifi-config-v3.vector.json', import.meta.url), 'utf8'))]]) {
+ test(`v${version} grant fits GATT attribute values at an ATT MTU of 517`, async () => {
+  const f = host('success', version);
+  f.device.mtu = 517;
+  const response = vector.response;
+  const material = { ...grant, format: response.format, grantBlob: response.envelope_base64, keyBase64: response.key_base64 };
+  try {
+   const result = await f.controls.execute('configureSecureWiFi', [
+    f.device, create.Create.ssid, create.Create.password, JSON.stringify(material),
+   ], f.context);
+   assert.equal(result.success, true);
+   const frames = f.writes.slice(0, -1);
+   assert.equal(frames.length, 2);
+   assert.equal(frames[0].bytes.length, 512);
+   for (const frame of frames) {
+    assert.equal(frame.characteristic, f.meta.CHAR_WIFI_GRANT);
+    assert.ok(frame.bytes.length <= 512);
+   }
+   assert.equal(Buffer.concat(frames.map(frame => frame.bytes.subarray(6))).toString('base64'), response.envelope_base64);
+   assert.equal(f.writes.at(-1).bytes.toString('hex'), vector.credentialHex);
+  } finally {
+   await f.controls.close();
+   f.core.dispose();
+  }
+ });
+}
+
 test('actual generated core and BLE host send only ciphertext and wait for authenticated receipt',async()=>{
  const f=host();try {
   const result=await f.controls.execute('configureSecureWiFi',[f.device,create.Create.ssid,create.Create.password,JSON.stringify(grant)],f.context);

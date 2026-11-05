@@ -145,7 +145,9 @@ ciphertext, 16-byte tag. It has no plaintext SSID/password.
 Credential plaintext: `ssid_length:u8 || password_length:u8 || ssid || password`.
 Lengths are UTF-8 byte lengths, maximum 32/64, no NUL. Set requires a nonempty
 SSID; disconnect requires both lengths zero. Frames are 30..126 bytes and must
-fit one ATT write (MTU minus 3). The grant alone is fragmented. Insufficient
+fit one ATT write. For v2 and v3, use the smaller of the negotiated MTU minus 3
+and the 512-byte GATT attribute limit. Each grant fragment includes its six-byte
+header within that limit. The grant alone is fragmented. Insufficient
 MTU fails before any write. Plaintext legacy packets and the old single-byte
 disconnect command are rejected.
 
