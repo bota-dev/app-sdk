@@ -590,3 +590,13 @@ output to the updated source. Local verification passes all 665 React Native
 checks, the Rust workspace suite and 162 native/generated RPC comparisons across
 all 14 core commands. Exact-source CI, publication and physical acceptance remain
 separate gates; dependency refresh does not replace occupied releases.
+
+The following `base64` 0.23.1 update retains the exact repaired `zeroize` parent
+`611b47f3` and both target versions in the combined `Cargo.lock` graph. Its
+generated body comes verbatim from Linux CI run `41943027725`, with
+generated-file checksum and current-source provenance verification. The same stacked-source
+Rust/tooling and complete dependency-license jobs pass; final-head runtime and
+platform qualification remain required before delivery. Local combined-graph
+verification passes all 665 React Native checks and 162 native/generated RPC
+comparisons across all 14 commands. This combined output replaces neither an
+occupied public release nor the installed-app acceptance gates.
