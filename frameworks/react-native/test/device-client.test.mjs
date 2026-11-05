@@ -1340,23 +1340,26 @@ test('device log subscription receives only complete native lines and owns teard
   ]);
 });
 
-test('WiFi configuration keeps encoding native and preserves frozen result values', async () => {
+test('legacy native WiFi adapters refuse before disclosing credentials', async () => {
+  const fixture = nativeFixture(); const client = createBotaDeviceSDK(fixture.module);
+  const grant = { grantBlob: 'legacy', expiresAt: new Date(1_788_200_000_000) };
+  await assert.rejects(client.wifi.configure(connected, {ssid:'Bota',password:'secret'}, grant),
+    {code:'native_operation_unavailable'});
+  await assert.rejects(client.wifi.disconnect(connected), {code:'native_contract_unsupported'});
+  assert.deepEqual(fixture.calls, []);
+});
+
+test('secure-only adapter receives complete authority and supports authorized disconnect', async () => {
   const fixture = nativeFixture();
-  const client = createBotaDeviceSDK(fixture.module);
-
-  const configured = await client.wifi.configure(
-    connected,
-    { ssid: 'Bota', password: 'secret', securityType: 'WPA2' },
-    { grantBlob: 'grant.test', expiresAt: new Date(1_788_200_000_000) }
-  );
-  const disconnected = await client.wifi.disconnect(connected);
-
-  assert.deepEqual(configured, { success: true });
-  assert.deepEqual(disconnected, { success: false, error: 'storage_error' });
-  assert.deepEqual(fixture.calls, [
-    ['configureWiFi', connected, 'Bota', 'secret', 'grant.test'],
-    ['disconnectWiFi', connected],
-  ]);
+  fixture.module.configureSecureWiFi = async (device,ssid,password,grantJSON) => {
+    fixture.calls.push([device,ssid,password,JSON.parse(grantJSON)]);return {success:true};
+  };
+  const client=createBotaDeviceSDK(fixture.module);
+  const grant={format:'bota-wifi-config-v2',grantBlob:'sealed',keyBase64:'ephemeral',expiresAt:new Date('2099-01-01T00:00:00Z')};
+  await client.wifi.configure(connected,{ssid:'Bota',password:'secret'},grant);
+  await client.wifi.disconnect(connected,{...grant,action:'disconnect'});
+  assert.equal(fixture.calls[0][3].keyBase64,'ephemeral');
+  assert.deepEqual(fixture.calls[1].slice(1,3),['','']);
 });
 
 test('WiFi status and scan preserve unknown fallback and own status teardown', async () => {

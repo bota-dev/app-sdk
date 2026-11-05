@@ -126,8 +126,9 @@ compatibility field, not a URL or proof that firmware switched environment.
 
 **Encrypted delivery (unreleased candidate):** the existing bind request adds
 `credential_delivery: "hpke_v1"`; its response carries `credential_envelope`
-and omits `device_token`. The backend selects an independently enrolled `PK_D`;
-the observed BLE key only checks identity consistency. The App/SDK forwards the
+and omits `device_token`. The backend pins the explicit `PK_D` at first authorized
+bind using TOFU, or checks an existing pin. This does not attest factory identity;
+later key replacement is rejected. The App/SDK forwards the
 opaque envelope to `000A/0001` without decrypting it. RN uses
 `DeviceManager.provisionEnvelope` with canonical unpadded base64url; native,
 Web and Flutter provisioning material carries bytes. For encrypted delivery, supply the envelope and leave the raw-token slot empty. See [device token envelope v1](protocol/device-token-v1.md)
@@ -145,7 +146,7 @@ to `DEVICE_TOKEN`.
 
 **Plaintext compatibility (unreleased):** server configuration
 `DEVICE_TOKEN_ENCRYPTION_ENABLED=false` is the default and returns raw
-`device_token` without trusted-key enrollment. SDK material uses a nonempty token
+`device_token`; explicit bind-time keys are pinned in either mode. SDK material uses a nonempty token
 and no envelope; `0003/0002` carries 1–255 printable ASCII bytes with the same
 ordered framing. It shares deferred persistence, read-back, paired/reset and
 connection fencing. Interleaved formats cannot combine fragments. Compatible
@@ -162,14 +163,16 @@ results are 0 success, 1 invalid token, 2 storage error, 3 chunk error and
 Time sync on `0002/0004` is eight bytes: Unix seconds u32LE, milliseconds
 within the second u16LE, then timezone offset in minutes i16LE.
 
-WiFi grant and credential handling uses `0006/0001` and `0006/0002`.
-The credential codec emits `ssid_length:u8 || ssid:UTF8 || password_length:u8 ||
-password:UTF8`, bounded to 32/64 bytes, with no embedded NUL. Disconnect is the
-single byte `00`; an empty SSID cannot carry a password. These codec bytes do
-not bypass device authorization. Scan starts with `01` on `0006/0004`.
-Connection status values are 0 idle, 1 connecting, 2 connected, 3 failed and
-4 disconnected. See [encoders](core/device-sdk-core/src/protocol/encode.rs) and
-[status/scan decoders](core/device-sdk-core/src/protocol/provisioning.rs).
+WiFi configuration uses versioned [secure personal WiFi v2/v3](protocol/wifi-config-v2.md)
+on `0006/0001` (capability and signed HPKE grant), `0006/0002` (one-use AEAD
+credentials), and `0006/0003` (authenticated result and ordinary status).
+V3 verifies the active installed credential commitment independently of token
+delivery format; v2 retains its signed token-envelope prerequisite.
+The shared legacy plaintext credential encoder is disabled. Disconnect also
+requires fresh signed authority; there is no plaintext fallback. Success
+acknowledges encrypted persistence and connection scheduling, not DHCP.
+Scan starts with `01` on `0006/0004`. Ordinary connection status values remain
+0 idle, 1 connecting, 2 connected, 3 failed and 4 disconnected.
 
 `DEVICE_SETTINGS` (`0003/0006`) writes use a 12-byte version-2 packet:
 

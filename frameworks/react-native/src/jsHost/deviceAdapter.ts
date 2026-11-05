@@ -76,8 +76,8 @@ const controls = [
   'deliverCertificate', 'deliverBackendPublicKey', 'writeGrant', 'syncTime',
   'requestStartRecording', 'requestStopRecording', 'readRecordingState',
   'readFindChallenge', 'readFindBindingChallenge', 'confirmFindBinding', 'readFindCapabilities', 'readFindStatus', 'requestFindDevice',
-  'startRecordingStateUpdates', 'stopRecordingStateUpdates', 'configureWiFi', 'disconnectWiFi',
-  'readConnectionSettings', 'writeConnectionSettings', 'readWiFiStatus', 'scanWiFiNetworks',
+  'startRecordingStateUpdates', 'stopRecordingStateUpdates', 'configureSecureWiFi', 'configureWiFi', 'disconnectWiFi',
+  'readConnectionSettings', 'writeConnectionSettings', 'readWiFiStatus', 'readWiFiProvisioningVersion', 'scanWiFiNetworks',
   'startStatusUpdates', 'stopStatusUpdates', 'startWiFiStatusUpdates', 'stopWiFiStatusUpdates',
   'startDeviceLogs', 'stopDeviceLogs',
   'readDiagnosticEvents', 'acknowledgeDiagnosticEvents',
@@ -924,11 +924,10 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
         let fileRegistered = false;
         let registrationAttempted = false;
         let cleanupPromise: Promise<void> | undefined;
-        let verifiedAt: number | undefined;
+        let recoveryDeadline: number | undefined;
         let deadlineExpired = false;
         let recoveryTimer: ReturnType<typeof setTimeout> | undefined;
         let completedProgress: { phase: string; completedUnits: number; totalUnits: number } | undefined;
-        const startedAt = performance.now();
         const canonicalBudget = safeNumber(metadata.firmwareRecoveryTimeoutMs);
         const budget = options.firmwareRecoveryTimeoutMs ?? canonicalBudget;
         if (!Number.isSafeInteger(budget) || budget < 1 || budget > canonicalBudget) {
@@ -973,10 +972,13 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
                 connectionGeneration++;
                 emit('onDeviceDisconnected', {});
               }
-              if (verifiedAt === undefined && (phase === 'rebooting' || phase === 'reconnecting')) {
-                verifiedAt = performance.now();
+              if (recoveryDeadline === undefined && (phase === 'rebooting' || phase === 'reconnecting')) {
+                // Generated core notifications are consumed in this executor: the
+                // first verified phase starts one budget shared with readback.
+                // Download and transfer time must not consume recovery time.
+                recoveryDeadline = performance.now() + budget;
                 recoveryTimer = setTimeout(() => { deadlineExpired = true; operation.controller.abort(); },
-                  Math.max(0, Math.min(startedAt + budget, verifiedAt + budget) - performance.now()));
+                  Math.max(0, recoveryDeadline - performance.now()));
               }
               const event = { phase, completedUnits: safeNumber(progress.completed_bytes), totalUnits: safeNumber(progress.total_bytes) };
               if (phase === 'complete') completedProgress = event;
@@ -984,8 +986,8 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
             },
           }, cleanupRegistration);
           const peripheralId = executor.connectedPeripheralId;
-          if (!peripheralId || verifiedAt === undefined) throw new BotaJsHostError('connection_not_verified', 'UpdateFirmware');
-          const remaining = Math.min(startedAt + budget, verifiedAt + budget) - performance.now();
+          if (!peripheralId || recoveryDeadline === undefined) throw new BotaJsHostError('connection_not_verified', 'UpdateFirmware');
+          const remaining = recoveryDeadline - performance.now();
           if (remaining <= 0) throw new BotaJsHostError('timeout', 'UpdateFirmware', true);
           await adoptConnection({ ...device, id: peripheralId, firmwareVersion: '', connectionState: 'connected' },
             'VerifyFirmwareConnection', image.version, operation.controller.signal);

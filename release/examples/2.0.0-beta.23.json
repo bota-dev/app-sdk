@@ -2,7 +2,7 @@
   "manifestVersion": 2,
   "sdkFamily": "bota-app-sdk",
   "sdkVersion": "2.0.0-beta.23",
-  "sourceRevision": "84e52753641f151417a3ef22752eb1af7dff5327",
+  "sourceRevision": "d04e6760ad006ac5026211281d2ef64cc6b296d5",
   "protocolFixtureDigest": "e3803e1e7774b9a7513d1c8059a7ea6ee30bf37d91a8b6662bf2f6fb06dd9639",
   "firmwareCompatibility": {
     "minimum": "1.0.17",
@@ -16,7 +16,7 @@
       "name": "BotaDeviceSDKCore.xcframework.zip",
       "ecosystem": "swiftpm",
       "version": "2.0.0-beta.23",
-      "checksumSha256": "2dd11418b3cdc88958f08cadbb54ef3daa033b7aa601166390c72954b17fb7ae",
+      "checksumSha256": "7492a334fc2d645aab313d8ac434f289c8c89757503d4d8ffa10d24fe7d9b218",
       "capabilities": [
         "connection_settings",
         "device_logs",
@@ -40,7 +40,7 @@
       "name": "bota-app-sdk-2.0.0-beta.23.aar",
       "ecosystem": "maven",
       "version": "2.0.0-beta.23",
-      "checksumSha256": "ad4c4c574321673dec9d028c71ba7e7c7d067eb3864e1e829566ddb560847eed",
+      "checksumSha256": "4d93125a8f978bbad0260b73f62c98d458e6b51b8fe08afdac329b12eb7c214d",
       "capabilities": [
         "android_device_sdk"
       ]
@@ -54,7 +54,7 @@
       "version": "2.0.0-beta.23",
       "packageIdentifier": "@bota.dev/react-native-app-sdk",
       "name": "bota.dev-react-native-app-sdk-2.0.0-beta.23.tgz",
-      "checksumSha256": "5987b6f533dc11326953ac8473c36b03b9fac02468bb7fccf72cd63cc4139004"
+      "checksumSha256": "0b6033b678da790fbd73cd08fa7a73e6f74e857f35307cc4e066e43c1ad6ee30"
     },
     {
       "platform": "web",
@@ -65,7 +65,7 @@
       "version": "2.0.0-beta.23",
       "packageIdentifier": "@bota.dev/web-app-sdk",
       "name": "bota.dev-web-app-sdk-2.0.0-beta.23.tgz",
-      "checksumSha256": "8400d9732b6d3dbc023f0885d0c27dade6bf945fe1c4d063a73fd70e98418e92"
+      "checksumSha256": "f0f18f7734b415eab5a6f276430b7ac1c24ad002ebc706b25a75ab6d565c3fa3"
     },
     {
       "platform": "flutter",
@@ -74,7 +74,7 @@
       "ecosystem": "pub",
       "version": "2.0.0-beta.23",
       "checksumSha256": "1f1db483851cfc6afbb97e7ec0f2d5f94704053ad55f81cb71a5e37b8874ff32",
-      "sourceRevision": "84e52753641f151417a3ef22752eb1af7dff5327",
+      "sourceRevision": "d04e6760ad006ac5026211281d2ef64cc6b296d5",
       "normalizedArchiveSha256": "da27bad8b1af194f57e2569f57aba29c3e56347f743c8b70a9aa5baa3d7be634",
       "generator": {
         "name": "pigeon",

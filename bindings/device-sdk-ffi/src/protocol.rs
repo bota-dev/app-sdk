@@ -1454,8 +1454,14 @@ mod tests {
             // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
             // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
             let output = unsafe { encode(&input.view()) };
-            assert!(output.is_ok(), "encode case {index}");
-            assert_eq!(output.unwrap().view().kind, input.view().kind);
+            if input.view().kind == packet_kind::PROTOCOL_ENCODE_WIFI_CREDENTIALS {
+                let error = output.err().expect("legacy WiFi encoding must be rejected");
+                assert_eq!(error.code, ErrorCode::UnsupportedOperation);
+                assert_eq!(error.operation, Operation::Provision);
+            } else {
+                assert!(output.is_ok(), "encode case {index}");
+                assert_eq!(output.unwrap().view().kind, input.view().kind);
+            }
         }
     }
 

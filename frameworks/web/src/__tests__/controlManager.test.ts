@@ -421,11 +421,8 @@ test('WiFi and recording control share the mutating owner and cannot overlap', a
   const wifiGrantWrite = deferred<void>()
   harness.transport.writeGate = wifiGrantWrite.promise
 
-  const configuring = harness.wifi.configure(
-    { ssid: 'Bota', password: 'secret' },
-    'grant.test',
-  )
-  await waitForWrite(harness.transport, WIFI_GRANT_CHARACTERISTIC)
+  const configuring = harness.wifi.scanNetworks()
+  await waitForWrite(harness.transport, 'b07a0006-0004-1000-8000-00805f9b34fb')
   await assert.rejects(
     harness.controls.startRecording({ authorityId: 'authority-overlap' }),
     (error: unknown) =>

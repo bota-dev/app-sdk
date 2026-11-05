@@ -31,6 +31,8 @@ test('preserves all 80 frozen exports plus exact maintenance and completion-reco
   additions.members.DeviceManager.push({ name: 'pauseAutoReconnect', optional: false,
     readonly: false, declarationKinds: ['MethodDeclaration'], type: '() => Promise<void>' });
   for (const [name, type] of [
+    ['readWiFiProvisioningVersion', '(deviceId: string) => Promise<2 | 3>'],
+    ['configureSecureWiFi', '(deviceId: string, credentials: WiFiCredentials, grant: WiFiConfigGrant) => Promise<WiFiConfigResult>'],
     ['provisionEnvelope', '(device: ConnectedDevice, credentialEnvelope: string, environment?: Environment, options?: ProvisionOptions) => Promise<void>'],
     ['getFindCapabilities', '(device: ConnectedDevice) => Promise<FindDeviceCapabilities>'],
     ['getFindStatus', '(device: ConnectedDevice) => Promise<FindDeviceStatus>'],
@@ -43,6 +45,12 @@ test('preserves all 80 frozen exports plus exact maintenance and completion-reco
   additions.members.UploadTask.push(optionalBoolean('completionPending'));
   additions.exports.find(value => value.name === 'UploadRecoveryContext').members.push(optionalBoolean('completionPending'));
   additions.exports.find(value => value.name === 'RecordingManagerOptions').members.push(optionalBoolean('backgroundSyncEnabled'));
+  additions.members.WiFiConfigGrant = [
+    ['format', '"bota-wifi-config-v2" | "bota-wifi-config-v3" | undefined'],
+    ['action', '"disconnect" | "set" | undefined'],
+    ['bindingGeneration', 'number | undefined'],
+    ...['keyBase64', 'requestId', 'authNonce', 'serialNumber'].map(name => [name, 'string | undefined']),
+  ].map(([name, type]) => ({ name, type, optional: true, readonly: false, declarationKinds: ['PropertySignature'] }));
   assert.deepEqual(validateCompatibleReactNativeSurface({
     frozen: baseline.surface,
     surface: extractReactNativeApi(packageRoot),
