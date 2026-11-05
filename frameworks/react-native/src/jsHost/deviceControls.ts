@@ -371,8 +371,10 @@ export class JsDeviceControls {
       throw controlError('unsupported_capability', context.operation);
     }
     const nonce = await this.decodeRead('decodeHex', 'SERVICE_BOTA_AUTH', 'CHAR_AUTH_NONCE', connection, context, { length: 16 });
+    // An ATT MTU of 517 can carry 514 bytes, but a GATT attribute value holds at most 512.
+    const capacity = Math.min(this.capacity(connection), 512);
     const prepared = record(this.codec('wifiProvisioning', { Create: {
-      grant: authority, ssid, password, nonce, serial: connection.device.serialNumber, capacity: this.capacity(connection),
+      grant: authority, ssid, password, nonce, serial: connection.device.serialNumber, capacity,
     } }));
     const id = prepared.id!;
     const credentials = bytes(prepared.credentials);
