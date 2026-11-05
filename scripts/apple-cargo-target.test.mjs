@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mkdtemp, mkdir, readFile, writeFile, copyFile, rm, readdir } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, copyFile, rm, readdir, realpath, symlink } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -117,4 +117,25 @@ test('real Cargo fingerprints reuse unchanged builds and recompile changed sourc
   assert.equal(changed.fresh, false);
   assert.equal(spawnSync(changed.executable, [], { encoding: 'utf8' }).stdout.trim(), 'changed source');
   assert.equal(build({ RUSTFLAGS: '--cfg ci_cache_option_changed' }).fresh, false);
+});
+
+test('Apple path guard rejects the selected Cargo directory outside the checkout', async t => {
+  const f = await fixture(t);
+  const shared = await mkdtemp(join(tmpdir(), 'bota-apple-external-cargo-'));
+  t.after(() => rm(shared, { recursive: true, force: true }));
+  const guard = join(f.root, 'tools/apple/verify-reproducible-paths.sh');
+  await copyFile(fileURLToPath(new URL('../tools/apple/verify-reproducible-paths.sh', import.meta.url)), guard);
+  const archive = join(f.root, 'platforms/apple/Artifacts/BotaDeviceSDKCore.xcframework/ios-arm64/libbota_device_sdk_ffi.a');
+  await mkdir(dirname(archive), { recursive: true });
+  await writeFile(archive, 'embedded generated-source path: ' + shared + '/build/output.rs');
+  const env = { ...f.env, CARGO_TARGET_DIR: shared };
+  const leaked = spawnSync('/bin/sh', [guard], { env, encoding: 'utf8' });
+  assert.notEqual(leaked.status, 0, 'external compiler paths must not be admitted');
+  assert.ok(leaked.stderr.includes(shared));
+  const alias = join(f.root, 'cargo-alias');
+  await symlink(shared, alias, 'dir');
+  await writeFile(archive, 'canonical generated-source path: ' + await realpath(shared) + '/build/output.rs');
+  assert.notEqual(spawnSync('/bin/sh', [guard], { env: { ...env, CARGO_TARGET_DIR: alias }, encoding: 'utf8' }).status, 0);
+  await writeFile(archive, 'no machine-specific source path');
+  assert.equal(spawnSync('/bin/sh', [guard], { env, encoding: 'utf8' }).status, 0);
 });

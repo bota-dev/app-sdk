@@ -785,7 +785,8 @@ five locked target builds and create fresh XCFramework outputs; Cargo reuses
 compiled inputs only while its source/toolchain/options fingerprints match.
 That directory is outside the persisted workspace cache. The opt-in refuses
 other contexts/paths; standalone and release builds retain fresh temporary Cargo
-directories.
+directories. The binary-path guard also checks the selected Cargo directory,
+including the CI temporary prefix, before admitting the XCFramework.
 
 PR and main CI use `tools/apple/package-release.sh --evidence-only` to generate
 and validate unpublished evidence for the current commit without comparing it
