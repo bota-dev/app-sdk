@@ -335,9 +335,15 @@ artifact. An uncertain push outcome requires reading the actual index before
 retrying.
 
 A new specification is staged on a unique publication branch and submitted as a
-pull request in the SDK repository for that exact commit. Validate Specs,
-Dependency licenses and Scan, plus existing required repository checks, must
-pass on the exact head. Organization policy requires an independent approval
+pull request in the SDK repository for that exact commit.
+
+Every PR event, including title/body-only edits, runs the real required `Scan`.
+Title/body-only edits use a separate concurrency group so they cannot cancel
+an active source scan. Base retargets and unknown edit payloads retain the
+source concurrency group.
+
+Validate Specs, dependency licenses and Scan, plus existing required repository
+checks, must pass on the exact head. Organization policy requires an independent approval
 of the latest push before an authorized maintainer merges it. The publisher
 waits for the actual merge and verifies the public specification on `main`.
 It must not approve or merge its own pull request, update `main` directly or
@@ -773,6 +779,15 @@ tools/apple/package-release.sh
 
 Normal mode fails if rebuilding the XCFramework produces a checksum different
 from the committed root package. Never hand-edit the release URL or checksum.
+
+The Apple CI job supplies a Cargo directory unique to its run, attempt and job
+under `RUNNER_TEMP`. Its package, consumer and evidence producers still run all
+five locked target builds and create fresh XCFramework outputs; Cargo reuses
+compiled inputs only while its source/toolchain/options fingerprints match.
+That directory is outside the persisted workspace cache. The opt-in refuses
+other contexts/paths; standalone and release builds retain fresh temporary Cargo
+directories. The binary-path guard also checks the selected Cargo directory,
+including the CI temporary prefix, before admitting the XCFramework.
 
 PR and main CI use `tools/apple/package-release.sh --evidence-only` to generate
 and validate unpublished evidence for the current commit without comparing it

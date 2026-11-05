@@ -4,9 +4,10 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 ARTIFACT="$ROOT/platforms/apple/Artifacts/BotaDeviceSDKCore.xcframework"
 CARGO_HOME=${CARGO_HOME:-$HOME/.cargo}
+CARGO_BUILD_PATH=$(CDPATH= cd -- "${CARGO_TARGET_DIR:-$ROOT}" && pwd -P)
 
 for archive in "$ARTIFACT"/*/libbota_device_sdk_ffi.a; do
-    for path in "$ROOT" "$CARGO_HOME"; do
+    for path in "$ROOT" "$CARGO_HOME" "${CARGO_TARGET_DIR:-$ROOT}" "$CARGO_BUILD_PATH"; do
         if LC_ALL=C grep -a -F -q "$path" "$archive"; then
             printf '%s contains machine-specific path %s\n' "$archive" "$path" >&2
             exit 1
