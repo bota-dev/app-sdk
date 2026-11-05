@@ -576,3 +576,17 @@ Synchronized publication is complete; app and device acceptance remain separate.
 earlier TypeScript-adapter milestone's 227 RN tests remain historical evidence.
 Hardware, customer proxy/TLS,
 OS background behavior and deployed app OTA require separate acceptance evidence.
+
+## November 4 Cargo dependency refresh
+
+The `zeroize` 1.9.1 Cargo update also requires regeneration of
+`frameworks/react-native/src/jsHost/generated/core.ts`: its provenance includes
+`Cargo.lock`, and the emitted body must match the exact dependency graph.
+The update adopts the unchanged `core.expected.ts` output retained by
+Linux CI run `41940927113`,
+using Rust 1.98.0 on `x86_64-unknown-linux-gnu` and Binaryen 132.0.0.
+Artifact checksum verification and the compiler-free provenance check bind that
+output to the updated source. Local verification passes all 665 React Native
+checks, the Rust workspace suite and 162 native/generated RPC comparisons across
+all 14 core commands. Exact-source CI, publication and physical acceptance remain
+separate gates; dependency refresh does not replace occupied releases.
