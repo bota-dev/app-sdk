@@ -6,7 +6,7 @@ export type RecordingEditSource = { kind: 'cloud_recording'; recording_id: strin
     file?: RecordingEditFile; highlights?: Array<{ id: string; start_sample: string; end_sample?: string }> };
 export interface RecordingEditRequest {
   operation_id: string;
-  kind: 'merge' | 'split';
+  kind: 'edit' | 'merge' | 'split';
   mode: 'concatenate_sources' | 'save_outputs';
   manifest: { sources: RecordingEditSource[]; outputs: Array<{ name: string; file?: RecordingEditFile;
     intervals?: Array<{ source_index: number; start_sample: string; end_sample: string }> }>;
@@ -34,16 +34,17 @@ const canonical = (value: unknown): string => Array.isArray(value) ? '[' + value
   : value && typeof value === 'object' ? '{' + Object.entries(value).filter(([, v]) => v !== undefined).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
     .map(([k, v]) => JSON.stringify(k) + ':' + canonical(v)).join(',') + '}' : JSON.stringify(value);
 function validate(request: RecordingEditRequest) {
-  if (!uuid.test(request.operation_id) || !['merge', 'split'].includes(request.kind) || !['concatenate_sources', 'save_outputs'].includes(request.mode)) throw new Error('Invalid edit intent');
+  if (!uuid.test(request.operation_id) || !['edit', 'merge', 'split'].includes(request.kind) || !['concatenate_sources', 'save_outputs'].includes(request.mode)) throw new Error('Invalid edit intent');
   const m = request.manifest;
   if (!m || m.processing !== 'transcribe_then_summarize' || m.sources.length < 1 || m.sources.length > 20 || m.outputs.length < 1 || m.outputs.length > 20
     || (m.metadata && Object.prototype.hasOwnProperty.call(m.metadata, 'derivation'))) throw new Error('Invalid edit manifest');
-  if (request.kind === 'merge' ? m.sources.length < 2 || m.outputs.length !== 1 : m.sources.length !== 1 || m.outputs.length < 2 || request.mode !== 'save_outputs') throw new Error('Invalid edit counts');
+  if (request.kind === 'merge' ? m.sources.length < 2 || m.outputs.length !== 1
+    : m.sources.length !== 1 || request.mode !== 'save_outputs' || (request.kind === 'edit' ? m.outputs.length !== 1 : m.outputs.length < 2)) throw new Error('Invalid edit counts');
   const ids = m.sources.map(s => s.kind === 'cloud_recording' ? s.recording_id : s.artifact_id);
   if (new Set(ids).size !== ids.length) throw new Error('Duplicate edit source');
   for (const s of m.sources) if (!/^[a-f0-9]{64}$/.test(s.sha256)) throw new Error('Invalid source identity');
   if (request.mode === 'save_outputs') {
-    let splitEnd = 0;
+    let splitEnd = 0, editEnd = 0;
     for (const o of m.outputs) {
       if (!o.file || !o.intervals?.length || o.intervals.length > 20) throw new Error('Finished files and intervals are required');
       for (const interval of o.intervals) {
@@ -52,6 +53,10 @@ function validate(request: RecordingEditRequest) {
         if (request.kind === 'split') {
           if (o.intervals.length !== 1 || interval.source_index !== 0 || start !== splitEnd) throw new Error('Invalid split partition');
           splitEnd = end;
+        }
+        if (request.kind === 'edit') {
+          if (interval.source_index !== 0 || start < editEnd) throw new Error('Invalid edit intervals');
+          editEnd = end;
         }
       }
     }

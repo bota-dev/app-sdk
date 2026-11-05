@@ -37,7 +37,7 @@ update flows in React Native, Swift, Kotlin, Flutter, or a web application.
 [Documentation](#documentation) · [Examples](https://github.com/bota-dev/examples) ·
 [Changelog](CHANGELOG.md)
 
-For App-owned splitting and ordered recording merges, see the unreleased
+For App-owned audio editing, splitting and ordered recording merges, see the unreleased
 [recording edit save helper](docs/recording-editing.md).
 
 ## Features

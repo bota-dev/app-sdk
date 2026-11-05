@@ -17,6 +17,22 @@ function host() {
     async upload() { throw Error('No upload should be requested for a cloud merge'); },
   };
 }
+test('saves one edited file with retained ranges and rejects overlapping edits before admission', async () => {
+  const h = host(), file = { sha256: 'b'.repeat(64), size_bytes: 844, content_type: 'audio/wav' }, uploads = [];
+  const request = { ...merge(), kind: 'edit', mode: 'save_outputs', manifest: { ...merge().manifest,
+    sources: [{ ...source('rec_A'), samples: '1000', channels: 1 }], outputs: [{ name: 'Original Copy', file,
+      intervals: [{ source_index: 0, start_sample: '100', end_sample: '300' }, { source_index: 0, start_sample: '600', end_sample: '800' }] }] } };
+  h.inspect = async () => file;
+  h.upload = async handle => { uploads.push(handle); };
+  h.request = async (_method, path) => path.endsWith('/upload-attempts') ? { upload_url: 'https://storage.invalid/exact', headers: {} }
+    : { operation_id: id, state: path.endsWith('/finalize') ? 'queued' : 'waiting_for_inputs', outputs: [{ index: 0, recording_id: 'rec_result', status: 'pending' }], required_uploads: [{ ...file, target: 'output', index: 0 }] };
+  assert.equal((await createRecordingEditClient(h).saveEdit(request, { output_0: 'edited.wav' })).state, 'queued');
+  assert.deepEqual(uploads, ['edited.wav']);
+  const bad = structuredClone(request); bad.manifest.outputs[0].intervals[1].start_sample = '200';
+  await assert.rejects(createRecordingEditClient(host()).saveEdit(bad), /edit intervals/);
+  bad.manifest.outputs.push(bad.manifest.outputs[0]);
+  await assert.rejects(createRecordingEditClient(host()).saveEdit(bad), /counts/);
+});
 test('persists exact intent before admission and preserves chosen merge order', async () => {
   const h = host(), client = createRecordingEditClient(h);
   const r = await client.saveEdit(merge());

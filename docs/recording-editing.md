@@ -8,7 +8,7 @@ The App owns its editor, actual clip files, authenticated backend facade and
 durable journal. The helper validates the intent, persists it before admission,
 uploads unchanged files, finalizes saving and recovers status. Server-side merge
 accepts ordered cloud recording IDs or uploaded input files. Server-side saving
-accepts already exported split clips or an already merged file.
+accepts one edited copy, already exported split clips or an already merged file.
 
 ```typescript
 import {
@@ -37,7 +37,7 @@ await edits.resume(accepted.operation_id);
 | `inspect` | Read the actual local file and return SHA-256 and byte size, preferably through bounded native/file streaming. |
 | `upload` | PUT the unchanged file to the returned HTTPS URL using all supplied checksum/content headers. Do not forward application authorization to object storage. Honor cancellation. |
 
-`saveEdit(request, files)` takes a client-generated UUID, `kind: merge | split`,
+`saveEdit(request, files)` takes a client-generated UUID, `kind: edit | merge | split`,
 `mode: concatenate_sources | save_outputs`, and `manifest` containing sources,
 outputs and `processing: transcribe_then_summarize`. Persist the UUID before the
 first possible mutation. Source order is playback order. No wall-clock alignment
@@ -50,6 +50,14 @@ Cloud sources contain `kind: cloud_recording`, `recording_id` and original
 The file identity is `{ sha256, size_bytes, content_type }`; handles use keys
 `input_0`, `input_1`, etc. Only local sources need handles.
 
+For `kind: edit, mode: save_outputs`, supply one source and one finished WAV
+output, with 1–20 source-index-0 intervals in ascending, nonoverlapping order.
+Gaps are allowed. Use `output_0` for the file handle. The host owns waveform
+selection, trim/delete/silence removal, undo/redo and file rendering. The host's
+Save as dialog defaults to `<original name> Copy` and permits a name up to 255
+characters. The SDK neither generates the filename nor modifies audio. The
+backend records the cloud source once and remaps only retained highlights.
+
 For split `save_outputs`, supply one source and 2–20 named finished WAV outputs.
 Each output has a file identity and one exact interval
 `{ source_index: 0, start_sample, end_sample }`. Sample coordinates are decimal
@@ -60,9 +68,9 @@ carry declared highlights and do not force upload of the original.
 
 The initial backend profile uses 48 kHz PCM16 WAV with mono/stereo channels.
 Combined duration is bounded to 20 minutes, inputs to 256 MiB each and 512 MiB
-combined. The One and Portal split editors further limit previews to five minutes
+combined. The One and Portal editors further limit previews to five minutes
 and 64 MiB. Query the backend's capabilities before preparing files. For cloud
-splitting, use the canonical editing preview supplied by the source descriptor;
+editing or splitting, use the canonical editing preview supplied by the source descriptor;
 its separate checksum does not replace the original source hash.
 
 `saveEdit` returning `queued` or `processing` means accepted, not published.
