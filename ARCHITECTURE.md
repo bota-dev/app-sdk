@@ -1476,3 +1476,11 @@ recovery. The JS host sequences durable writes and cloud receipt reconciliation;
 standalone Apple/Android ports own hotspot and pinned TLS IO. Cancellation joins
 cleanup before releasing the owner, and each recording closes its AP before
 cloud publication. See [the adapter design](docs/parity/local-wifi.md).
+
+## Recording edit save boundary
+
+The React Native recording edit client is a standalone HTTP/file orchestration
+helper. Host Apps own media editing, credentials, durable journals and native file
+handles. The backend owns ordered concatenation, full-set publication, provenance
+and fresh AI processing. The helper does not reserve BLE or change firmware
+protocols. See [the save contract](docs/recording-editing.md).

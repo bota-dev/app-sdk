@@ -37,6 +37,9 @@ update flows in React Native, Swift, Kotlin, Flutter, or a web application.
 [Documentation](#documentation) · [Examples](https://github.com/bota-dev/examples) ·
 [Changelog](CHANGELOG.md)
 
+For App-owned audio editing, splitting and ordered recording merges, see the unreleased
+[recording edit save helper](docs/recording-editing.md).
+
 ## Features
 
 - **Device connectivity:** discover nearby devices, connect, reconnect by serial

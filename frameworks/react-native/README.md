@@ -460,3 +460,10 @@ The actual Android App candidate builds with this configuration; its generated
 schema contains only the WiFi IO module. Profile-2 control and App source are
 implemented; public release adoption, iOS target compilation and external
 firmware acceptance remain pending. See [installation and limitations](../../docs/parity/local-wifi.md#standalone-native-packaging).
+
+## Saving edited audio
+
+The App owns editing and finished files. `createRecordingEditClient` from the
+root or `/runtime` entry coordinates saving, uploads and recovery through an
+authenticated host. See the [recording editing contract](../../docs/recording-editing.md).
+This helper requires the matching qualified package before consumer enablement.
