@@ -779,6 +779,14 @@ tools/apple/package-release.sh
 Normal mode fails if rebuilding the XCFramework produces a checksum different
 from the committed root package. Never hand-edit the release URL or checksum.
 
+The Apple CI job supplies a Cargo directory unique to its run, attempt and job
+under `RUNNER_TEMP`. Its package, consumer and evidence producers still run all
+five locked target builds and create fresh XCFramework outputs; Cargo reuses
+compiled inputs only while its source/toolchain/options fingerprints match.
+That directory is outside the persisted workspace cache. The opt-in refuses
+other contexts/paths; standalone and release builds retain fresh temporary Cargo
+directories.
+
 PR and main CI use `tools/apple/package-release.sh --evidence-only` to generate
 and validate unpublished evidence for the current commit without comparing it
 to the immutable package from the previous release. The protected release

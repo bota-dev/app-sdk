@@ -50,7 +50,19 @@ rustup target add \
     aarch64-apple-darwin \
     x86_64-apple-darwin >/dev/null
 
-CARGO_TARGET_DIR="$BUILD_ROOT/cargo"
+# Only this CI job may share Cargo fingerprints; every invocation still builds all targets.
+if [ -n "${BOTA_APPLE_CI_CARGO_TARGET_DIR:-}" ]; then
+    EXPECTED_CI_TARGET="${RUNNER_TEMP:-}/bota-apple-cargo-${GITHUB_RUN_ID:-}-${GITHUB_RUN_ATTEMPT:-}-${GITHUB_JOB:-}"
+    if [ "${GITHUB_ACTIONS:-}" != true ] || [ -z "${RUNNER_TEMP:-}" ] \
+        || [ -z "${GITHUB_RUN_ID:-}" ] || [ -z "${GITHUB_RUN_ATTEMPT:-}" ] \
+        || [ -z "${GITHUB_JOB:-}" ] || [ "$BOTA_APPLE_CI_CARGO_TARGET_DIR" != "$EXPECTED_CI_TARGET" ]; then
+        printf 'Apple shared Cargo directory must belong to this CI job/run/attempt\n' >&2
+        exit 1
+    fi
+    CARGO_TARGET_DIR="$BOTA_APPLE_CI_CARGO_TARGET_DIR"
+else
+    CARGO_TARGET_DIR="$BUILD_ROOT/cargo"
+fi
 export CARGO_TARGET_DIR
 CARGO_HOME=${CARGO_HOME:-$HOME/.cargo}
 RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }--remap-path-prefix=$ROOT=/bota-app-sdk --remap-path-prefix=$CARGO_HOME=/bota-cargo"
@@ -94,17 +106,17 @@ MACOSX_DEPLOYMENT_TARGET=13.0 cargo build \
 mkdir -p "$BUILD_ROOT/libraries/ios-simulator" "$BUILD_ROOT/libraries/macos" "$ARTIFACTS"
 
 xcrun lipo -create \
-    "$BUILD_ROOT/cargo/aarch64-apple-ios-sim/release/libbota_device_sdk_ffi.a" \
-    "$BUILD_ROOT/cargo/x86_64-apple-ios/release/libbota_device_sdk_ffi.a" \
+    "$CARGO_TARGET_DIR/aarch64-apple-ios-sim/release/libbota_device_sdk_ffi.a" \
+    "$CARGO_TARGET_DIR/x86_64-apple-ios/release/libbota_device_sdk_ffi.a" \
     -output "$BUILD_ROOT/libraries/ios-simulator/libbota_device_sdk_ffi.a"
 
 xcrun lipo -create \
-    "$BUILD_ROOT/cargo/aarch64-apple-darwin/release/libbota_device_sdk_ffi.a" \
-    "$BUILD_ROOT/cargo/x86_64-apple-darwin/release/libbota_device_sdk_ffi.a" \
+    "$CARGO_TARGET_DIR/aarch64-apple-darwin/release/libbota_device_sdk_ffi.a" \
+    "$CARGO_TARGET_DIR/x86_64-apple-darwin/release/libbota_device_sdk_ffi.a" \
     -output "$BUILD_ROOT/libraries/macos/libbota_device_sdk_ffi.a"
 
 xcodebuild -create-xcframework \
-    -library "$BUILD_ROOT/cargo/aarch64-apple-ios/release/libbota_device_sdk_ffi.a" \
+    -library "$CARGO_TARGET_DIR/aarch64-apple-ios/release/libbota_device_sdk_ffi.a" \
     -headers "$HEADER_DIR" \
     -library "$BUILD_ROOT/libraries/ios-simulator/libbota_device_sdk_ffi.a" \
     -headers "$HEADER_DIR" \
