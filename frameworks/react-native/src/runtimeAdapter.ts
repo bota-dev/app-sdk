@@ -6,6 +6,8 @@ import type { Spec as BackendSpec } from './specs/NativeBotaUploadV2Backend';
 export const BOTA_RUNTIME_API_VERSION = 1 as const;
 /** Optional JS-host extension; native ABI remains unchanged and fails preflight. */
 export type BotaRuntimeSpec = Spec & FindDeviceAdapter & {
+  configureSecureWiFi: Spec['configureWiFi'];
+  readWiFiProvisioningVersion: (device: Parameters<Spec['readWiFiStatus']>[0]) => Promise<number>;
   syncEncryptedRecordingV2LocalWifi: Spec['syncEncryptedRecordingV2'];
 };
 export type BotaDeviceAdapter = Partial<Omit<BotaRuntimeSpec, 'getConstants'>>;

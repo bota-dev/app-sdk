@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
 import { loadSource } from './loadSource.mjs';
 
 const { createGeneratedJsCore } = loadSource('core.ts');
@@ -743,6 +744,11 @@ test('real generated connection workflow verifies physical serial and builds nat
 for (const platform of ['android', 'ios']) {
   test(`${platform} uses connected Note identity and refreshes WiFi capability after reconnect`, async () => {
     const f = fixture({ platform });
+    const vector = JSON.parse(readFileSync(new URL('../../../../../protocol/wifi-config-v2.vector.json', import.meta.url), 'utf8'));
+    const r = vector.response;
+    f.values.set(f.metadata.CHAR_SERIAL_NUMBER, Buffer.from(r.serial_number));
+    f.values.set(f.metadata.CHAR_AUTH_NONCE, Buffer.from(r.auth_nonce, 'hex'));
+    f.values.set(f.metadata.CHAR_WIFI_GRANT, Uint8Array.from([0xb2,2,7,0,253,1,126,0]));
     let wifiPresent = true;
     const probes = [];
     f.ports.ble.hasService = async (id, service) => { probes.push([id, service]); return wifiPresent; };
@@ -760,7 +766,7 @@ for (const platform of ['android', 'ios']) {
       await write(...args);
       if (args[0].characteristicUuid === f.metadata.CHAR_WIFI_CREDENTIAL) {
         assert.equal(f.calls.at(-2)[1].characteristicUuid, f.metadata.CHAR_WIFI_GRANT);
-        subscribers.get(f.metadata.CHAR_WIFI_CREDENTIAL)(Uint8Array.of(0));
+        subscribers.get(f.metadata.CHAR_WIFI_STATUS)(Buffer.from(vector.successHex, 'hex'));
       }
     };
     const { createBotaDeviceSDK } = loadSource('../client.ts');
@@ -773,13 +779,16 @@ for (const platform of ['android', 'ios']) {
           firmwareVersion: '', pairingState: 'unpaired', macAddress: null, rssi: -60, discoveredAt: new Date() });
         assert.equal(device.deviceType, 'bota_note');
         assert.equal(device.capabilities.wifiUpload, wifiPresent);
+        assert.equal(await client.wifi.readProvisioningVersion(device),2);
         assert.equal(device.capabilities.lteUpload, false);
-        assert.deepEqual(await client.wifi.configure(device, { ssid: 'fixture-wifi', password: 'fixture-password' },
-          { grantBlob: 'synthetic-grant', expiresAt: new Date(Date.now() + 60000) }), { success: true });
+        assert.deepEqual(await client.wifi.configure(device, { ssid: 'Audit-Network', password: 'Audit-Only-123' },
+          { grantBlob: r.envelope_base64, expiresAt: new Date(r.expires_at), format: r.format,
+            keyBase64: r.key_base64, requestId: r.request_id, authNonce: r.auth_nonce, action: r.action,
+            serialNumber: r.serial_number, bindingGeneration: r.binding_generation }), { success: true });
         await client.devices.disconnect();
       }
       wifiPresent = false;
-      const reconnected = await client.devices.reconnect('C8SU2XXWHI');
+      const reconnected = await client.devices.reconnect(r.serial_number);
       assert.equal(reconnected.deviceType, 'bota_note');
       assert.equal(reconnected.capabilities.wifiUpload, false, 'a prior connection cannot lend its WiFi capability');
       assert.deepEqual(probes, Array(4).fill(['selected', f.metadata.SERVICE_BOTA_WIFI_CONFIG]));
@@ -1395,6 +1404,36 @@ test('fresh post-reboot identity mismatch cannot emit complete or retain the rep
   assert.ok(f.calls.some(call => Array.isArray(call) && call[0] === 'disconnect' && call[1] === 'rebooted'));
   await f.adapter.destroy();
 });
+
+for (const slowPhase of ['download', 'transfer']) {
+  test(`long ${slowPhase} does not consume the generated post-verification recovery budget`, { timeout: 5000 }, async t => {
+    const clockDescriptor = Object.getOwnPropertyDescriptor(performance, 'now');
+    const realNow = performance.now.bind(performance);
+    let elapsed = 0;
+    Object.defineProperty(performance, 'now', { configurable: true, value: () => realNow() + elapsed });
+    t.after(() => { if (clockDescriptor) Object.defineProperty(performance, 'now', clockDescriptor); else delete performance.now; });
+    const f = otaFixture({ samePeripheral: true, async connect() { await new Promise(resolve => setTimeout(resolve, 10)); } });
+    t.after(async () => { await f.adapter.destroy(); f.core.dispose(); });
+    const phases = [];
+    f.adapter.onFirmwareUpdateProgress(value => phases.push(value.phase));
+    if (slowPhase === 'download') {
+      const download = f.ports.network.download;
+      f.ports.network.download = async (...args) => { elapsed = 369_147; return download(...args); };
+    } else {
+      const write = f.ports.ble.write;
+      f.ports.ble.write = async (address, bytes, ...rest) => {
+        if (address.characteristicUuid === f.metadata.CHAR_RECORDING_TRANSFER) elapsed = 369_147;
+        return write(address, bytes, ...rest);
+      };
+    }
+    await f.adapter.configure({ logLevel: 'none' });
+    const device = await f.adapter.connectSelected({ id: 'original', rssi: -50, discoveredAtMs: 0 });
+    await f.adapter.updateFirmware(device, f.image);
+    assert.equal(phases.at(-1), 'complete');
+    assert.equal(firmwareDataWrites(f).length, 1, 'recovery must not retransmit the image');
+    assert.equal(f.unregisters.length, 1);
+  });
+}
 
 test('shortened recovery deadline retains ownership until ignored connection cancellation and cleanup settle', { timeout: 5000 }, async () => {
   let entered, release;

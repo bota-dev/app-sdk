@@ -1,0 +1,29 @@
+{
+  "notice": "Synthetic test keys only. Never use for deployed devices.",
+  "recipientPrivateJwk": {
+    "kty": "EC",
+    "x": "oxgtgtOvx2oTLyT0mwneiIsplS8oMg-hgWfq1qjx7i8",
+    "y": "MiGQqTMXM5JtXZkzq5hcLZIe20v3OvnRy-ztwmqYb9Q",
+    "crv": "P-256",
+    "d": "IfXkHW-jTZAuNCPTHABfLjwvc0IArSaMt6BAS9vygCE"
+  },
+  "signerPublicJwk": {
+    "kty": "EC",
+    "x": "GraqvEJ2qLspvHYuNnUmBH83-rSQMNaRkLolSl_3qkI",
+    "y": "O_vUIN3p5OL8W8osl19BfYUpUY0IS7wR_XhxYZUJgwQ",
+    "crv": "P-256"
+  },
+  "response": {
+    "format": "bota-wifi-config-v2",
+    "envelope_base64": "Qk9UQVdGUDIAEAABAAMAAeXKNEOb3sT0nmiVigR3D2ZGn+uqaFQ6YaKhi8wmZTenRRtvogT4zGQB2yZcRxRBV0IOJqA8s/jH4YA/OaEoAVHK+4RLsW5FZRSE6c+L8KQh95AS3gTaNjI6SVPEFGlbL0tEbxC0aqmMv9THfQM/Y9t9UTXcbTnU3jU7TxW7ij7qO8ye1panuRMTcYKpp67On+fLOgXBIus/BjTKGacc1NV7qgn7jD5NzvQlFdsItw4/U1AuxenfXf3o9nUCUgFxLZaeIyqC840FA/khSmqsDWHHgqxec7nRerpzPW+CAkLGvLud6fn2vRwspIDp2FJMQLMCKEKw6C0Fo65y2QX3wOLHy7eoLI/JJAZJTpijft38g49+mPkOISbuterHjrcrTw+r9ZC59PxmG1XQvbQOh1Umcu2qN8TMF/Qx/XfedhPGkLwNFgiHv4abRYnlgfwKND0iCl07ZuZyVxtQPM37fPU0dLcY3s+hXaXRuBMBs++lr+F/eD3dS8l0PCai5wl5Gm9n+hr14e4nzZn/pp1jTOpEgqvCV3bfw7ULQNvJRNbrZJrXUeBuuyLII2QoND2UtCEaCFdukHbEFHX3O2sueg11KvupGvLSj68y607RlvytQe9Ekj1E3fAdN4SWr8nzyt/KKUFDZhfbdk8olaw=",
+    "key_base64": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=",
+    "request_id": "41",
+    "auth_nonce": "09090909090909090909090909090909",
+    "action": "set",
+    "serial_number": "TEST000001",
+    "binding_generation": 2,
+    "expires_at": "2027-01-15T08:01:00.000Z"
+  },
+  "credentialHex": "b2010100290000000000000046104c6c2c7584abf1b49e480ecfeff979f5955a32eddfbbed228b4acadffc479b454f2f22ad7f4c7b3309912c",
+  "successHex": "b20201002900000000000000ea1a6697e10848859ae3b95434f25e8fc3"
+}

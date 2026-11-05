@@ -4,48 +4,24 @@ import XCTest
 @testable import BotaAppSDK
 
 final class WiFiManagerTests: XCTestCase {
-    func testConfigureWritesGrantBeforeSubscribingAndCredentialsAfterSubscription() async throws {
-        let fixture = await WiFiRuntimeFixture(
-            notifications: [BotaBluetoothUUIDs.wifiStatus: [Data([0x00])]]
-        )
+    func testLegacyConfigureAndDisconnectRefuseBeforeBLEEffects() async throws {
+        let fixture = await WiFiRuntimeFixture()
         let manager = WiFiManager()
         await manager.attach(fixture.runtime)
-
-        let result = try await manager.configure(
-            fixture.device,
-            ssid: "Bota",
-            password: "secret",
-            grantBlob: "grant.test"
-        )
-
-        XCTAssertEqual(result, .success)
+        do {
+            _ = try await manager.configure(fixture.device, ssid: "Bota", password: "secret", grantBlob: "grant.test")
+            XCTFail("Legacy plaintext configuration must be unavailable")
+        } catch {
+            XCTAssertEqual((error as? BotaSDKError)?.code, .unsupportedOperation)
+        }
+        do {
+            _ = try await manager.disconnect(fixture.device)
+            XCTFail("Disconnect requires secure authority")
+        } catch {
+            XCTAssertEqual((error as? BotaSDKError)?.code, .unsupportedOperation)
+        }
         let actions = await fixture.recorder.actions
-        let expected: [WiFiActionRecorder.Action] = [
-            .write(BotaBluetoothUUIDs.wifiGrant, Data("grant.test".utf8)),
-            .subscribe(BotaBluetoothUUIDs.wifiStatus),
-            .write(BotaBluetoothUUIDs.wifiCredential, Data([0x04]) + Data("Bota".utf8) + Data([0x06]) + Data("secret".utf8)),
-            .unsubscribe(BotaBluetoothUUIDs.wifiStatus),
-        ]
-        XCTAssertEqual(actions, expected)
-    }
-
-    func testDisconnectSubscribesBeforeWritingForgetPacket() async throws {
-        let fixture = await WiFiRuntimeFixture(
-            notifications: [BotaBluetoothUUIDs.wifiStatus: [Data([0x00])]]
-        )
-        let manager = WiFiManager()
-        await manager.attach(fixture.runtime)
-
-        let result = try await manager.disconnect(fixture.device)
-
-        XCTAssertEqual(result, .success)
-        let actions = await fixture.recorder.actions
-        let expected: [WiFiActionRecorder.Action] = [
-            .subscribe(BotaBluetoothUUIDs.wifiStatus),
-            .write(BotaBluetoothUUIDs.wifiCredential, Data([0x00])),
-            .unsubscribe(BotaBluetoothUUIDs.wifiStatus),
-        ]
-        XCTAssertEqual(actions, expected)
+        XCTAssertEqual(actions, [])
     }
 
     func testReadStatusUsesWiFiStatusCharacteristicAndSharedDecoder() async throws {
