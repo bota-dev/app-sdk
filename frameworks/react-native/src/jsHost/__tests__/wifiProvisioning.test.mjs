@@ -53,9 +53,11 @@ test('both directions depend on every operation-key byte and the complete grant'
 });
 
 const { JsDeviceControls } = loadSource('deviceControls.ts');
-function host(mode = 'success', version = 2) {
+function host(t, mode = 'success', version = 2) {
  const vector=version===2?v:JSON.parse(readFileSync(new URL('../../../../../protocol/wifi-config-v3.vector.json',import.meta.url),'utf8'));
  const r=vector.response;
+ const beforeExpiry = Date.parse(r.expires_at) - 1000;
+ t.mock.method(Date, 'now', () => beforeExpiry);
  const core=createGeneratedJsCore(), meta=core.codec('protocolMetadata',{}), writes=[], listeners=new Set();
  const device={id:'peripheral',serialNumber:r.serial_number,mtu:185};
  let generation='1', removed=0;
@@ -84,8 +86,8 @@ function host(mode = 'success', version = 2) {
  return {core,controls,context,device,writes,meta,removed:()=>removed};
 }
 for (const [version, vector] of [[2, v], [3, JSON.parse(readFileSync(new URL('../../../../../protocol/wifi-config-v3.vector.json', import.meta.url), 'utf8'))]]) {
- test(`v${version} grant fits GATT attribute values at an ATT MTU of 517`, async () => {
-  const f = host('success', version);
+ test(`v${version} grant fits GATT attribute values at an ATT MTU of 517`, async t => {
+  const f = host(t, 'success', version);
   f.device.mtu = 517;
   const response = vector.response;
   const material = { ...grant, format: response.format, grantBlob: response.envelope_base64, keyBase64: response.key_base64 };
@@ -110,8 +112,8 @@ for (const [version, vector] of [[2, v], [3, JSON.parse(readFileSync(new URL('..
  });
 }
 
-test('actual generated core and BLE host send only ciphertext and wait for authenticated receipt',async()=>{
- const f=host();try {
+test('actual generated core and BLE host send only ciphertext and wait for authenticated receipt',async t=>{
+ const f=host(t);try {
   const result=await f.controls.execute('configureSecureWiFi',[f.device,create.Create.ssid,create.Create.password,JSON.stringify(grant)],f.context);
   assert.equal(result.success,true);assert.equal(f.writes.length,4);assert.equal(f.removed(),1);
   assert.equal(f.writes.at(-1).bytes.toString('hex'),v.credentialHex);
@@ -122,8 +124,8 @@ test('actual generated core and BLE host send only ciphertext and wait for authe
   }
  } finally {await f.controls.close();f.core.dispose();}
 });
-for(const mode of ['legacy','nonce','reconnect','cancel','tamper'])test(`secure host refuses ${mode} without plaintext fallback`,async()=>{
- const f=host(mode);try {
+for(const mode of ['legacy','nonce','reconnect','cancel','tamper'])test(`secure host refuses ${mode} without plaintext fallback`,async t=>{
+ const f=host(t,mode);try {
   await assert.rejects(f.controls.execute('configureSecureWiFi',[f.device,create.Create.ssid,create.Create.password,JSON.stringify(grant)],f.context));
   if(['legacy','nonce'].includes(mode))assert.equal(f.writes.length,0);
   if(['reconnect','cancel'].includes(mode))assert.equal(f.writes.length,1);
@@ -148,11 +150,11 @@ test('generated runtime binds the v3 grant and refuses mismatched response versi
  } finally {core.dispose();}
 });
 
-test('v3 capability selects v3 on the real generated host and refuses a v2 response',async()=>{
+test('v3 capability selects v3 on the real generated host and refuses a v2 response',async t=>{
  const v3=JSON.parse(readFileSync(new URL('../../../../../protocol/wifi-config-v3.vector.json',import.meta.url),'utf8'));
  const r3=v3.response;
  const material={...grant,format:r3.format,grantBlob:r3.envelope_base64,keyBase64:r3.key_base64};
- const f=host('success',3);try {
+ const f=host(t,'success',3);try {
   assert.equal(await f.controls.execute('readWiFiProvisioningVersion',[f.device],f.context),3);
   await assert.rejects(f.controls.execute('configureSecureWiFi',[f.device,'Audit-Network','Audit-Only-123',JSON.stringify(grant)],f.context));
   assert.equal(f.writes.length,0);

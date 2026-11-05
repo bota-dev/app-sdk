@@ -11,15 +11,19 @@ final class CoreBluetoothDriverCancellationTests: XCTestCase {
     XCTAssertFalse(waiter.grant())
   }
 
-  func testCancellationAfterPreRegistrationGrantDoesNotRevokeTransferredOwnership() async {
+  func testCancellationAfterPreRegistrationGrantDoesNotRevokeTransferredOwnership() async throws {
     let waiter = PeripheralOperationWaiter()
+    let registration = RegistrationGate()
     XCTAssertTrue(waiter.grant())
     let task = Task {
+      await registration.wait()
       try await waiter.value()
-      try Task.checkCancellation()
+      return Task.isCancelled
     }
     task.cancel()
-    await assertCancelled(task)
+    await registration.open()
+    let wasCancelled = try await task.value
+    XCTAssertTrue(wasCancelled)
     XCTAssertFalse(waiter.grant())
   }
 
