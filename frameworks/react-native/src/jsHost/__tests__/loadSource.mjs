@@ -19,7 +19,8 @@ export function loadSource(name) {
   }).outputText;
   const localRequire = identifier => identifier.startsWith('.')
     ? loadSource(resolve(dirname(path), `${identifier}.ts`))
-    : require(identifier);
+    // Metro resolves the npm polyfill; Node's built-in Buffer supports extra encodings.
+    : require(identifier === 'buffer' ? 'buffer/' : identifier);
   new Function('require', 'exports', 'module', output)(localRequire, module.exports, module);
   return module.exports;
 }

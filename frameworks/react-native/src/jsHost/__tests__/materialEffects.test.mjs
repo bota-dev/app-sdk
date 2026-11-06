@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { Buffer as MobileBuffer } from 'buffer/index.js';
 import { loadSource } from './loadSource.mjs';
 
 const { JsMaterialEffects } = loadSource('materialEffects.ts');
+
+test('host regressions use the mobile Buffer package without Node-only encodings', () => {
+  assert.equal(MobileBuffer.isEncoding('base64url'), false);
+});
 function fixture() {
   const events = [], cleanups = [], codecs = [];
   const controller = new AbortController();
@@ -138,4 +143,40 @@ test('raw-only material is forwarded in the legacy field without an envelope', a
   const material = (await pending).ProvisioningMaterialPrepared.material;
   assert.deepEqual(material.device_token, Array.from(Buffer.from('dtok_legacy')));
   assert.equal(material.credential_envelope, null);
+});
+
+test('mobile envelope decoding preserves URL-safe bytes at both bounds and each padding length', async () => {
+  for (const length of [230, 231, 232, 767, 768]) {
+    const f = fixture();
+    f.effects.registerProvisioning('op', { serialNumber: 'SERIAL' });
+    const waiting = f.effects.handler(f.provisioning, f.context);
+    const bytes = Buffer.from(Array.from({ length }, (_, i) => i % 2 ? 255 : 251));
+    bytes.write('BOTATOK1');
+    const encoded = bytes.toString('base64url');
+    assert.match(encoded, /-/); assert.match(encoded, /_/);
+    await f.effects.resolveProvisioningMaterial(f.events[0][1].requestId, {
+      apiEndpoint: '\0', deviceToken: '', credentialEnvelope: encoded, mtu: 517,
+    });
+    const material = (await waiting).ProvisioningMaterialPrepared.material;
+    assert.deepEqual(material.credential_envelope, Array.from(bytes));
+    assert.deepEqual(material.device_token, []);
+  }
+});
+
+test('mobile decoding still rejects noncanonical and out-of-bounds envelopes and settles the broker', async () => {
+  const valid = Buffer.alloc(230).toString('base64url');
+  for (const encoded of [
+    valid + '=', valid + 'AA', valid.slice(0, -1) + 'B',
+    '+' + valid.slice(1), '/' + valid.slice(1), valid.slice(0, -1) + '\n',
+    Buffer.alloc(229).toString('base64url'), Buffer.alloc(769).toString('base64url'),
+  ]) {
+    const f = fixture();
+    f.effects.registerProvisioning('op', { serialNumber: 'SERIAL' });
+    const waiting = f.effects.handler(f.provisioning, f.context);
+    const rejection = assert.rejects(waiting, { code: 'invalid_provisioning_material' });
+    await assert.rejects(f.effects.resolveProvisioningMaterial(f.events[0][1].requestId, {
+      apiEndpoint: '\0', deviceToken: '', credentialEnvelope: encoded, mtu: 23,
+    }), { code: 'invalid_provisioning_material' });
+    await rejection;
+  }
 });

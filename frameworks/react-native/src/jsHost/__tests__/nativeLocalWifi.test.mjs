@@ -30,6 +30,7 @@ test('absent native module or security verifier refuses before resource acquisit
 });
 test('native network IO preserves the existing material and bounded reader contract', async () => {
   const f=fixture(); await f.port.preflight('device',f.context);
+  f.material.downloadToken = Uint8Array.from({ length: 32 }, (_, i) => i % 2 ? 255 : 251);
   const lease=await f.port.join(f.material,f.context);
   const reader=await lease.open(request,f.context);
   assert.equal(reader.response.content_length,'3');
@@ -37,6 +38,8 @@ test('native network IO preserves the existing material and bounded reader contr
   assert.equal(f.calls.filter(c=>c[0]==='secure').length,2);
   const open=f.calls.find(c=>c[0]==='open')[2];
   assert.equal(open.bearer,Buffer.from(f.material.downloadToken).toString('base64url'));
+  assert.match(open.bearer, /-/); assert.match(open.bearer, /_/);
+  assert.equal(open.bearer.length, 43);
   assert.equal(open.spkiHex,'01'.repeat(32));
   assert.equal(open.ipv4,'192.168.4.1');
   await reader.close(); await reader.close(); await lease.close(); await lease.close();
