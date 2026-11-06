@@ -116,12 +116,10 @@
     "eventemitter3": "5.0.1"
   },
   "overrides": {
-    "react-native-builder-bob@0.43.0": {
-      "glob@13.0.6": {
-        "minimatch": {
-          ".": "11.0.1",
-          "@isaacs/nonrecursive-glob-match": "1.0.1"
-        }
+    "glob@13.0.6": {
+      "minimatch": {
+        ".": "11.0.1",
+        "@isaacs/nonrecursive-glob-match": "1.0.1"
       }
     }
   }
