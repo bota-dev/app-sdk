@@ -1,119 +1,186 @@
-# External firmware integration: signed regulatory country v1
+# External firmware design: Project country synchronization
 
-This handoff targets the external BES implementation. It does not require changes
-to a different reference firmware repository. The wire authority is
-[Regulatory Country v1](../../protocol/regulatory-country-v1.md); this guide
-organizes implementation and acceptance without introducing another wire format.
+**Status: design proposal, not implemented or qualified.** This replaces the
+earlier country integration direction for the external BES firmware team.
+[SDK #84](https://github.com/bota-dev/app-sdk/pull/84) implements the earlier
+B07A000C design; its [wire contract](../../protocol/regulatory-country-v1.md)
+and [vector](../../protocol/vectors/regulatory-signed-v1.json) describe that
+source only. They are not vectors for this proposal. This documentation change
+does not replace that implementation, allocate a wire kind, or enable devices.
 
-## Read in this order
+## Scope
 
-1. [Firmware protocol entry](../../FIRMWARE_PROTOCOL.md): existing GATT and token installation.
-2. [Token envelope v1](../../protocol/device-token-v1.md): unchanged BOTATOK1, encrypted-only delivery, identity and refresh recovery.
-3. [Country v1](../../protocol/regulatory-country-v1.md): sections 2, 4, 5 and 6 for sequencing, document, BLE and receipt layouts.
-4. [Shared country vector](../../protocol/vectors/regulatory-signed-v1.json): deterministic signature/codec interoperability, not an approved RF profile or a live grant.
-5. [WiFi v2/v3](../../protocol/wifi-config-v2.md): independent credential authorization and exact capability negotiation.
+The backend owns a Project's `country_alpha2` and monotonic `country_revision`.
+The device applies the latest authorized version through existing transports.
+Country changes do not require rebinding or token replacement.
 
-The [manifest](../../protocol/manifest/device-protocol.yaml) owns UUIDs; the
-[Rust codec](../../core/device-sdk-core/src/protocol/regulatory.rs) and
-[codec tests](../../core/device-sdk-core/tests/regulatory_profile.rs) provide a
-reference. SDK structural validation does not replace firmware signature checks.
+- Country comes only from the Project: no organization inheritance, phone
+  locale, IP inference, or default CN/US.
+- Keep `bind → install encrypted token → confirm / abort` and the existing
+  [BOTATOK1 contract](../../protocol/device-token-v1.md) unchanged.
+- Use one readable, server-signed country document. There is no country HPKE,
+  new BLE service, country nonce, device-signed ACK, permanent country lock, or
+  cloud RF-profile distribution system.
+- Preserve [WiFi v3](../../protocol/wifi-config-v2.md), QR parsing, credential
+  encryption and transfer frames. Firmware still enforces its supported country
+  domains and hardware limits; this proposal does not redefine them.
 
-## What remains and what changes
+## First binding
 
-| Area | Required implementation |
+1. The App relays the device's existing SN, PK_D and actual capabilities.
+   Authorized bind preparation retains the existing TOFU policy and returns an
+   attempt, unchanged encrypted BOTATOK1, and an optional country preview.
+2. Firmware installs the encrypted token and returns the existing provisioning
+   result. Failure before confirm follows the existing abort path.
+3. Confirm reads the **current** Project country and revision under the same
+   Project lock used for country updates, and commits the normal binding/token
+   activation with the signed configuration. A country change after preparation
+   updates the configuration returned at confirm; the preview is not a lock.
+4. The App relays the signed configuration through `SIGNED_BLOB_V2`. Firmware
+   verifies, applies and persists it, then reports the application result.
+5. If country delivery fails after confirm, ownership remains confirmed. Retry
+   configuration synchronization only. A lost confirm response uses the same
+   attempt's existing idempotent recovery, without issuing another initial token.
+
+PK_D is pinned during successful authorized bind preparation. Country preview
+is not a permanent device record. Actual applied country/revision are persisted
+by firmware after successful application; their first-write timing differs.
+
+## Project changes and synchronization
+
+Changing the country increments the Project revision atomically; saving the same
+country is idempotent. `CN → US → CN` therefore produces revisions `1 → 2 → 3`.
+A Project with bound devices cannot clear its country. A Project without a
+configured country cannot start an admitted country-managed binding.
+
+The backend derives desired state from the current Project. No per-device
+command fanout is needed. The App fetches current configuration through its
+existing connection/foreground/configuration cycle and before WiFi setup.
+Direct-device heartbeat responses can carry the same signed `country_config`.
+Both transports reach one firmware validator and application handler.
+
+Firmware reports applied country, revision and result through ordinary status
+and heartbeat, keeping a failed attempted revision separate from the actual
+applied revision. The backend compares that observation with current desired state;
+an old report cannot complete a newer revision or overwrite a newer observation.
+Reports are operational observations, not device-signed evidence or authorization
+to issue WiFi grants. The old independent signed-country-ACK gate is not retained.
+
+Report the confirmed binding generation captured at the operation, not one
+looked up after its completion; reject late reports from an old scope. A relay
+success belongs to its completed write ID's package. Failed attempts do not
+claim the target revision or a cached revision as currently applied. Omitted
+country fields mean no new observation; explicit `missing` requests redelivery.
+Without an existing applied-state reader, the App can request resynchronization
+at existing hooks and resend idempotently, even after a past cloud success.
+
+An offline device keeps its last valid configuration and catches up to the
+latest revision on reconnection. Intermediate revisions need not be replayed.
+This is eventual synchronization, not an immediate fleet-wide country switch.
+
+## Firmware validation and state
+
+The signed document logically contains protocol/purpose and signer ID, environment,
+Project ID, device ID, confirmed binding generation, country, revision and a
+country-specific credential tag. Use the existing trusted cloud signature
+verifier and one canonical encoding; the App cannot supply a new trust anchor.
+Exact bytes, purpose identifier, size limits and shared vectors must be agreed
+before implementation. Do not reinterpret `BOTAREG1` bytes from the old design.
+
+The binding scope is `(environment, project_id, device_id, confirmed_generation)`.
+Firmware retains this authenticated context with its installed token. In the
+two-stage flow, initial BOTATOK1 (`purpose=1`, nonempty binding attempt) contains
+provisional generation `g`, so its expected confirmed generation is `g+1`;
+a refresh (`purpose=2`) already contains confirmed generation `g`. Historical
+immediate-binding purpose-1 tokens can have an empty attempt and an already
+confirmed generation: normalize them through ordinary encrypted token refresh
+before country admission, without rebinding. Do not add one to every historical
+purpose-1 generation or depend on attempt ID as the permanent scope.
+
+The public document must not expose the token or the existing WiFi v3 credential
+commitment `C`. The proposed purpose-separated matching tag is:
+
+```text
+country_credential_tag = HMAC-SHA256(
+  key = C,
+  data = ASCII("bota/country-config/credential/v1") || 0x00
+)
+```
+
+The backend signs only for the current valid active binding and credential.
+The cloud signature covers this tag and all configuration fields. The tag
+distinguishes replacement credentials whose prepare attempts share a generation.
+It only matches the current credential; it cannot authorize configuration by itself.
+Freeze the exact derivation in shared vectors before implementing it.
+
+Firmware processes each received document in this order:
+
+1. Validate framing, document bounds, purpose and cloud signature.
+2. Match the installed token's authenticated binding scope and credential tag.
+   A country document cannot change device ownership or Project.
+3. Compare revision within that scope: older rejects; equal revision and equal
+   country succeeds idempotently; equal revision with a different country rejects;
+   a newer revision may change the country.
+4. Apply the supported country using the existing driver/configuration storage
+   mechanism at a safe point. Return success only after driver application and
+   durable readback succeed.
+
+Token refresh retains applied country/revision and the same binding scope.
+Previously verified durable configuration remains valid; do not revalidate its
+historical credential tag against the refreshed token or close the radio for
+that mismatch. Newly received packages must match the current token. A
+reissued document may have a different tag/signature at the same revision;
+idempotency compares scope, revision and country, not all document bytes.
+A new authorized binding establishes a new scope through the existing token
+installation flow. Old in-flight configuration work must not cross that boundary,
+and the old scope's country does not authorize radio use in the new scope.
+
+## Existing transport and failure behavior
+
+Reuse `SIGNED_BLOB_V2` at
+`B07A0004-0007-1000-8000-00805F9B34FB`, including BEGIN/DATA/COMMIT/ABORT/RESULT,
+write IDs, connection retirement, cancellation and the existing GATT queue.
+Kind **8 is proposed**; kinds 1–7 are occupied. The manifest, fixed-length codec
+validation and all consuming bindings must be updated together in a later
+implementation. Do not start an upload workflow just to send country settings.
+
+The existing sender needs effective write capacity at least 64 bytes, meaning
+**ATT MTU ≥67**. This proposal does not add MTU23 support. Mere presence of the
+characteristic does not prove support for the new kind. Qualify the BES firmware
+and negotiate actual supported protocol capabilities before enabling this path;
+do not add an unknown bit to the existing strict capabilities decoder.
+
+| Situation | Required behavior |
 | --- | --- |
-| Country source | Backend project country only, plus approved SKU/profile artifacts. No organization fallback, phone locale, IP inference or hard-coded CN/US. |
-| Ownership | Keep bind → encrypted token installation → confirm/abort. Configuration ACK is not a third ownership phase. |
-| Token | Preserve BOTATOK1 HPKE and signature verification. Reject new plaintext installation; retain valid tokens from historical completed bindings. |
-| Country document | Add readable server-signed BOTAREG1. Do not decrypt it with HPKE or feed it into the token installer. |
-| Completion | Persist and apply the driver configuration, then sign BOTARAK1 with SK_D. ATT success alone is not application success. |
-| Radio admission | Gate active scan, personal manual/QR setup, managed STA and SoftAP/fast transfer on an applied valid profile. Keep recovery over BLE available. |
+| BLE and heartbeat deliver together | Serialize application; use the same scope/revision rules. |
+| Transfer or OTA owns the transport/radio | Report busy/deferred and retry at a safe point; do not steal ownership or discard transfer checkpoints. |
+| Country requires WiFi restart | Safely stop, apply and reconnect STA/SoftAP. Local recording alone need not stop. |
+| Unsupported country or driver/storage failure | Report a specific failure; retain the last successfully applied state and restore/verify its driver settings. If restoration is uncertain, refuse radio use until recovery. Never report the new revision as applied or substitute another country. |
+| Disconnect or lost result | Retry the same current configuration; successful application is idempotent. |
+| Reboot or power loss | Recover through existing durable settings facilities and restore the matching driver state before reporting ready. If no valid applicable state remains, refuse WiFi startup and retain BLE recovery. |
+| Delayed App callback or old binding report | Reject/ignore it using current connection and binding scope; it cannot overwrite current state. |
 
-## Binding sequence and durable state
+An ATT acknowledgement or queued work is not application success. Normal RESULT
+and heartbeat are not device-signed receipts. Without a nonce, an offline device
+cannot know that the cloud has issued a newer revision; revision checks prevent
+rollback after the device has accepted a newer revision. They do not add protection
+against rollback of the entire token store or device NVM.
 
-1. Expose the actual device SN, raw P-256 public key PK_D and implemented
-   capabilities over BLE. SK_D remains on the device. The App relays these values.
-2. The backend's authorized bind preparation pins an absent PK_D using TOFU,
-   snapshots project country/profile, and returns an attempt plus opaque BOTATOK1.
-   Existing pins cannot be replaced. Committed preparation followed by abort
-   retains the pin, but does not create a permanent country lock.
-3. Install BOTATOK1 using the existing encrypted characteristic and actual durable
-   provisioning result. The token carries provisional binding generation `g`.
-4. Expose a fresh regulatory nonce. The App sends it with the same attempt's
-   confirm. The backend atomically activates binding/token, commits the country
-   lock and returns a signed country document for generation `g+1`.
-5. Verify the document against the same token's device/project/end-user/attempt
-   and exactly `g+1`. Persist this confirmed context only after authentication.
-   Later documents match the confirmed generation; refreshed tokens already
-   carrying it match directly. Never accept an arbitrary generation jump.
-6. Persist the country/profile journal, apply/read back the driver domain, and
-   persist the success receipt. The App relays that receipt to the cloud ACK API.
-   Only the matching authenticated result `APPLIED` completes cloud state.
+## Implementation dependencies and acceptance
 
-PK_D enrollment happens during successful bind preparation. The permanent country
-lock is created at confirm. These are different persistence moments.
+First agree the minimal wire encoding, kind registration, result meanings and
+shared vectors. Then implement backward-compatible backend fields, the SDK/App
+relay, and the BES handler; keep new country admission off until the coordinated
+candidate is qualified. Existing old-design devices need an explicit migration
+decision before enabling this replacement. Do not delete old locks or reinterpret
+their bytes as part of a documentation update. Dev acceptance precedes separately
+authorized gamma/prod rollout. Token encrypted-only policy remains independent.
 
-## Firmware work items
-
-| Work item | Acceptance detail |
-| --- | --- |
-| B07A000C service | Add capabilities `0001`, challenge `0002`, configuration `0003`, status `0004`, receipt `0005`; use the full UUIDs in the manifest. |
-| Capabilities | Eight bytes: `01 0f 42 02 c6 00 78 00`. The three u16 fields are little-endian (578, 198, 120). Advertise support only after every required flag is implemented. |
-| Challenge | Version1 plus 16 cryptographically random bytes; all-zero is invalid, individual zero bytes are valid. New full read creates a challenge; Read Blob continues the same snapshot. Enforce a 120-second monotonic lifetime. |
-| Fragment assembly | `[index,total,data]`; data capacity `min(MTU-7,244)`, MTU23 supported. Bound to 578 bytes/64 fragments; strict order and identical immediate duplicates only. Clear partial assembly on disconnect or after 30 seconds. |
-| Authentication | Validate cloud low-S ECDSA-P256 signature, provisioned signer, environment, PK_D hash, SN, owner/project/attempt/generation, nonce, lifetime, country lock and exact approved profile hash/modes. Use the canonical domains and byte offsets; document and receipt integers are big-endian. |
-| Persistent state | A recoverable journal for country lock, accepted configuration and receipt. Do expensive crypto/NVM/driver work outside ATT callbacks; fence stale connection/binding/reset work. |
-| Driver | Stop radio activity, safely checkpoint transfer, apply the approved profile and verify effective parameters. Radio limits are the intersection of hardware, factory limits and the approved profile. |
-| Status/receipt | Coherent 64-byte status and 198-byte signed receipt; support complete long reads and framed notifications. Persist receipt before reporting success; reboot restores driver before reporting ready. |
-
-The signed document identifies an approved RF artifact by its hash; it does not
-contain the artifact's channel/power table. The firmware/RF team must supply and
-integrate the exact artifact bytes, SKU, country, profile ID, SHA-256 and allowed
-modes. The catalog and board must agree. Do not hash reserialized JSON.
-
-## Recovery and compatibility
-
-- Before confirm, provisioning failure uses the existing abort. After confirm,
-  country failure keeps ownership and retries only country delivery/ACK; do not
-  reinstall a token, automatically unbind or report full setup success.
-- Lost confirm response: retry the same attempt. Expired/missing issuance: read
-  a fresh challenge and request redelivery. Lost notification: read the complete
-  receipt. Lost HTTP ACK: resend the saved receipt, without reapplying the driver.
-- Persist the country lock across ordinary reset, unbind and environment/project
-  changes. A higher revision does not authorize another country/profile in v1.
-- Restore the last valid applied profile on failure. If recovery is uncertain,
-  keep emitting paths off and BLE recovery available. A valid installed profile
-  remains usable offline; the 120-second window is for installation, not use.
-- WiFi v3 checks the installed original token's commitment inside its signed,
-  encrypted authorization. It never hashes BOTATOK1 ciphertext or reads a
-  token-delivery switch. QR parsing, credential encryption and transfer frames
-  remain their existing protocols; country readiness adds an admission check.
-
-## Joint test and delivery checklist
-
-1. **Offline codec:** use the shared vector for signature/domain, field offsets,
-   hashes, receipt and MTU23 framing. Reject altered fields, wrong environment/
-   key/attempt/generation, high-S signatures, expired/all-zero nonce and overflow.
-2. **Binding:** encrypted install succeeds before confirm; initial `g → g+1`
-   matches. No country lock before confirm; project-country change invalidates
-   the pending snapshot. Raw/mixed token input is refused.
-3. **Country application:** actual driver and durable state match the exact
-   approved profile; status is ready and the cloud records the signed ACK.
-4. **Recovery:** disconnect/lost notification/lost confirm/lost ACK; power loss at
-   journal, driver and receipt stages; driver/NVM failure; stale reset or owner.
-   Verify no silent success, country unlock or unnecessary rebind.
-5. **Original functionality:** scan, manual/QR WiFi, managed STA, SoftAP/fast
-   transfer and applicable firmware OTA; repeat offline after reboot and after
-   token refresh. Verify all emitting paths are blocked without a valid profile.
-
-Backend migration 141 must precede API writers. Country admission defaults off
-globally and per project; the approved catalog defaults empty. A merged PR or
-successful deployment does not enable the pilot. First qualify matching SDK/App
-consumers and target firmware, then configure the approved catalog/project and
-explicitly admit the dev pilot. Gamma/prod rollout is separate.
-
-For a local integration APK, record the exact Demo and SDK commits, packed SDK
-hash, installed runtime provenance, active dev backend, APK signature and test
-results. The normal App registry pin may still be older: a local SDK archive is
-an unpublished integration candidate, not proof of public SDK adoption. Physical
-radio, power-loss and phone acceptance remain required after software checks.
+Qualification must cover initial binding; Project change during bind; `CN → US → CN`;
+same-value save; concurrent/out-of-order BLE and heartbeat delivery; token refresh
+before and after first country application; different device/Project/environment/
+generation; altered signature/tag; unsupported country; result loss; restart and
+power loss; busy OTA/transfer; and offline catch-up. Regress manual/QR WiFi,
+scanning, managed STA and local WiFi fast transfer with the target firmware.
+Software checks, published packages, installed APK provenance and physical-device
+results remain separate evidence. None is established by this design proposal.

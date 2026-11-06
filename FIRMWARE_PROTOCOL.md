@@ -951,19 +951,22 @@ This is an unreleased source contract. See the
 [cross-repository checklist and evidence](docs/parity/ble-advertising-name.md)
 for generated-runtime, firmware and physical qualification status.
 
-## Signed regulatory country configuration (unreleased)
+## Project country synchronization (design proposal)
 
-Read [Regulatory Country v1](protocol/regulatory-country-v1.md) and its
-[synthetic interoperability vector](protocol/vectors/regulatory-signed-v1.json).
-The [external firmware handoff](docs/firmware/regulatory-country-integration.md)
-gives the implementation order, recovery rules and acceptance checklist.
-B07A000C carries readable server-signed configuration and a device-signed ACK;
-there is no country HPKE encryption. Keep the two-stage bind and BOTATOK1 bytes
-unchanged. The first confirmed country context advances provisional generation
-by exactly one; subsequent generations must match. External firmware must persist
-the country lock, apply/read back its approved RF profile and gate scan/STA/SoftAP.
-New token installation is encrypted-only; existing stored tokens remain valid.
-Country application failure does not undo confirmed ownership.
+The [external firmware design](docs/firmware/regulatory-country-integration.md)
+replaces the earlier integration direction with versioned Project country settings,
+one readable server-signed document, existing SIGNED_BLOB_V2 and heartbeat delivery.
+It preserves two-stage binding and encrypted BOTATOK1. Confirm selects the latest
+Project country; later changes synchronize without rebinding. The target has no
+new BLE service, country nonce, device-signed ACK or permanent country lock.
+
+This target is not implemented. The merged SDK #84 source still follows the
+[earlier Regulatory Country v1 wire contract](protocol/regulatory-country-v1.md)
+and its [old synthetic vector](protocol/vectors/regulatory-signed-v1.json), including
+B07A000C and signed ACK. Those bytes are not the new design. Kind registration,
+shared vectors, coordinated implementation and BES qualification remain required.
+New token installation stays encrypted-only; historical completed bindings are
+not forced to rebind. Country failure after confirm does not undo ownership.
 
 ## Unreleased device credential envelope
 
