@@ -10,11 +10,13 @@ credential, HPKE package, GATT service, challenge or device-signed receipt.
 
 ## Scope and lifecycle
 
-Only Project administration selects `country_alpha2`. A changed value increments
-the Project's positive `country_revision`; a same-value save does not. A Project
-with bound devices cannot clear country. No organization/phone/IP fallback or
-RF-artifact catalog is involved. Firmware still enforces its supported country
-domains and hardware limits.
+New Project creation requires an explicit uppercase two-letter `country_alpha2`.
+Existing Projects with absent/null configuration resolve server-side to US, with
+revision at least 1 (preserve a higher historical revision). The server includes
+that effective country in the signed bytes. Saving the same effective value does
+not advance revision; a real change increments it atomically. Clearing country is
+rejected. No organization/phone/IP fallback or RF-artifact catalog is involved.
+Firmware still enforces its supported country domains and hardware limits.
 
 Bind preparation returns preview metadata. After the original encrypted token
 installation, first confirm reads the latest Project country under the Project
@@ -163,7 +165,7 @@ Confirm and heartbeat can return:
     "binding_generation": 7,
     "country_alpha2": "CN",
     "country_revision": "3",
-    "expected_firmware_version": "<qualified device version>",
+    "expected_firmware_version": "<observed device version>",
     "document": {
       "format": "bota-country-config-v1",
       "encoding": "base64url",
@@ -175,13 +177,13 @@ Confirm and heartbeat can return:
 
 Metadata must agree with the signed package. `expected_firmware_version` is an
 admission/transport check, not signed authority; SDK reads the actual GATT firmware
-version and requires an exact match before sending. Backend admission retains
-the existing global/Project cohort and requires the configured supported firmware
-minimum. An unset minimum admits no firmware; do not invent a qualified BES version.
-Characteristic presence alone is insufficient support evidence.
-Turning off either the global or Project cohort stops new country issuance,
-including for previously admitted devices. It preserves their existing binding
-and durable country; re-enabling permits synchronization to resume.
+version and requires an exact match before sending. There is no configured firmware
+minimum or global/Project country switch. This comparison checks connection metadata,
+not proof of kind-8 support. Binding without `country_protocol_version:1` retains
+legacy encrypted binding without a country package; explicit scoped synchronization
+can follow later. Qualify matching SDK/App and firmware before distributing them.
+Characteristic presence or a server default alone cannot add firmware support.
+A missing/invalid/unauthenticated package must never become an unsigned US default.
 
 Heartbeat requests optionally carry `country_sync` with `protocol_version:1`,
 the operation's captured `binding_generation`, optional `force:true`, and optional

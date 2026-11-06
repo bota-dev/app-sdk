@@ -7,6 +7,7 @@ publication is performed by this SDK change.
 | Requirement | Source implementation | Remaining acceptance |
 | --- | --- | --- |
 | Reuse transport | Manifest kind 8, fixed 264-byte codec, existing signed-blob planner and JsUploadContextExchange; no new service or ACK endpoint | Matching BES implementation and MTU >=67 |
+| Default Project country | Backend signs US for absent/null legacy settings; new Projects require explicit country. No global/Project country switch or configured minimum. SDK wire/runtime unchanged. | Matching backend policy; existing kind-8 BES handler remains required |
 | Preserve ownership and token | Country control never enters provisioning; BOTATOK1 and WiFi v3 remain unchanged | Coordinated backend/App bind/refresh and physical tests |
 | Scoped delivery | Existing direct lease/GATT queue, fresh firmware-version read, exact kind/write-ID RESULT, captured connection and host scope checks | Installed candidate and reconnect/credential-change tests |
 | Ordinary observations | Only success returns parsed configuration metadata; device failures retain protocolStatus; no signed-receipt claim | App reports must retain captured binding context |
