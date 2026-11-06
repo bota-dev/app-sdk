@@ -50,8 +50,11 @@ by firmware after successful application; their first-write timing differs.
 
 Changing the country increments the Project revision atomically; saving the same
 country is idempotent. `CN → US → CN` therefore produces revisions `1 → 2 → 3`.
-A Project with bound devices cannot clear its country. A Project without a
-configured country cannot start an admitted country-managed binding.
+New Projects must explicitly select a country and start at revision 1. Existing
+Projects without a configured country resolve to US on the server before signing;
+a higher historical revision is retained. Explicitly saving that effective US
+does not advance the revision. Clearing country is rejected. Firmware uses the
+verified signed value; it must not default malformed or missing packages to US.
 
 The backend derives desired state from the current Project. No per-device
 command fanout is needed. The App fetches current configuration through its
@@ -169,10 +172,13 @@ against rollback of the entire token store or device NVM.
 ## Implementation dependencies and acceptance
 
 The wire contract and shared vector define the coordinated implementation.
-Adopt matching backend fields and the SDK/App relay, then integrate the BES handler; keep new country admission off until the coordinated
-candidate is qualified. Existing old-design devices need an explicit migration
-decision before enabling this replacement. Do not delete old locks or reinterpret
-their bytes without a separately reviewed data migration. Dev acceptance precedes separately
+Adopt matching backend fields and the SDK/App relay, then integrate and qualify
+the BES handler. No global/Project country switch or configured firmware minimum
+is required. Protocol-v1 opt-in and the existing observed GATT version comparison
+remain; default US does not make old firmware implement kind 8. Existing old-design
+devices need an explicit migration decision before adopting this replacement.
+Do not delete old locks or reinterpret their bytes without a separately reviewed
+data migration. Dev acceptance precedes separately
 authorized gamma/prod rollout. Token encrypted-only policy remains independent.
 
 Qualification must cover initial binding; Project change during bind; `CN → US → CN`;
