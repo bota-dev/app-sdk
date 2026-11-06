@@ -122,6 +122,16 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
+The React Native development build scopes minimatch 11.0.1 and its helper 1.0.1
+to the existing Bob 0.43.0 → glob 13.0.6 dependency chain for
+[GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249).
+Keep the override scoped to that exact glob parent, whose sole owner is Bob.
+The source CI uses the Node 22 installation's npm for frozen installs; also
+check the declared npm 12.0.2 profile without changing either profile's guards.
+The build-glob regressions check pattern-amplification bounds, real glob
+selection and compiler refusals. The normal build, Codegen, generated-core
+provenance and packed-package checks remain required when updating this tooling.
+
 Web facade changes use Node.js 22+, npm 12.0.2 for packing, and Playwright
 1.63.0 with only Chromium installed under `target/playwright-browsers`. Run the
 single complete local gate rather than testing a source-linked consumer:
