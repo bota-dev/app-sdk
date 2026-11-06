@@ -902,8 +902,8 @@ and reasons, with no result-8 guessing or unverified package-version upgrade.
 ### Direct-cloud use of Find revision 2 (unreleased)
 
 Direct firmware may offer `find_authorization: {protocol_version: 2, nonce_d}`
-in an authenticated heartbeat only when both actuators and current binding are
-available. The server returns at most one atomically claimed Find command with
+in an authenticated heartbeat when both actuators are supported and time is valid.
+Delivery requires current trusted binding; the optional preparation flow below can establish it. The server returns at most one atomically claimed Find command with
 `find_grant_blob` (Base64, 193 bytes), retaining the same Grant/Control layout.
 Its request ID is SHA-256(ASCII `bota/find/cloud/v1` + NUL + UTF-8 command ID)[0:16].
 The Grant expires at the earlier of command expiry and issuance +60 seconds.
@@ -920,6 +920,71 @@ Nearby SDK BLE Find remains a separate user action; do not use cloud as automati
 fallback after an uncertain BLE START. Legacy relay-pending clients do not consume
 these cloud Find commands. Physical board support and coordinated release remain
 required; the weak unsupported adapter does not advertise cloud Find.
+
+### Automatic preparation over the existing heartbeat
+
+This additive source extension removes the App relay dependency for direct-cloud
+Find. Deploy the backend before firmware sends the new optional fields. Existing
+revision-2 devices with acknowledged bindings retain their original request.
+The command creation endpoint, pending-command queue and execution ACK endpoint
+are unchanged; no new business API, database migration or SDK BLE workflow is required.
+
+A direct device authenticated with its current device token sends the independent
+Find `nonce_d` and, when its trusted binding is unavailable, a separate
+`binding_nonce_d` (16 bytes as 32 hexadecimal characters):
+
+```json
+{"find_authorization":{"protocol_version":2,"nonce_d":"01010101010101010101010101010101","binding_nonce_d":"02020202020202020202020202020202"}}
+```
+
+The response contains `find_authorization_result` with
+`status: "binding_confirmation_required"` and `confirmation_blob` (Base64, 184
+bytes). Firmware verifies the existing BOTABND1 signature, device, environment,
+current credential commitment, original binding challenge and its 60-second
+installation deadline; it durably stores and reads back the confirmation before
+signing BOTABAK1. The next heartbeat replaces `binding_nonce_d` with
+`binding_acknowledgement` (Base64, 104 bytes / 140 characters) and still offers a
+live independent Find nonce. Never send both preparation fields together.
+
+The server verifies this ACK under the current device/token/binding lock before
+claiming a queued command. A successful preparation can deliver the Find in the
+same ACK heartbeat; preparation itself never consumes the command. No App-assisted
+confirmation endpoint is needed on this path. Tokens lacking a committed binding
+or credential commitment still require normal reconfirmation/rebinding; the server
+must not synthesize authority from BLE connectivity, battery or `device_state`.
+
+`find_authorization_result.status` distinguishes:
+
+| Status | Firmware/integrator action |
+| --- | --- |
+| `binding_confirmation_required` with blob | Verify, persist, then send the signed ACK |
+| `binding_confirmation_required` without blob | Resend the current stored confirmation's ACK, or offer a binding challenge if none is valid |
+| `binding_acknowledgement_invalid` | Offer a new binding challenge; do not repeatedly submit the stale ACK |
+| `binding_reconfirmation_required` | Repair the normal binding/credential through the owning provisioning flow |
+| `credential_changed`, `binding_changed` | Reconcile current credentials/binding or the stale command; do not reuse old authority |
+| `command_conflict` | START remains queued behind recording/reset/STOP; STOP keeps priority |
+| `no_pending_command` | Binding is ready and no command was claimed; continue normal heartbeats |
+| `command_delivered` | Process the original pending command and report its actual execution result |
+| `invalid_offer` | Correct the optional object; unknown fields such as `ble_connected` are invalid |
+| `scope_mismatch` | Use the matching direct device token, not an App-relayed heartbeat |
+| `unavailable` | Retry preparation on a later heartbeat; ordinary heartbeat handling continues |
+
+`ready` is reserved for preparation-ready responses; it is not physical execution.
+These statuses contain no raw grants, nonce, signature or credential logs. Heartbeat
+responses are `Cache-Control: no-store` and bypass generic idempotency caching.
+Retry a lost preparation response using the same unexpired binding challenge or
+signed ACK. After successful ACK acceptance, omit preparation fields. A replaced
+confirmation requires a fresh challenge. Reboot/credential changes discard volatile
+retry hints and revalidate the durable binding. Never replay START after uncertain
+command delivery; query the original command result or issue an explicit STOP.
+
+Both physical actuators and valid time remain required. Firmware may offer a binding
+challenge before capability byte 4 becomes ready, but must not execute Find until
+the trusted binding and signed exact-action Grant validate. Connected BLE still
+suppresses the reference direct-cloud path; the existing authorized SDK BLE path
+remains independent. Battery, recording/OTA/reset preemption, maximum duration and
+truthful dual-actuator ACK requirements are unchanged. External firmware integration and hardware qualification remain separate.
+
 
 ## BLE Advertising Name
 
