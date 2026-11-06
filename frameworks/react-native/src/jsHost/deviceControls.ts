@@ -1,5 +1,6 @@
 import type { NativeConnectedDevice } from '../specs/NativeBotaDeviceSDK';
 import { normalizeConnectedDeviceType } from '../deviceModel';
+import { JsUploadContextExchange } from './encryptedUploadV2';
 import type {
   BotaJsHostPorts, GattAddress, JsGattValue, JsHostContext, JsHostSubscription,
   JsValue, RawJsCoreFactory,
@@ -21,7 +22,7 @@ export type ResolveBoundDeviceModel = (serialNumber: string, context: JsHostCont
   BoundDeviceModelHint | null | Promise<BoundDeviceModelHint | null>;
 
 export interface JsDeviceControlsOptions {
-  readonly ports: Pick<BotaJsHostPorts, 'ble' | 'persistence' | 'signal' | 'checkScope'>;
+  readonly ports: Pick<BotaJsHostPorts, 'ble' | 'persistence' | 'signal' | 'checkScope' | 'randomBytes'>;
   readonly core: Pick<RawJsCoreFactory, 'codec'>;
   readonly connection: () => JsControlConnection | null;
   readonly emit: (event: string, value: unknown) => void;
@@ -137,6 +138,9 @@ export class JsDeviceControls {
   }
 
   private async perform(operation: string, args: readonly unknown[], context: JsHostContext): Promise<unknown> {
+    if (['readRegulatoryCapabilities', 'readRegulatoryStatus', 'readRegulatoryChallenge', 'applyRegulatoryConfiguration'].includes(operation)) {
+      throw controlError('unsupported_capability', operation);
+    }
     const stopKey = ({ stopStatusUpdates: 'status', stopRecordingStateUpdates: 'recording',
       stopWiFiStatusUpdates: 'wifi', stopDeviceLogs: 'logs' } as Record<string, string>)[operation];
     if (stopKey) {
@@ -153,6 +157,8 @@ export class JsDeviceControls {
       return;
     }
     switch (operation) {
+      case 'applyCountryConfiguration':
+        return this.applyCountryConfiguration(args[1], connection, context);
       case 'readStatus':
         return this.decodeRead('decodeDeviceStatus', 'SERVICE_BOTA_CONTROL', 'CHAR_DEVICE_STATUS', connection, context,
           { timestampMs: Date.now() });
@@ -204,19 +210,6 @@ export class JsDeviceControls {
       }
       case 'readRecordingState':
         return this.decodeRead('decodeRecordingState', 'SERVICE_BOTA_CONTROL', 'CHAR_RECORDING_STATUS', connection, context);
-      case 'readRegulatoryCapabilities': {
-        const service = this.address('SERVICE_BOTA_REGULATORY', 'CHAR_REGULATORY_CAPABILITIES', connection);
-        if (!this.options.ports.ble.hasService) throw controlError('unsupported_capability', operation);
-        const available = await this.step(connection, context, () => this.options.ports.ble.hasService!(connection.device.id, service.serviceUuid, context));
-        if (!available) return { supported: false, protocolVersion: 0 };
-        return this.decodeRead('regulatory', 'SERVICE_BOTA_REGULATORY', 'CHAR_REGULATORY_CAPABILITIES', connection, context, { op: 'Capabilities' });
-      }
-      case 'readRegulatoryStatus':
-        return this.decodeRead('regulatory', 'SERVICE_BOTA_REGULATORY', 'CHAR_REGULATORY_STATUS', connection, context, { op: 'Status' });
-      case 'readRegulatoryChallenge':
-        return this.decodeRead('regulatory', 'SERVICE_BOTA_REGULATORY', 'CHAR_REGULATORY_CHALLENGE', connection, context, { op: 'Challenge' });
-      case 'applyRegulatoryConfiguration':
-        return this.applyRegulatory(args[1], connection, context);
       case 'readFindChallenge':
         return this.decodeRead('decodeHex', 'SERVICE_BOTA_FIND', 'CHAR_FIND_CHALLENGE', connection, context, { length: 16 });
       case 'readFindBindingChallenge':
@@ -348,38 +341,26 @@ export class JsDeviceControls {
     } finally { value.fill(0); }
   }
 
-  private async applyRegulatory(value: unknown, connection: JsControlConnection, context: JsHostContext): Promise<JsValue> {
-    const delivery = record(json(value));
-    if (delivery.format !== 'bota-regulatory-signed-v1' || delivery.encoding !== 'base64url') {
-      throw controlError('invalid_input', context.operation);
+  private async applyCountryConfiguration(value: unknown, connection: JsControlConnection, context: JsHostContext): Promise<JsValue> {
+    const firmwareVersion = await this.decodeRead('decodeText', 'SERVICE_DEVICE_INFO', 'CHAR_FIRMWARE_REVISION', connection, context, { required: true });
+    const prepared = record(this.codec('prepareCountryConfiguration', { delivery: json(value), firmwareVersion, mtu: connection.device.mtu }));
+    if (typeof prepared.blobKind !== 'number' || typeof prepared.maximumBlobBytes !== 'number') {
+      throw controlError('protocol_error', context.operation);
     }
-    await this.decodeRead('regulatory', 'SERVICE_BOTA_REGULATORY', 'CHAR_REGULATORY_CAPABILITIES', connection, context, { op: 'Capabilities' });
-    const frames = array(this.codec('regulatory', { op: 'Prepare', document: delivery.data!, nonce: delivery.nonce!,
-      serial: connection.device.serialNumber, mtu: connection.device.mtu }));
+    const document = bytes(prepared.bytes!);
+    const exchange = new JsUploadContextExchange({ core: this.options.core, ports: this.options.ports,
+      peripheralId: connection.device.id, maximumWriteBytes: this.capacity(connection), maximumSignedBlobBytes: prepared.maximumBlobBytes,
+      gatt: this.options.gatt, checkOwner: owner => this.requireOwner(connection, owner),
+      onCleanupFailure: (error, owner) => this.markCleanupFailure(error, owner) });
     try {
-      try {
-        return await this.withResult('SERVICE_BOTA_REGULATORY', 'CHAR_REGULATORY_RECEIPT', connection, context,
-          packet => {
-            try { return this.codec('regulatory', { op: 'Notification', bytes: publicBytes(packet) }); }
-            catch { return null; } // A complete Read Blob remains authoritative after notification loss.
-          },
-          async beginResults => {
-            beginResults();
-            for (const frame of frames) await this.writeBytes(bytes(frame), 'SERVICE_BOTA_REGULATORY', 'CHAR_REGULATORY_CONFIG', connection, context);
-          }, 1500);
-      } catch (error) {
-        if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'timeout') throw error;
-      }
-      // Read Blob returns the complete durable receipt when notifications were lost.
-      // Keep the captured GATT owner and scope for every poll and joined cleanup.
-      const deadline = Date.now() + 28_000;
-      while (Date.now() < deadline) {
-        const result = await this.decodeRead('regulatory', 'SERVICE_BOTA_REGULATORY', 'CHAR_REGULATORY_RECEIPT', connection, context, { op: 'Receipt' });
-        if (result !== null) return result;
-        await waitResult(new Promise<void>(resolve => setTimeout(resolve, 150)), 500, context);
-      }
-      throw controlError('timeout', context.operation);
-    } finally { this.codec('regulatory', { op: 'Clear' }); }
+      await exchange.sendSignedBlob(prepared.blobKind, document, context);
+      this.requireOwner(connection, context);
+      return prepared.result!;
+    } finally {
+      document.fill(0);
+      try { await exchange.close(); }
+      catch (error) { this.markCleanupFailure(error, context); throw error; }
+    }
   }
 
   private async recordingControl(action: 'start' | 'stop', grant: unknown,

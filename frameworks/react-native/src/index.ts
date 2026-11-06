@@ -1,3 +1,4 @@
+export type { CountryConfigurationDelivery, CountryConfigurationResult } from './countryConfiguration';
 import NativeBotaDeviceSDK from './specs/NativeBotaDeviceSDK';
 export { createRecordingEditClient } from './recordingEdits';
 export type { RecordingEditFile, RecordingEditSource, RecordingEditRequest, RecordingEditStatus, RecordingEditJournal, RecordingEditHost } from './recordingEdits';

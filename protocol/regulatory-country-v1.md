@@ -1,6 +1,14 @@
 # Wi-Fi regulatory country configuration v1
 
-**Status:** Implementation contract; coordinated changes and external firmware qualification are required before enablement.
+**Status: superseded integration direction; retained as the contract of the earlier
+merged SDK #84 source.** New firmware planning follows the
+[Project country synchronization design](../docs/firmware/regulatory-country-integration.md),
+which reuses SIGNED_BLOB_V2 and heartbeat, supports Project country changes, and
+removes the separate service, nonce, signed ACK and permanent country lock.
+The replacement now has a separate [country-config v1 contract](country-config-v1.md)
+and kind 8 implementation. The current facade rejects these retired B07A000C
+operations; their UUIDs stay reserved. The old vector does not test the replacement. The sections below preserve the earlier
+wire meanings; do not mix their bytes or requirements with the new proposal.
 
 The server selects the deployment country only from the project. There is no organization country setting or fallback. Keep the existing `bind → install encrypted token → confirm / abort` ownership transaction. Confirm returns a **readable, server-signed country document**; the App relays it and firmware verifies it. There is no separate country HPKE operation and no token or token commitment in this document. `BOTATOK1`, its HPKE suite, and Wi-Fi v3 authorization remain unchanged. New token delivery is encrypted-only; completed historical bindings remain valid and are not forced to rebind.
 
@@ -22,6 +30,8 @@ Prepare stores the project country, project ID/settings revision, SKU, profile a
 4. App reads a fresh regulatory challenge and passes it to existing confirm. Server commits the normal binding and returns `regulatory_config` alongside the existing device fields. Signing failure rolls back this transaction. Do not create another binding to retry the same pending attempt.
 5. SDK writes the signed document over the separate regulatory characteristic. Firmware checks signature, identity, binding context, nonce, country lock and profile, then persists and applies the driver settings. ATT success is not application success.
 6. App forwards the device-signed receipt to the configuration ACK endpoint. This is configuration completion, not a third ownership phase. A post-confirm failure leaves the device bound and configuration pending; retry only country delivery/ACK. Never abort a confirmed binding or send another token because country application failed.
+
+**Persistence timing:** an authorized first successful bind preparation pins PK_D through the existing TOFU policy so the server can encrypt the provisional token. Abort after committed preparation retains that identity pin and revokes provisional credentials. Country is only a binding-attempt snapshot at this stage; the permanent physical country lock is committed by confirm. PK_D enrollment and country-lock creation therefore do not share the same first-write timing.
 
 ```mermaid
 sequenceDiagram

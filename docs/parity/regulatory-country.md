@@ -1,4 +1,22 @@
-# Signed regulatory country delivery review
+# Project country synchronization review
+
+Status: unreleased source. Authority: [country-config v1](../../protocol/country-config-v1.md).
+The external firmware owner is the BES team. No firmware, deployment or registry
+publication is performed by this SDK change.
+
+| Requirement | Source implementation | Remaining acceptance |
+| --- | --- | --- |
+| Reuse transport | Manifest kind 8, fixed 264-byte codec, existing signed-blob planner and JsUploadContextExchange; no new service or ACK endpoint | Matching BES implementation and MTU >=67 |
+| Preserve ownership and token | Country control never enters provisioning; BOTATOK1 and WiFi v3 remain unchanged | Coordinated backend/App bind/refresh and physical tests |
+| Scoped delivery | Existing direct lease/GATT queue, fresh firmware-version read, exact kind/write-ID RESULT, captured connection and host scope checks | Installed candidate and reconnect/credential-change tests |
+| Ordinary observations | Only success returns parsed configuration metadata; device failures retain protocolStatus; no signed-receipt claim | App reports must retain captured binding context |
+| Retire old integration | Public B07A000C methods refuse before I/O; old UUIDs remain reserved | Existing-fleet state migration reviewed separately |
+| Keep generation reproducible | Rust owns wire/validation; generated constants and Linux JS use existing generators | Exact-head CI, published consumers and physical qualification remain separate |
+
+Local commands and exact results belong in the implementation PR. The historical
+results below apply to the retired service only and do not validate kind 8.
+
+## Historical B07A000C source and qualification
 
 Status: source implementation; publication and external BES qualification remain separate.
 Authority: [protocol](../../protocol/regulatory-country-v1.md) and

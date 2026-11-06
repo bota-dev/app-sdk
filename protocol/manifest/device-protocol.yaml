@@ -1,6 +1,7 @@
 schemaVersion: 1
 protocolRevision: firmware-8b175a89374c
 contractRevisions:
+  COUNTRY_CONFIG_CONTRACT_REVISION: bota-country-config-v1
   REGULATORY_CONTRACT_REVISION: bota-regulatory-signed-v1
   WIFI_PROVISIONING_CONTRACT_REVISION: wifi-config-v2-2026-11-02
   LOCAL_WIFI_CONTRACT_REVISION: local-wifi-v2-2026-10-29
@@ -108,6 +109,7 @@ services:
       - { name: CHAR_LOCAL_WIFI_CONTROL, uuid: B07A000B-0002-1000-8000-00805F9B34FB }
       - { name: CHAR_LOCAL_WIFI_EVENT, uuid: B07A000B-0003-1000-8000-00805F9B34FB }
 
+  # Retired country-v1 allocation. Kept reserved; public installers reject it.
   - name: SERVICE_BOTA_REGULATORY
     uuid: B07A000C-0000-1000-8000-00805F9B34FB
     characteristics:
@@ -382,6 +384,13 @@ constantGroups:
     ENCRYPTED_UPLOAD_V2_BLOB_KIND_MARKED_AUTHORIZATION: 5
     ENCRYPTED_UPLOAD_V2_BLOB_KIND_MARKED_RECEIPT: 6
     ENCRYPTED_UPLOAD_V2_BLOB_KIND_LOCAL_WIFI_CONTROL: 7
+    ENCRYPTED_UPLOAD_V2_BLOB_KIND_COUNTRY_CONFIG: 8
+  country_config:
+    COUNTRY_CONFIG_VERSION: 1
+    COUNTRY_CONFIG_PURPOSE: 1
+    COUNTRY_CONFIG_ENVIRONMENT_DEVELOPMENT: 0
+    COUNTRY_CONFIG_ENVIRONMENT_PRODUCTION: 1
+    COUNTRY_CONFIG_ENVIRONMENT_GAMMA: 2
   encrypted_upload_v2_context:
     ENCRYPTED_UPLOAD_V2_CONTEXT_BEGIN: 101
     ENCRYPTED_UPLOAD_V2_CONTEXT_SNAPSHOT: 102
@@ -509,6 +518,8 @@ dwordConstantGroups:
     ENCRYPTED_UPLOAD_V2_CAP_RECOVERY_REQUIRED_MASK: 895
 
 byteStrings:
+  COUNTRY_CONFIG_P256_ORDER: ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551
+  COUNTRY_CONFIG_P256_HALF_ORDER: 7fffffff800000007fffffffffffffffde737d56d38bcf4279dce5617e3192a8
   RECORDING_MARKER_MAGIC: 424f54414d524b31
   ENCRYPTED_UPLOAD_V2_STORAGE_MAGIC: 424f5441454e4332
   ENCRYPTED_UPLOAD_V2_TRAILER_MAGIC: 424f5441454e4432
@@ -519,6 +530,9 @@ byteStrings:
   UPLOAD_CONTEXT_RESULT_MAGIC: 424f544143545852
 
 asciiStrings:
+  COUNTRY_CONFIG_MAGIC: BOTACFG1
+  COUNTRY_CONFIG_SIGNATURE_DOMAIN: bota/country-config/signature/v1
+  COUNTRY_CONFIG_CREDENTIAL_DOMAIN: bota/country-config/credential/v1
   WIFI_PROVISIONING_V3_MAGIC: BOTAWFP3
   WIFI_PROVISIONING_MAGIC: BOTAWFP2
   WIFI_PROVISIONING_AAD: bota/wifi-config/v2
@@ -546,6 +560,26 @@ asciiStrings:
   ENCRYPTED_UPLOAD_V2_DOMAIN_PUBLICATION: bota/enc-v2/publication/v1
 
 layouts:
+  COUNTRY_CONFIG:
+    minimumLength: 264
+    fixedLength: 264
+    fields:
+      - { name: magic, offset: 0, width: 8, encoding: ascii }
+      - { name: version, offset: 8, width: 1, encoding: u8 }
+      - { name: environment, offset: 9, width: 1, encoding: u8 }
+      - { name: purpose, offset: 10, width: 1, encoding: u8 }
+      - { name: reserved, offset: 11, width: 1, encoding: zero }
+      - { name: signer_id, offset: 12, width: 4, encoding: bytes }
+      - { name: binding_generation, offset: 16, width: 8, encoding: u64_be }
+      - { name: country_revision, offset: 24, width: 8, encoding: u64_be }
+      - { name: country_alpha2, offset: 32, width: 2, encoding: ascii }
+      - { name: reserved_word, offset: 34, width: 2, encoding: zero }
+      - { name: credential_tag, offset: 36, width: 32, encoding: bytes }
+      - { name: project_length, offset: 68, width: 2, encoding: u16_be }
+      - { name: project_id, offset: 70, width: 64, encoding: utf8_zero_padded }
+      - { name: device_length, offset: 134, width: 2, encoding: u16_be }
+      - { name: device_id, offset: 136, width: 64, encoding: utf8_zero_padded }
+      - { name: signature, offset: 200, width: 64, encoding: p1363_signature }
   LOCAL_WIFI_CAPABILITIES:
     minimumLength: 16
     fixedLength: 16

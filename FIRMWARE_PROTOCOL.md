@@ -144,14 +144,14 @@ through this initial-bind path. Firmware verifies/decrypts, persists and reads
 back the token before reporting the existing result. Missing encrypted support or validation failure must never trigger a fallback
 to `DEVICE_TOKEN`.
 
-**Plaintext compatibility (unreleased):** server configuration
-`DEVICE_TOKEN_ENCRYPTION_ENABLED=false` is the default and returns raw
-`device_token`; explicit bind-time keys are pinned in either mode. SDK material uses a nonempty token
-and no envelope; `0003/0002` carries 1–255 printable ASCII bytes with the same
-ordered framing. It shares deferred persistence, read-back, paired/reset and
-connection fencing. Interleaved formats cannot combine fragments. Compatible
-clients accept either server response; only the explicit server policy selects
-plaintext, never a failed encrypted operation.
+**Encrypted-only policy:** new binding and refresh return only
+`credential_envelope`. The retired `DEVICE_TOKEN_ENCRYPTION_ENABLED` variable
+cannot enable plaintext, including when false or absent. SDK material requires
+an envelope and an empty raw-token slot; raw or mixed material is rejected before
+credential writes. The legacy `0003/0002` handle is reserved, not a supported new
+token installer. Firmware must reject plaintext installation without changing the
+existing token. Completed historical bindings retain their valid installed token;
+after decryption, firmware still uses the original token for HTTPS Bearer auth.
 
 Encrypted delivery retains bind → provision → confirm/abort and existing result values;
 no additional user action or application request round trip is introduced.
@@ -951,17 +951,24 @@ This is an unreleased source contract. See the
 [cross-repository checklist and evidence](docs/parity/ble-advertising-name.md)
 for generated-runtime, firmware and physical qualification status.
 
-## Signed regulatory country configuration (unreleased)
+## Project country synchronization (unreleased source)
 
-Read [Regulatory Country v1](protocol/regulatory-country-v1.md) and its
-[synthetic interoperability vector](protocol/vectors/regulatory-signed-v1.json).
-B07A000C carries readable server-signed configuration and a device-signed ACK;
-there is no country HPKE encryption. Keep the two-stage bind and BOTATOK1 bytes
-unchanged. The first confirmed country context advances provisional generation
-by exactly one; subsequent generations must match. External firmware must persist
-the country lock, apply/read back its approved RF profile and gate scan/STA/SoftAP.
-New token installation is encrypted-only; existing stored tokens remain valid.
-Country application failure does not undo confirmed ownership.
+The [external firmware design](docs/firmware/regulatory-country-integration.md)
+replaces the earlier integration direction with versioned Project country settings,
+one readable server-signed document, existing SIGNED_BLOB_V2 and heartbeat delivery.
+It preserves two-stage binding and encrypted BOTATOK1. Confirm selects the latest
+Project country; later changes synchronize without rebinding. The target has no
+new BLE service, country nonce, device-signed ACK or permanent country lock.
+
+Read the [country-config v1 wire contract](protocol/country-config-v1.md) and
+[shared vector](protocol/vectors/country-config-v1.json). Rust validates the fixed
+264-byte package; the generated-JS control facade sends kind 8 through existing
+transport and requires ATT MTU >=67 plus an exact firmware-version match.
+The old B07A000C facade rejects before I/O; its UUIDs remain reserved and old
+BOTAREG1/BOTARAK1 bytes are not reinterpreted. Publication, paired backend/App
+adoption and external BES qualification remain separate.
+New token installation stays encrypted-only; historical completed bindings are
+not forced to rebind. Country failure after confirm does not undo ownership.
 
 ## Unreleased device credential envelope
 

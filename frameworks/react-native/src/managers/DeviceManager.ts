@@ -1,4 +1,5 @@
 import type { RegulatoryCapabilities, RegulatoryDelivery, RegulatoryReceipt } from '../regulatory';
+import type { CountryConfigurationDelivery, CountryConfigurationResult } from '../countryConfiguration';
 import type { FindBindingProvider } from '../findDevice';
 import type { FindDeviceCapabilities, FindDeviceStatus } from '../findDevice';
 import EventEmitter from 'eventemitter3';
@@ -439,6 +440,11 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
   async readRegulatoryCapabilities(device: ConnectedDevice): Promise<RegulatoryCapabilities> {
     this.requireConnected(device.id);
     return this.client.controls.readRegulatoryCapabilities(device);
+  }
+
+  async applyCountryConfiguration(device: ConnectedDevice, delivery: CountryConfigurationDelivery): Promise<CountryConfigurationResult> {
+    this.requireConnected(device.id);
+    return this.client.controls.applyCountryConfiguration(device, delivery);
   }
 
   async readRegulatoryStatus(device: ConnectedDevice): Promise<{ ready: boolean }> {

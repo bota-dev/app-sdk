@@ -324,6 +324,7 @@ pub enum WebSignedBlobKind {
     Receipt,
     ContextChallenge,
     ContextResult,
+    CountryConfiguration,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
@@ -1109,6 +1110,9 @@ const fn signed_blob_kind(kind: WebSignedBlobKind) -> u8 {
             wire::ENCRYPTED_UPLOAD_V2_BLOB_KIND_CONTEXT_CHALLENGE
         }
         WebSignedBlobKind::ContextResult => wire::ENCRYPTED_UPLOAD_V2_BLOB_KIND_CONTEXT_RESULT,
+        WebSignedBlobKind::CountryConfiguration => {
+            wire::ENCRYPTED_UPLOAD_V2_BLOB_KIND_COUNTRY_CONFIG
+        }
     }
 }
 
