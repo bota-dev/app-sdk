@@ -144,14 +144,14 @@ through this initial-bind path. Firmware verifies/decrypts, persists and reads
 back the token before reporting the existing result. Missing encrypted support or validation failure must never trigger a fallback
 to `DEVICE_TOKEN`.
 
-**Plaintext compatibility (unreleased):** server configuration
-`DEVICE_TOKEN_ENCRYPTION_ENABLED=false` is the default and returns raw
-`device_token`; explicit bind-time keys are pinned in either mode. SDK material uses a nonempty token
-and no envelope; `0003/0002` carries 1–255 printable ASCII bytes with the same
-ordered framing. It shares deferred persistence, read-back, paired/reset and
-connection fencing. Interleaved formats cannot combine fragments. Compatible
-clients accept either server response; only the explicit server policy selects
-plaintext, never a failed encrypted operation.
+**Encrypted-only policy:** new binding and refresh return only
+`credential_envelope`. The retired `DEVICE_TOKEN_ENCRYPTION_ENABLED` variable
+cannot enable plaintext, including when false or absent. SDK material requires
+an envelope and an empty raw-token slot; raw or mixed material is rejected before
+credential writes. The legacy `0003/0002` handle is reserved, not a supported new
+token installer. Firmware must reject plaintext installation without changing the
+existing token. Completed historical bindings retain their valid installed token;
+after decryption, firmware still uses the original token for HTTPS Bearer auth.
 
 Encrypted delivery retains bind → provision → confirm/abort and existing result values;
 no additional user action or application request round trip is introduced.
@@ -955,6 +955,8 @@ for generated-runtime, firmware and physical qualification status.
 
 Read [Regulatory Country v1](protocol/regulatory-country-v1.md) and its
 [synthetic interoperability vector](protocol/vectors/regulatory-signed-v1.json).
+The [external firmware handoff](docs/firmware/regulatory-country-integration.md)
+gives the implementation order, recovery rules and acceptance checklist.
 B07A000C carries readable server-signed configuration and a device-signed ACK;
 there is no country HPKE encryption. Keep the two-stage bind and BOTATOK1 bytes
 unchanged. The first confirmed country context advances provisional generation

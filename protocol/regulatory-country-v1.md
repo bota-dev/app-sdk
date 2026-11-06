@@ -23,6 +23,8 @@ Prepare stores the project country, project ID/settings revision, SKU, profile a
 5. SDK writes the signed document over the separate regulatory characteristic. Firmware checks signature, identity, binding context, nonce, country lock and profile, then persists and applies the driver settings. ATT success is not application success.
 6. App forwards the device-signed receipt to the configuration ACK endpoint. This is configuration completion, not a third ownership phase. A post-confirm failure leaves the device bound and configuration pending; retry only country delivery/ACK. Never abort a confirmed binding or send another token because country application failed.
 
+**Persistence timing:** an authorized first successful bind preparation pins PK_D through the existing TOFU policy so the server can encrypt the provisional token. Abort after committed preparation retains that identity pin and revokes provisional credentials. Country is only a binding-attempt snapshot at this stage; the permanent physical country lock is committed by confirm. PK_D enrollment and country-lock creation therefore do not share the same first-write timing.
+
 ```mermaid
 sequenceDiagram
     participant A as App / SDK
