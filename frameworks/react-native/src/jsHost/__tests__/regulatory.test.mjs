@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { loadSource } from './loadSource.mjs';
@@ -30,7 +31,7 @@ function fixture(mode='notify') {
  }};
  const connection={device,generation:'connection-1'};
  const controls=new JsDeviceControls({core,ports,connection:()=>connection,emit(){},gatt:(_context,body)=>body()});
- const apply=()=>controls.execute('applyRegulatoryConfiguration',[device,{format:'bota-regulatory-signed-v1',encoding:'base64url',data:wire.toString('base64url'),nonce:'01'.repeat(16)}],context);
+ const apply=()=>controls.execute('applyRegulatoryConfiguration',[device,{format:'bota-regulatory-signed-v1',encoding:'base64url',data:wire.toString('base64url'),nonce:vector.nonceHex}],context);
  return {controls,apply,calls,core,meta};
 }
 test('actual generated Rust sends minimum-MTU frames after subscribing and matches fragmented ACK',async()=>{
@@ -54,4 +55,27 @@ test('scope invalidation during fragmented write stops further writes and retire
  await assert.rejects(f.apply());assert.equal(f.calls.filter(c=>c[0]==='write').length,1);
  assert.equal(f.calls.filter(c=>c[0]==='remove').length,1);
  }finally{await f.controls.close();}
+});
+test('generated codec decodes every nonce byte and clears prepared state on invalid input',()=>{
+ const core=createGeneratedJsCore();
+ // Exercise transport parsing only. Firmware/backend own signature verification;
+ // changing this fixture does not produce an authenticated country document.
+ const nonce=createHash('sha256').update(wire).digest().subarray(0,16);
+ nonce[0]=0; // Individual zero bytes are valid; an all-zero nonce is not.
+ const encoded=nonce.toString('hex'),document=Buffer.from(wire);
+ nonce.copy(document,80);
+ assert.match(encoded,/[a-f]/);
+ const prepare=value=>core.codec('regulatory',{op:'Prepare',document:document.toString('base64url'),serial:'SYNTHETIC',nonce:value,mtu:23});
+ assert.deepEqual(Buffer.from(prepare(encoded).flatMap(frame=>frame.slice(2))),document);
+ const mismatches=Array.from(nonce,(_byte,i)=>{
+  const other=Buffer.from(nonce);other[i]^=1;return other.toString('hex');
+ });
+ for(const value of [...mismatches,'',encoded.slice(1),encoded+'00',encoded.toUpperCase(),'g'+encoded.slice(1),'é'+encoded.slice(1)]){
+  prepare(encoded);
+  assert.throws(()=>prepare(value));
+  assert.throws(()=>core.codec('regulatory',{op:'Receipt',bytes:[...receipt]}),/regulatory operation missing/);
+ }
+ const allZero=Buffer.alloc(nonce.length),zeroDocument=Buffer.from(document);
+ allZero.copy(zeroDocument,80);
+ assert.throws(()=>core.codec('regulatory',{op:'Prepare',document:zeroDocument.toString('base64url'),serial:'SYNTHETIC',nonce:allZero.toString('hex'),mtu:23}));
 });

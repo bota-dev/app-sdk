@@ -73,11 +73,15 @@ impl RegulatoryCodecs {
                 {
                     return Err(invalid("invalid regulatory document"));
                 }
-                let mut challenge = [0; 16];
-                for (i, b) in challenge.iter_mut().enumerate() {
-                    *b = u8::from_str_radix(&nonce[i * 2..i * 2 + 2], 16)
-                        .map_err(|_| invalid("invalid regulatory nonce"))?;
-                }
+                let challenge: [u8; 16] = (0..nonce.len())
+                    .step_by(2)
+                    .map(|i| {
+                        u8::from_str_radix(&nonce[i..i + 2], 16)
+                            .map_err(|_| invalid("invalid regulatory nonce"))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?
+                    .try_into()
+                    .map_err(|_| invalid("invalid regulatory nonce"))?;
                 let bytes = URL_SAFE_NO_PAD
                     .decode(&document)
                     .map_err(|_| invalid("invalid regulatory encoding"))?;

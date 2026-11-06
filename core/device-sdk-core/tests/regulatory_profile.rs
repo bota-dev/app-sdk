@@ -2,7 +2,7 @@ use bota_device_sdk_core::protocol::{
     RegulatoryDocument, RegulatoryReceiptAssembler, regulatory_capabilities, regulatory_challenge,
     regulatory_ready,
 };
-fn fixture() -> (Vec<u8>, Vec<u8>) {
+fn fixture() -> (Vec<u8>, Vec<u8>, [u8; 16]) {
     let v: serde_json::Value = serde_json::from_str(include_str!(
         "../../../protocol/vectors/regulatory-signed-v1.json"
     ))
@@ -14,7 +14,11 @@ fn fixture() -> (Vec<u8>, Vec<u8>) {
             .map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap())
             .collect::<Vec<_>>()
     };
-    (decode("documentHex"), decode("receiptHex"))
+    (
+        decode("documentHex"),
+        decode("receiptHex"),
+        decode("nonceHex").try_into().unwrap(),
+    )
 }
 #[test]
 fn readiness_preserves_a_valid_profile_after_a_failed_delivery() {
@@ -35,13 +39,13 @@ fn readiness_preserves_a_valid_profile_after_a_failed_delivery() {
 }
 #[test]
 fn signed_backend_vector_survives_minimum_mtu_and_fragmented_receipt() {
+    let (wire, ack, nonce) = fixture();
     regulatory_capabilities(&[1, 15, 66, 2, 198, 0, 120, 0]).unwrap();
     assert_eq!(
-        regulatory_challenge(&[&[1][..], &[1; 16]].concat()).unwrap(),
-        [1; 16]
+        regulatory_challenge(&[&[1][..], &nonce].concat()).unwrap(),
+        nonce
     );
-    let (wire, ack) = fixture();
-    let doc = RegulatoryDocument::parse(&wire, "SYNTHETIC", &[1; 16]).unwrap();
+    let doc = RegulatoryDocument::parse(&wire, "SYNTHETIC", &nonce).unwrap();
     assert_eq!(doc.country, "CN");
     assert_eq!(doc.generation, 2);
     assert_eq!(doc.receipt(&ack).unwrap(), Some(0));
@@ -71,16 +75,18 @@ fn signed_backend_vector_survives_minimum_mtu_and_fragmented_receipt() {
 }
 #[test]
 fn invalid_context_bounds_and_stale_receipts_refuse() {
-    let (wire, ack) = fixture();
-    let doc = RegulatoryDocument::parse(&wire, "SYNTHETIC", &[1; 16]).unwrap();
-    assert!(RegulatoryDocument::parse(&wire, "OTHER", &[1; 16]).is_err());
-    assert!(RegulatoryDocument::parse(&wire, "SYNTHETIC", &[2; 16]).is_err());
+    let (wire, ack, nonce) = fixture();
+    let doc = RegulatoryDocument::parse(&wire, "SYNTHETIC", &nonce).unwrap();
+    assert!(RegulatoryDocument::parse(&wire, "OTHER", &nonce).is_err());
+    let mut different_nonce = nonce;
+    different_nonce[0] ^= 1;
+    assert!(RegulatoryDocument::parse(&wire, "SYNTHETIC", &different_nonce).is_err());
     for offset in [8, 10, 11, 99] {
         let mut bad = wire.clone();
         bad[offset] = 9;
-        assert!(RegulatoryDocument::parse(&bad, "SYNTHETIC", &[1; 16]).is_err());
+        assert!(RegulatoryDocument::parse(&bad, "SYNTHETIC", &nonce).is_err());
     }
-    assert!(RegulatoryDocument::parse(&wire[..200], "SYNTHETIC", &[1; 16]).is_err());
+    assert!(RegulatoryDocument::parse(&wire[..200], "SYNTHETIC", &nonce).is_err());
     assert!(doc.fragments(22).is_err());
     for offset in [9, 12, 44, 60, 68, 76, 78, 110] {
         let mut old = ack.clone();

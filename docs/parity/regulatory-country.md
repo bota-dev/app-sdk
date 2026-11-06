@@ -41,3 +41,22 @@ An extended Demo probe also reproduces three OTA subscription settlement failure
 against both its feature branch and original main using the existing published
 SDK. The matching successor package must be qualified and adopted before release;
 country source tests do not establish that package acceptance.
+
+## Nonce dataflow and CodeQL follow-up
+
+The CodeQL check on `17fb6de0` reported six fixed-nonce test inputs and one
+zero-initialized decode buffer. The buffer was fully overwritten from the device
+challenge before use; it was not a nonce generator. Decode directly into a
+fallible 16-byte result instead, and read the deterministic test nonce from the
+shared vector's independent `nonceHex` field. The negative context test changes
+one byte of that nonce. No alert suppression or security-check exclusion is used.
+
+| Requirement | Evidence | Scope |
+| --- | --- | --- |
+| Preserve the complete device challenge | Generated-code regression varies each of the 16 input bytes and checks exact document reassembly with a mixed-byte nonce. | Transport validation; firmware/backend still authenticate the document. |
+| Reject malformed, stale and all-zero nonce inputs | Short, long, uppercase, non-hex, non-ASCII, mismatched and all-zero inputs refuse; failure clears prepared receipt state. | Original protocol and error behavior retained. |
+| Preserve binding, token and country authority | This change only clarifies nonce decoding and fixture provenance; project-only country source, two-stage binding and BOTATOK1 remain unchanged. | No release, environment or firmware operation. |
+
+The corrected Rust requires canonical Linux JavaScript regeneration and fresh
+exact-head CI, including CodeQL, before merge. Test results and generated artifact
+identity for this follow-up are recorded in PR #84.
