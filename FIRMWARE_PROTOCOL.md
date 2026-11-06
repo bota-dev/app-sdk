@@ -954,7 +954,7 @@ for generated-runtime, firmware and physical qualification status.
 ## Signed regulatory country configuration (unreleased)
 
 Read [Regulatory Country v1](protocol/regulatory-country-v1.md) and its
-[synthetic interoperability vector](protocol/fixtures/regulatory-signed-v1.json).
+[synthetic interoperability vector](protocol/vectors/regulatory-signed-v1.json).
 B07A000C carries readable server-signed configuration and a device-signed ACK;
 there is no country HPKE encryption. Keep the two-stage bind and BOTATOK1 bytes
 unchanged. The first confirmed country context advances provisional generation

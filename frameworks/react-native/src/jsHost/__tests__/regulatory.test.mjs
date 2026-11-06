@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { loadSource } from './loadSource.mjs';
 const {createGeneratedJsCore}=loadSource('core.ts');
 const {JsDeviceControls}=loadSource('deviceControls.ts');
-const vector=JSON.parse(readFileSync(new URL('../../../../../protocol/fixtures/regulatory-signed-v1.json',import.meta.url),'utf8'));
+const vector=JSON.parse(readFileSync(new URL('../../../../../protocol/vectors/regulatory-signed-v1.json',import.meta.url),'utf8'));
 const wire=Buffer.from(vector.documentHex,'hex'),receipt=Buffer.from(vector.receiptHex,'hex');
 function fixture(mode='notify') {
  const core=createGeneratedJsCore(),meta=core.codec('protocolMetadata',{}),calls=[];

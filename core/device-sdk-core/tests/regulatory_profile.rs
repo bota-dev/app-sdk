@@ -4,7 +4,7 @@ use bota_device_sdk_core::protocol::{
 };
 fn fixture() -> (Vec<u8>, Vec<u8>) {
     let v: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../protocol/fixtures/regulatory-signed-v1.json"
+        "../../../protocol/vectors/regulatory-signed-v1.json"
     ))
     .unwrap();
     let decode = |key: &str| {

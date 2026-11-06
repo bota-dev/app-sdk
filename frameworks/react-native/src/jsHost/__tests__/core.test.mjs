@@ -203,7 +203,7 @@ test('actual generated Rust core rejects plaintext before subscribing or writing
 });
 
 test('generated country codec matches the backend vector at MTU 23 and returns only matching evidence', () => {
-  const vector = JSON.parse(readFileSync(new URL('../../../../../protocol/fixtures/regulatory-signed-v1.json', import.meta.url), 'utf8'));
+  const vector = JSON.parse(readFileSync(new URL('../../../../../protocol/vectors/regulatory-signed-v1.json', import.meta.url), 'utf8'));
   const owner = createGeneratedJsCore();
   assert.deepEqual(owner.codec('regulatory', { op: 'Capabilities', bytes: [1,15,66,2,198,0,120,0] }), { supported: true, protocolVersion: 1 });
   assert.equal(owner.codec('regulatory', { op: 'Challenge', bytes: [1, ...Array(16).fill(1)] }), vector.nonceHex);
