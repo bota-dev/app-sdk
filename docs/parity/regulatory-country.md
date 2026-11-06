@@ -19,10 +19,23 @@ locked Binaryen 132.0.0 generator. Local Node disabled Wasm tier-up/liftoff to
 avoid an emulation crash; generator inputs and transformations were unchanged.
 Source provenance passes, and native Rust/generated JavaScript agree on 162 RPCs.
 Rust country/provisioning tests pass (10), JS bridge tests pass (73), Web tests
-pass (402) with typecheck, and package/license/tooling checks pass. Final RN test
-results are recorded in the PR. Exact hosted artifact, package publication,
+pass (402) with typecheck, all 684 RN tests pass, and package/license/tooling
+checks pass. Two local-Wi-Fi cases failed on the first combined run, then all
+19 passed in isolation and the full RN rerun passed; hosted confirmation remains
+required. Package publication,
 native adapters without the additive capability, and physical acceptance remain
 separate. No package version or artifact checksum was invented.
+
+The signed vector belongs in `protocol/vectors`, outside native fixture suites.
+After correcting that test reference, exact-source Linux CI run `42169307061`
+at head `9309890e` rebuilt the runtime. Adopted `core.expected.ts` unmodified
+from artifact `13480088497`; SHA-256 is
+`a4e28322d875b92cfb050365215f5d91485f65992f694a8f4231ff480c1ab1f8`.
+The executable bytes are identical; only generated source provenance changed
+to `2e3dd62ce61f9eb37ec29528fef5a285f58642844c9f5d911712e1e61f97fde5`.
+Local fixture-contract, Apple/Android fixture-resource and 16 affected runtime
+checks pass. That CI's Rust/tooling lane passes; the new final commit still needs
+its own hosted checks. No generation check was disabled or hand-edited.
 
 An extended Demo probe also reproduces three OTA subscription settlement failures
 against both its feature branch and original main using the existing published
