@@ -14,8 +14,9 @@ The backend owns a Project's `country_alpha2` and monotonic `country_revision`.
 The device applies the latest authorized version through existing transports.
 Country changes do not require rebinding or token replacement.
 
-- Country comes only from the Project: no organization inheritance, phone
-  locale, IP inference, or default CN/US.
+- New Projects explicitly select country. Legacy absent/null Project settings
+  resolve server-side to signed US; no organization inheritance, phone locale
+  or IP inference. Firmware never substitutes US for missing or invalid packages.
 - Keep `bind → install encrypted token → confirm / abort` and the existing
   [BOTATOK1 contract](../../protocol/device-token-v1.md) unchanged.
 - Use one readable, server-signed country document. There is no country HPKE,
@@ -148,9 +149,11 @@ SDK structural parsing does not authenticate the cloud signature for firmware. D
 
 The existing sender needs effective write capacity at least 64 bytes, meaning
 **ATT MTU ≥67**. This implementation does not add MTU23 support. Mere presence of the
-characteristic does not prove support for the new kind. The backend admits only qualified firmware and returns its observed version;
-the SDK reads the actual GATT firmware version and requires an exact match before
-sending. Qualify the BES firmware before enabling this path;
+characteristic does not prove support for the new kind. The backend returns the
+observed firmware version; the SDK reads the actual GATT version and requires an
+exact match before sending. This is a consistency check, not a configured firmware
+minimum or country rollout switch. Qualify the BES firmware before distributing
+the compatible App/SDK combination;
 do not add an unknown bit to the existing strict capabilities decoder.
 
 | Situation | Required behavior |
