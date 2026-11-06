@@ -19,6 +19,7 @@ const MAX_LOG_PENDING_BYTES: usize = 64 * 1024;
 pub(crate) struct CodecState {
     wifi_provisioning: crate::wifi_provisioning::WifiProvisioningCodecs,
     local_wifi: crate::local_wifi::LocalWifiCodecs,
+    regulatory: crate::regulatory::RegulatoryCodecs,
     logs: BTreeMap<String, LogState>,
     diagnostics: BTreeMap<String, DeviceDiagnosticsDecoder>,
     hashers: BTreeMap<String, dto::WebIntegrityHasher>,
@@ -250,6 +251,9 @@ struct ReceiverEvent {
 impl CodecState {
     #[inline(never)]
     pub(crate) fn execute(&mut self, name: &str, value: Value) -> Result<Vec<u8>, DeviceSdkError> {
+        if name == "regulatory" {
+            return self.regulatory.call(value);
+        }
         if name == "wifiProvisioning" {
             return self.wifi_provisioning.call(value);
         }
@@ -1125,6 +1129,12 @@ fn metadata() -> Value {
         CHAR_RECORDING_STATUS,
         CHAR_TIME_SYNC,
         CHAR_DEVICE_COMMAND,
+        SERVICE_BOTA_REGULATORY,
+        CHAR_REGULATORY_CAPABILITIES,
+        CHAR_REGULATORY_CHALLENGE,
+        CHAR_REGULATORY_CONFIG,
+        CHAR_REGULATORY_STATUS,
+        CHAR_REGULATORY_RECEIPT,
         SERVICE_BOTA_FIND,
         CHAR_FIND_CAPABILITIES,
         CHAR_FIND_CONTROL,

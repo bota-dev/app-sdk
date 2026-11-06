@@ -951,6 +951,18 @@ This is an unreleased source contract. See the
 [cross-repository checklist and evidence](docs/parity/ble-advertising-name.md)
 for generated-runtime, firmware and physical qualification status.
 
+## Signed regulatory country configuration (unreleased)
+
+Read [Regulatory Country v1](protocol/regulatory-country-v1.md) and its
+[synthetic interoperability vector](protocol/vectors/regulatory-signed-v1.json).
+B07A000C carries readable server-signed configuration and a device-signed ACK;
+there is no country HPKE encryption. Keep the two-stage bind and BOTATOK1 bytes
+unchanged. The first confirmed country context advances provisional generation
+by exactly one; subsequent generations must match. External firmware must persist
+the country lock, apply/read back its approved RF profile and gate scan/STA/SoftAP.
+New token installation is encrypted-only; existing stored tokens remain valid.
+Country application failure does not undo confirmed ownership.
+
 ## Unreleased device credential envelope
 
 The encrypted-token candidate uses the append-only B07A000A service and existing

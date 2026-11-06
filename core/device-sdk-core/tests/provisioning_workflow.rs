@@ -338,37 +338,26 @@ fn mixed_material_is_rejected_before_subscribing_or_writing() {
 }
 
 #[test]
-fn plaintext_token_uses_legacy_characteristic_only() {
+fn plaintext_token_is_rejected_before_any_credential_write() {
     let mut engine = WorkflowEngine::default();
-    let (subscription, _) = reach_subscription(
-        &mut engine,
-        ProvisioningMaterial {
-            api_endpoint: vec![0],
-            device_token: b"dtok_legacy".to_vec(),
-            credential_envelope: None,
-            mtu: 23,
-        },
-    );
+    let (request, _) = reach_material_request(&mut engine);
     let effects = engine
         .dispatch(host(
-            subscription,
-            HostEventKind::Ble(BleEvent::Subscribed {
-                characteristic_uuid: CHAR_PROVISIONING_RESULT.into(),
-            }),
+            request,
+            HostEventKind::ProvisioningMaterialPrepared {
+                material: ProvisioningMaterial {
+                    api_endpoint: vec![0],
+                    device_token: b"dtok_legacy".to_vec(),
+                    credential_envelope: None,
+                    mtu: 23,
+                },
+            },
         ))
         .unwrap();
-    let endpoint = request_id(&effects, |e| {
-        matches!(e, Effect::Ble(BleEffect::Write { .. }))
-    });
-    let effects = engine
-        .dispatch(host(endpoint, HostEventKind::Ble(BleEvent::WriteCompleted)))
-        .unwrap();
-    assert!(effects.iter().any(|e| matches!(&e.effect,
-        Effect::Ble(BleEffect::Write { service_uuid, characteristic_uuid, payload, .. })
-        if service_uuid == bota_device_sdk_core::generated::protocol::SERVICE_BOTA_PROVISIONING
-        && characteristic_uuid == CHAR_DEVICE_TOKEN && payload == b"\x00\x01dtok_legacy")));
-    assert!(!effects.iter().any(
-        |e| matches!(&e.effect, Effect::Ble(BleEffect::Write {characteristic_uuid, ..})
-        if characteristic_uuid == CHAR_CREDENTIAL_ENVELOPE)
-    ));
+    assert!(
+        !effects
+            .iter()
+            .any(|e| matches!(&e.effect, Effect::Ble(BleEffect::Write { .. })))
+    );
+    assert!(matches!(engine.status(), WorkflowStatus::Failed { .. }));
 }

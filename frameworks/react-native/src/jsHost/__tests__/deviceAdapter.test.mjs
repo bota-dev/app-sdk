@@ -1506,7 +1506,7 @@ test('generated provisioning waits for exact application material and subscribes
 });
 
 for (const encrypted of [false, true]) {
-  test(`public RN runtime provisions ${encrypted ? 'encrypted' : 'plaintext'} credentials through the client bridge`,
+  test(`public RN runtime ${encrypted ? 'provisions encrypted' : 'rejects plaintext'} credentials through the client bridge`,
     { timeout: 5000 }, async () => {
       const f = fixture();
       f.values.set(f.metadata.CHAR_AUTH_NONCE, new Uint8Array(16).fill(2));
@@ -1535,7 +1535,11 @@ for (const encrypted of [false, true]) {
         const manager = runtime.client.devices;
         const device = await manager.connect({ id: 'selected', rssi: -50, discoveredAt: new Date(0) });
         if (encrypted) await manager.provisionEnvelope(device, credential.toString('base64url'), 'development');
-        else await manager.provision(device, credential.toString('ascii'), 'development');
+        else {
+          await assert.rejects(manager.provision(device, credential.toString('ascii'), 'development'), { code: 'INVALID_TOKEN' });
+          assert.deepEqual(writesBeyondTimeSync(f), []);
+          return;
+        }
         const writes = writesBeyondTimeSync(f);
         assert.deepEqual(writes.map(call => call[1].characteristicUuid), [f.metadata.CHAR_API_ENDPOINT, characteristic]);
         assert.deepEqual(writes[0][2], [0]);

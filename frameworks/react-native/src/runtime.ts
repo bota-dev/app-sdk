@@ -1,3 +1,4 @@
+export type { RegulatoryCapabilities, RegulatoryDelivery, RegulatoryReceipt } from './regulatory';
 import { createBotaDeviceSDK } from './client';
 import type { BotaDeviceSDKClient } from './client';
 import { createBotaClient } from './BotaClient';

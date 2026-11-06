@@ -204,6 +204,19 @@ export class JsDeviceControls {
       }
       case 'readRecordingState':
         return this.decodeRead('decodeRecordingState', 'SERVICE_BOTA_CONTROL', 'CHAR_RECORDING_STATUS', connection, context);
+      case 'readRegulatoryCapabilities': {
+        const service = this.address('SERVICE_BOTA_REGULATORY', 'CHAR_REGULATORY_CAPABILITIES', connection);
+        if (!this.options.ports.ble.hasService) throw controlError('unsupported_capability', operation);
+        const available = await this.step(connection, context, () => this.options.ports.ble.hasService!(connection.device.id, service.serviceUuid, context));
+        if (!available) return { supported: false, protocolVersion: 0 };
+        return this.decodeRead('regulatory', 'SERVICE_BOTA_REGULATORY', 'CHAR_REGULATORY_CAPABILITIES', connection, context, { op: 'Capabilities' });
+      }
+      case 'readRegulatoryStatus':
+        return this.decodeRead('regulatory', 'SERVICE_BOTA_REGULATORY', 'CHAR_REGULATORY_STATUS', connection, context, { op: 'Status' });
+      case 'readRegulatoryChallenge':
+        return this.decodeRead('regulatory', 'SERVICE_BOTA_REGULATORY', 'CHAR_REGULATORY_CHALLENGE', connection, context, { op: 'Challenge' });
+      case 'applyRegulatoryConfiguration':
+        return this.applyRegulatory(args[1], connection, context);
       case 'readFindChallenge':
         return this.decodeRead('decodeHex', 'SERVICE_BOTA_FIND', 'CHAR_FIND_CHALLENGE', connection, context, { length: 16 });
       case 'readFindBindingChallenge':
@@ -333,6 +346,40 @@ export class JsDeviceControls {
     try {
       await this.step(connection, context, () => this.options.ports.ble.write(this.address(service, characteristic, connection), value, true, context));
     } finally { value.fill(0); }
+  }
+
+  private async applyRegulatory(value: unknown, connection: JsControlConnection, context: JsHostContext): Promise<JsValue> {
+    const delivery = record(json(value));
+    if (delivery.format !== 'bota-regulatory-signed-v1' || delivery.encoding !== 'base64url') {
+      throw controlError('invalid_input', context.operation);
+    }
+    await this.decodeRead('regulatory', 'SERVICE_BOTA_REGULATORY', 'CHAR_REGULATORY_CAPABILITIES', connection, context, { op: 'Capabilities' });
+    const frames = array(this.codec('regulatory', { op: 'Prepare', document: delivery.data!, nonce: delivery.nonce!,
+      serial: connection.device.serialNumber, mtu: connection.device.mtu }));
+    try {
+      try {
+        return await this.withResult('SERVICE_BOTA_REGULATORY', 'CHAR_REGULATORY_RECEIPT', connection, context,
+          packet => {
+            try { return this.codec('regulatory', { op: 'Notification', bytes: publicBytes(packet) }); }
+            catch { return null; } // A complete Read Blob remains authoritative after notification loss.
+          },
+          async beginResults => {
+            beginResults();
+            for (const frame of frames) await this.writeBytes(bytes(frame), 'SERVICE_BOTA_REGULATORY', 'CHAR_REGULATORY_CONFIG', connection, context);
+          }, 1500);
+      } catch (error) {
+        if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'timeout') throw error;
+      }
+      // Read Blob returns the complete durable receipt when notifications were lost.
+      // Keep the captured GATT owner and scope for every poll and joined cleanup.
+      const deadline = Date.now() + 28_000;
+      while (Date.now() < deadline) {
+        const result = await this.decodeRead('regulatory', 'SERVICE_BOTA_REGULATORY', 'CHAR_REGULATORY_RECEIPT', connection, context, { op: 'Receipt' });
+        if (result !== null) return result;
+        await waitResult(new Promise<void>(resolve => setTimeout(resolve, 150)), 500, context);
+      }
+      throw controlError('timeout', context.operation);
+    } finally { this.codec('regulatory', { op: 'Clear' }); }
   }
 
   private async recordingControl(action: 'start' | 'stop', grant: unknown,
