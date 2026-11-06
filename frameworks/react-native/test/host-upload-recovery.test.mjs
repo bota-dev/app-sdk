@@ -167,3 +167,20 @@ test('verification polling has a two-minute budget and never treats expiry as AC
   assert.equal(getEventListeners(f.scope.signal, 'abort').length, 0);
   info.dispose();
 });
+
+
+test('recovery preserves safe HTTP classification while dropping native text and credentials', async () => {
+  const f = fixture();
+  f.scope.getRecording = async () => { throw Object.assign(new Error('private-url'), {
+    status: 503, reason: 'network_io', code: 'http_transport_failed', retryable: true,
+    serviceRequestId: 'request-1', requestId: 'https://private-url', cause: { token: 'private-token' },
+  }); };
+  await assert.rejects(f.provider(f.task), error => {
+    assert.equal(error.message, 'Upload recovery request failed');
+    assert.equal(error.status, 503); assert.equal(error.reason, 'network_io');
+    assert.equal(error.code, 'http_transport_failed'); assert.equal(error.retryable, true);
+    assert.equal(error.serviceRequestId, 'request-1'); assert.equal(error.requestId, undefined);
+    assert.equal(error.cause, undefined); assert(!JSON.stringify(error).includes('private')); return true;
+  });
+  assert.deepEqual(f.calls, ['dispose']);
+});

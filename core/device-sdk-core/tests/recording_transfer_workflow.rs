@@ -563,6 +563,9 @@ fn queued_transfer_overflow_fails_without_confirming_device_deletion() {
                     Effect::Notify(WorkflowNotification::Failed { .. })
                 )
             }) {
+                assert!(effects.iter().any(|request| matches!(&request.effect,
+                    Effect::Notify(WorkflowNotification::Failed { error })
+                    if error.detail.as_deref() == Some("receive_buffer_overflow"))));
                 failed = true;
                 break;
             }
@@ -1014,6 +1017,9 @@ fn integrity_failure_nacks_and_never_confirms_delete() {
             HostEventKind::RecordingSinkIntegrityFailed,
         ))
         .unwrap();
+    assert!(failed.iter().any(|request| matches!(&request.effect,
+        Effect::Notify(WorkflowNotification::Failed { error })
+        if error.detail.as_deref() == Some("checksum_mismatch"))));
     assert!(failed.iter().any(|request| matches!(
         &request.effect,
         Effect::Ble(BleEffect::Write { characteristic_uuid, payload, .. })
@@ -1238,4 +1244,22 @@ fn retained_transfer_completes_after_final_ack_without_confirming_delete() {
         request.effect,
         Effect::Notify(WorkflowNotification::RecordingTransferCompleted { .. })
     )));
+}
+
+#[test]
+fn sequence_gap_has_a_distinct_diagnostic_without_confirming_deletion() {
+    let mut engine = WorkflowEngine::default();
+    let (subscription, _) = start_with_checkpoint(&mut engine, None);
+    let failed = engine
+        .dispatch(host(
+            subscription,
+            HostEventKind::Ble(BleEvent::Notification {
+                characteristic_uuid: CHAR_RECORDING_TRANSFER.into(),
+                value: data(2, &[1, 2]),
+            }),
+        ))
+        .unwrap();
+    assert!(failed.iter().any(|request| matches!(&request.effect,
+        Effect::Notify(WorkflowNotification::Failed { error })
+        if error.code == ErrorCode::IntegrityFailed && error.detail.as_deref() == Some("sequence_gap"))));
 }

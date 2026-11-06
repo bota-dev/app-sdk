@@ -90,6 +90,7 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
   private unavailable?: BotaRuntimeCompatibilityError;
   private destroyed = false;
   private activeStreamingSession: StreamingSession | null = null;
+  private readonly activeSyncs = new Set<string>();
 
   constructor();
   constructor(options: RecordingManagerOptions);
@@ -146,13 +147,42 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
     recording: DeviceRecording,
     uploadInfo: UploadInfo
   ): AsyncGenerator<SyncProgress> {
+    const key = JSON.stringify([device.id, recording.uuid]);
+    if (this.activeSyncs.has(key)) {
+      uploadInfo.dispose?.();
+      throw new Error('Recording sync is already active');
+    }
+    this.activeSyncs.add(key);
+    try {
+      yield* this.performSyncRecording(device, recording, uploadInfo);
+    } finally {
+      this.activeSyncs.delete(key);
+    }
+  }
+
+  private async *performSyncRecording(
+    device: ConnectedDevice,
+    recording: DeviceRecording,
+    uploadInfo: UploadInfo
+  ): AsyncGenerator<SyncProgress> {
     this.assertReady();
     if (uploadInfo.signal?.aborted) {
       uploadInfo.dispose?.();
       throw new Error('Upload authorization context cancelled');
     }
     this.emit('syncStarted', recording.uuid);
-    const sinkId = createOpaqueId();
+    const retained = uploadInfo.recoveryScope ? this.queue.all().filter(value =>
+      value.deviceId === device.id && value.recordingUuid === recording.uuid) : [];
+    const previous = retained[0];
+    if (previous && (retained.length !== 1 || previous.recoveryScope !== uploadInfo.recoveryScope ||
+        previous.recordingId !== uploadInfo.recordingId || (!previous.localPath &&
+          (previous.status !== 'failed' || previous.completionPending || previous.contentSha256)))) {
+      uploadInfo.dispose?.();
+      throw new Error('Existing recording upload recovery requires review');
+    }
+    // A failed BLE attempt keeps its original cloud identity and sink/checkpoint.
+    // Only a complete local source can enter HTTP recovery without another transfer.
+    const sinkId = previous?.id ?? createOpaqueId();
     const now = new Date();
     const task: UploadTask = {
       id: sinkId,
@@ -171,10 +201,7 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
       createdAt: now,
       updatedAt: now,
     };
-    const recovered = uploadInfo.recoveryScope && this.queue.all().find(value =>
-      value.recoveryScope === uploadInfo.recoveryScope && value.recordingId === uploadInfo.recordingId &&
-      value.deviceId === device.id && value.recordingUuid === recording.uuid && !!value.localPath
-    );
+    const recovered = previous?.localPath ? previous : undefined;
     if (recovered) {
       const adopted = this.queue.offerCredentials(recovered.id, uploadInfo);
       try {
@@ -191,7 +218,13 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
       return;
     }
     try {
-      await this.queue.add(task, uploadInfo);
+      if (previous) {
+        // Keep failed durable until complete bytes are retained. Cancellation or
+        // process exit during this retry must not strand a pending empty source.
+        if (uploadInfo.signal?.aborted || !this.queue.offerCredentials(previous.id, uploadInfo)) throw new Error('Upload cancelled');
+      } else {
+        await this.queue.add(task, uploadInfo);
+      }
     } catch (error) {
       uploadInfo.dispose?.();
       throw error;

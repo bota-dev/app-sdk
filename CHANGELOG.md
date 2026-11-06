@@ -13,6 +13,11 @@ tracked separately.
 
 ## Unreleased
 
+- Retry failed pre-upload React Native transfers with their original scoped cloud
+  identity and sink, and expose fixed BLE integrity failure reasons without raw
+  native details. HTTP completion and receipt-confirmed cleanup are unchanged.
+
+
 - Add readable, server-signed country configuration through B07A000C in the
   generated-JS React Native runtime, with minimum-MTU framing and signed-receipt
   recovery. Preserve two-stage binding and BOTATOK1. Requires matching API/App

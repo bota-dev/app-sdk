@@ -42,6 +42,19 @@ native workflow; this document describes the compatibility batch upload queue.
   completion, and pass application acceptance gates. No applications are
   upgraded by this change.
 
+## Failed pre-upload Bluetooth transfers
+
+`RECORDING_TRANSFER_RETRY_VERSION = 1` advertises explicit foreground retry of a
+failed task with no complete local source. Supply the same recovery scope, device,
+recording UUID and original cloud recording ID. The manager refuses ambiguous or
+foreign records, incomplete pending/completed tasks and completion evidence without
+a source. One active sync owns each device/recording pair. A retry preserves its
+original sink/checkpoint and durable failed status until complete bytes are retained;
+no replacement cloud creation or journal deletion is needed. Fully received files
+still use the existing HTTP/completion path. Unknown initial creation outcomes stay
+outside this retry contract. Physical device and process-kill acceptance remain
+separate from host regressions.
+
 ## Persistence And Completion
 
 The generated-JS source factory also implements file upload, scoped metadata

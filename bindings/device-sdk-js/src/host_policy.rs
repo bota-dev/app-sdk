@@ -76,7 +76,10 @@ pub(crate) fn call(name: &str, value: Value) -> Result<Vec<u8>, DeviceSdkError> 
             let request: Failure = input(value)?;
             public_output(
                 json!({"code":request.error.code.as_str(),"operation":request.error.operation.as_str(),
-                "retryable":request.error.retryable,"protocolStatus":request.error.protocol_status}),
+                "retryable":request.error.retryable,"protocolStatus":request.error.protocol_status,
+                "reason":request.error.detail.as_deref().filter(|detail| matches!(*detail,
+                    "receive_buffer_overflow" | "sequence_gap" | "encrypted_chunk_too_short" |
+                    "checksum_mismatch" | "encrypted_header_missing"))}),
             )
         }
         "normalizeForegroundReconnect" => {
@@ -168,7 +171,23 @@ mod tests {
                 json!({"error":{"code":"NotConnected","operation":"UpdateFirmware",
             "retryable":true,"protocol_status":7,"detail":null}})
             ),
-            json!({"code":"not_connected","operation":"update_firmware","retryable":true,"protocolStatus":7})
+            json!({"code":"not_connected","operation":"update_firmware","retryable":true,"protocolStatus":7,"reason":null})
         );
+    }
+    #[test]
+    fn workflow_failure_diagnostics_never_export_arbitrary_detail() {
+        for (detail, expected) in [
+            ("sequence_gap", Some("sequence_gap")),
+            ("receive_buffer_overflow", Some("receive_buffer_overflow")),
+            ("https://private.invalid/?token=secret", None),
+        ] {
+            let value = run(
+                "normalizeWorkflowError",
+                json!({"error":{
+                "code":"IntegrityFailed","operation":"TransferRecording","retryable":true,
+                "protocol_status":null,"detail":detail}}),
+            );
+            assert_eq!(value["reason"], json!(expected));
+        }
     }
 }

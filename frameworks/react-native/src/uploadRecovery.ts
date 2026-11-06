@@ -3,6 +3,23 @@ import { isUploadVerificationPending, UploadVerificationPendingError } from './m
 import type { CompatibilityUploadPolicyCodec } from './managers/NativeUploadQueue';
 
 export const UPLOAD_RECOVERY_VERSION = 1;
+/** Failed pre-upload BLE tasks can be retried with their original scoped cloud identity. */
+export const RECORDING_TRANSFER_RETRY_VERSION = 1;
+
+const recoveryFailure = (error: unknown): Error => {
+  const failure = new Error('Upload recovery request failed');
+  if (!error || typeof error !== 'object') return failure;
+  const value = error as Record<string, unknown>;
+  const safe: Record<string, unknown> = {};
+  if (typeof value.status === 'number' && Number.isInteger(value.status) && value.status >= 100 && value.status <= 599) safe.status = value.status;
+  if (typeof value.reason === 'string' && ['cancelled', 'timeout', 'dns', 'tls', 'connection', 'network_io', 'file_read', 'policy', 'unknown'].includes(value.reason)) safe.reason = value.reason;
+  if (value.code === 'http_transport_failed' || value.code === 'cancelled') safe.code = value.code;
+  if (typeof value.retryable === 'boolean') safe.retryable = value.retryable;
+  for (const key of ['requestId', 'serviceRequestId']) {
+    if (typeof value[key] === 'string' && /^[A-Za-z0-9:_=-]{1,128}$/.test(value[key] as string)) safe[key] = value[key];
+  }
+  return Object.assign(failure, safe);
+};
 
 const waitForCompletion = (milliseconds: number, signals: AbortSignal[]): Promise<void> =>
   new Promise((resolve, reject) => {
@@ -116,9 +133,9 @@ export function createUploadRecoveryProvider(
           }
         },
       };
-    } catch {
+    } catch (error) {
       backend?.dispose();
-      throw new Error('Upload recovery request failed');
+      throw recoveryFailure(error);
     }
   };
 }
