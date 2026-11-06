@@ -2,6 +2,7 @@ import { Buffer } from 'buffer';
 import type { NativeProvisioningMaterial } from '../specs/NativeBotaDeviceSDK';
 import type { JsEffectContext, JsEffectHandler, JsHostContext, JsValue, RawJsCoreFactory } from './contracts';
 import { BotaJsHostError } from './executor';
+import { encodeBase64Url } from './base64Url';
 
 export interface JsMaterialEffectsOptions {
   core: Pick<RawJsCoreFactory, 'codec'>;
@@ -106,8 +107,8 @@ export class JsMaterialEffects {
         if (input.deviceToken !== '' || typeof encoded !== 'string' || !/^[A-Za-z0-9_-]{307,1024}$/.test(encoded)) {
           throw new BotaJsHostError('invalid_provisioning_material', request.context.operation);
         }
-        const bytes = Buffer.from(encoded, 'base64url');
-        if (bytes.toString('base64url') !== encoded || bytes.length < 230 || bytes.length > 768) {
+        const bytes = Buffer.from(encoded.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+        if (encodeBase64Url(bytes) !== encoded || bytes.length < 230 || bytes.length > 768) {
           throw new BotaJsHostError('invalid_provisioning_material', request.context.operation);
         }
         envelope = Array.from(bytes);

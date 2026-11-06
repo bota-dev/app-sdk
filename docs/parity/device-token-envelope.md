@@ -23,6 +23,14 @@ forms; testing the App parser and core separately does not cover this boundary.
 
 ### RN client compatibility review
 
+The React Native host uses the npm `buffer` polyfill, which does not implement
+Node's `base64url` encoding. Decode envelopes using standard Base64 with URL-safe
+alphabet conversion and retain the canonical unpadded round-trip and byte bounds.
+The local WiFi bearer uses the same portable encoder. Host regressions resolve
+`buffer` to the installed mobile package so Node-only encoding support cannot
+hide a failure before credential BLE writes. This changes no protocol bytes,
+trust decisions, plaintext compatibility or confirm/abort behavior.
+
 | Requirement | Evidence | Status / remaining check |
 | --- | --- | --- |
 | Both delivery forms traverse the public RN API | The new public-runtime regression reproduced `provision: internal` for plaintext before the fix; both paths pass after it | Source verified |
