@@ -1,12 +1,12 @@
 # External firmware design: Project country synchronization
 
-**Status: design proposal, not implemented or qualified.** This replaces the
-earlier country integration direction for the external BES firmware team.
-[SDK #84](https://github.com/bota-dev/app-sdk/pull/84) implements the earlier
-B07A000C design; its [wire contract](../../protocol/regulatory-country-v1.md)
-and [vector](../../protocol/vectors/regulatory-signed-v1.json) describe that
-source only. They are not vectors for this proposal. This documentation change
-does not replace that implementation, allocate a wire kind, or enable devices.
+**Status: unreleased SDK source; coordinated backend/App delivery and external
+BES firmware qualification remain separate.** The current source implements the
+[fixed country contract](../../protocol/country-config-v1.md) and reuses kind 8
+of SIGNED_BLOB_V2. The earlier B07A000C methods now reject before device I/O;
+its [wire contract](../../protocol/regulatory-country-v1.md) and old vector are
+historical references, not the active installation path. Use the
+[current shared vector](../../protocol/vectors/country-config-v1.json).
 
 ## Scope
 
@@ -84,8 +84,8 @@ The signed document logically contains protocol/purpose and signer ID, environme
 Project ID, device ID, confirmed binding generation, country, revision and a
 country-specific credential tag. Use the existing trusted cloud signature
 verifier and one canonical encoding; the App cannot supply a new trust anchor.
-Exact bytes, purpose identifier, size limits and shared vectors must be agreed
-before implementation. Do not reinterpret `BOTAREG1` bytes from the old design.
+The [wire contract](../../protocol/country-config-v1.md) fixes the 264-byte encoding,
+purpose and shared vector. Do not reinterpret `BOTAREG1` bytes from the old design.
 
 The binding scope is `(environment, project_id, device_id, confirmed_generation)`.
 Firmware retains this authenticated context with its installed token. In the
@@ -98,7 +98,7 @@ before country admission, without rebinding. Do not add one to every historical
 purpose-1 generation or depend on attempt ID as the permanent scope.
 
 The public document must not expose the token or the existing WiFi v3 credential
-commitment `C`. The proposed purpose-separated matching tag is:
+commitment `C`. The purpose-separated matching tag is:
 
 ```text
 country_credential_tag = HMAC-SHA256(
@@ -111,7 +111,7 @@ The backend signs only for the current valid active binding and credential.
 The cloud signature covers this tag and all configuration fields. The tag
 distinguishes replacement credentials whose prepare attempts share a generation.
 It only matches the current credential; it cannot authorize configuration by itself.
-Freeze the exact derivation in shared vectors before implementing it.
+Use the shared vector to verify this derivation and the cloud signature.
 
 Firmware processes each received document in this order:
 
@@ -140,14 +140,14 @@ and the old scope's country does not authorize radio use in the new scope.
 Reuse `SIGNED_BLOB_V2` at
 `B07A0004-0007-1000-8000-00805F9B34FB`, including BEGIN/DATA/COMMIT/ABORT/RESULT,
 write IDs, connection retirement, cancellation and the existing GATT queue.
-Kind **8 is proposed**; kinds 1–7 are occupied. The manifest, fixed-length codec
-validation and all consuming bindings must be updated together in a later
-implementation. Do not start an upload workflow just to send country settings.
+Kind **8** has fixed total length **264** in the manifest and Rust codec.
+SDK structural parsing does not authenticate the cloud signature for firmware. Do not start an upload workflow just to send country settings.
 
 The existing sender needs effective write capacity at least 64 bytes, meaning
-**ATT MTU ≥67**. This proposal does not add MTU23 support. Mere presence of the
-characteristic does not prove support for the new kind. Qualify the BES firmware
-and negotiate actual supported protocol capabilities before enabling this path;
+**ATT MTU ≥67**. This implementation does not add MTU23 support. Mere presence of the
+characteristic does not prove support for the new kind. The backend admits only qualified firmware and returns its observed version;
+the SDK reads the actual GATT firmware version and requires an exact match before
+sending. Qualify the BES firmware before enabling this path;
 do not add an unknown bit to the existing strict capabilities decoder.
 
 | Situation | Required behavior |
@@ -168,12 +168,11 @@ against rollback of the entire token store or device NVM.
 
 ## Implementation dependencies and acceptance
 
-First agree the minimal wire encoding, kind registration, result meanings and
-shared vectors. Then implement backward-compatible backend fields, the SDK/App
-relay, and the BES handler; keep new country admission off until the coordinated
+The wire contract and shared vector define the coordinated implementation.
+Adopt matching backend fields and the SDK/App relay, then integrate the BES handler; keep new country admission off until the coordinated
 candidate is qualified. Existing old-design devices need an explicit migration
 decision before enabling this replacement. Do not delete old locks or reinterpret
-their bytes as part of a documentation update. Dev acceptance precedes separately
+their bytes without a separately reviewed data migration. Dev acceptance precedes separately
 authorized gamma/prod rollout. Token encrypted-only policy remains independent.
 
 Qualification must cover initial binding; Project change during bind; `CN → US → CN`;
@@ -183,4 +182,19 @@ generation; altered signature/tag; unsupported country; result loss; restart and
 power loss; busy OTA/transfer; and offline catch-up. Regress manual/QR WiFi,
 scanning, managed STA and local WiFi fast transfer with the target firmware.
 Software checks, published packages, installed APK provenance and physical-device
-results remain separate evidence. None is established by this design proposal.
+results remain separate evidence. The current source does not establish package publication or physical qualification.
+
+## App-facing SDK integration
+
+Use `controls.applyCountryConfiguration(device, delivery)` or the DeviceManager
+method with the same arguments. Map backend `country_config` metadata to
+`protocolVersion`, `bindingGeneration`, `countryAlpha2`, `countryRevision`,
+`expectedFirmwareVersion`, and the unchanged `document` wrapper. The SDK compares
+metadata with the parsed bytes and firmware version before subscribing/writing.
+It returns `{result:0, bindingGeneration, countryAlpha2, countryRevision}` only
+for the matching successful kind/write-ID RESULT. `ProtocolRejected.protocolStatus`
+preserves an actual device failure. Timeout or connection loss is not evidence
+that the device rejected or applied a configuration. Apps must check captured
+binding/account/connection state again before recording or reporting the result.
+Native-only adapters without this extension fail before writing. No package pin
+change is implied by this source integration; see the [conformance review](../parity/regulatory-country.md).

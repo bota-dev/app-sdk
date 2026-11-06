@@ -72,6 +72,7 @@ interface QueuedControl {
 }
 
 const controls = [
+  'applyCountryConfiguration',
   'readRegulatoryCapabilities', 'readRegulatoryStatus', 'readRegulatoryChallenge', 'applyRegulatoryConfiguration',
   'readStatus', 'isProvisioned', 'readPublicKey', 'readAuthNonce', 'setApiEndpoint',
   'deliverCertificate', 'deliverBackendPublicKey', 'writeGrant', 'syncTime',

@@ -1,3 +1,4 @@
+/** @deprecated Retired B07A000C contract. All installer methods reject; use countryConfiguration. */
 import type { NativeConnectedDevice } from './specs/NativeBotaDeviceSDK';
 export type RegulatoryCapabilities = { supported: boolean; protocolVersion: number };
 export type RegulatoryDelivery = {

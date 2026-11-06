@@ -34,6 +34,7 @@ test('preserves all 80 frozen exports plus exact maintenance and completion-reco
     ['readWiFiProvisioningVersion', '(deviceId: string) => Promise<2 | 3>'],
     ['configureSecureWiFi', '(deviceId: string, credentials: WiFiCredentials, grant: WiFiConfigGrant) => Promise<WiFiConfigResult>'],
     ['provisionEnvelope', '(device: ConnectedDevice, credentialEnvelope: string, environment?: Environment, options?: ProvisionOptions) => Promise<void>'],
+    ['applyCountryConfiguration', '(device: ConnectedDevice, delivery: CountryConfigurationDelivery) => Promise<CountryConfigurationResult>'],
     ['readRegulatoryCapabilities', '(device: ConnectedDevice) => Promise<RegulatoryCapabilities>'],
     ['readRegulatoryStatus', '(device: ConnectedDevice) => Promise<{ ready: boolean; }>'],
     ['readRegulatoryChallenge', '(device: ConnectedDevice) => Promise<string>'],

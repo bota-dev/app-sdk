@@ -1,4 +1,5 @@
 import type { RegulatoryAdapter } from './regulatory';
+import type { CountryConfigurationAdapter } from './countryConfiguration';
 import type { FindDeviceAdapter } from './findDevice';
 import type { Spec } from './specs/NativeBotaDeviceSDK';
 import type { Spec as BackendSpec } from './specs/NativeBotaUploadV2Backend';
@@ -6,7 +7,7 @@ import type { Spec as BackendSpec } from './specs/NativeBotaUploadV2Backend';
 /** The bridge contract is independent of npm, SwiftPM and Maven package versions. */
 export const BOTA_RUNTIME_API_VERSION = 1 as const;
 /** Optional JS-host extension; native ABI remains unchanged and fails preflight. */
-export type BotaRuntimeSpec = Spec & FindDeviceAdapter & RegulatoryAdapter & {
+export type BotaRuntimeSpec = Spec & FindDeviceAdapter & RegulatoryAdapter & CountryConfigurationAdapter & {
   configureSecureWiFi: Spec['configureWiFi'];
   readWiFiProvisioningVersion: (device: Parameters<Spec['readWiFiStatus']>[0]) => Promise<number>;
   syncEncryptedRecordingV2LocalWifi: Spec['syncEncryptedRecordingV2'];

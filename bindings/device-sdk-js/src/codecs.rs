@@ -251,6 +251,9 @@ struct ReceiverEvent {
 impl CodecState {
     #[inline(never)]
     pub(crate) fn execute(&mut self, name: &str, value: Value) -> Result<Vec<u8>, DeviceSdkError> {
+        if name == "prepareCountryConfiguration" {
+            return crate::country_config::prepare(value);
+        }
         if name == "regulatory" {
             return self.regulatory.call(value);
         }

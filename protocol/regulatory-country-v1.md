@@ -5,8 +5,9 @@ merged SDK #84 source.** New firmware planning follows the
 [Project country synchronization design](../docs/firmware/regulatory-country-integration.md),
 which reuses SIGNED_BLOB_V2 and heartbeat, supports Project country changes, and
 removes the separate service, nonce, signed ACK and permanent country lock.
-That replacement is design-only and is not implemented by this file, the current
-manifest, or the old regulatory vector. The sections below preserve the earlier
+The replacement now has a separate [country-config v1 contract](country-config-v1.md)
+and kind 8 implementation. The current facade rejects these retired B07A000C
+operations; their UUIDs stay reserved. The old vector does not test the replacement. The sections below preserve the earlier
 wire meanings; do not mix their bytes or requirements with the new proposal.
 
 The server selects the deployment country only from the project. There is no organization country setting or fallback. Keep the existing `bind → install encrypted token → confirm / abort` ownership transaction. Confirm returns a **readable, server-signed country document**; the App relays it and firmware verifies it. There is no separate country HPKE operation and no token or token commitment in this document. `BOTATOK1`, its HPKE suite, and Wi-Fi v3 authorization remain unchanged. New token delivery is encrypted-only; completed historical bindings remain valid and are not forced to rebind.

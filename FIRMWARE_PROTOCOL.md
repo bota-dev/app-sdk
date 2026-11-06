@@ -951,7 +951,7 @@ This is an unreleased source contract. See the
 [cross-repository checklist and evidence](docs/parity/ble-advertising-name.md)
 for generated-runtime, firmware and physical qualification status.
 
-## Project country synchronization (design proposal)
+## Project country synchronization (unreleased source)
 
 The [external firmware design](docs/firmware/regulatory-country-integration.md)
 replaces the earlier integration direction with versioned Project country settings,
@@ -960,11 +960,13 @@ It preserves two-stage binding and encrypted BOTATOK1. Confirm selects the lates
 Project country; later changes synchronize without rebinding. The target has no
 new BLE service, country nonce, device-signed ACK or permanent country lock.
 
-This target is not implemented. The merged SDK #84 source still follows the
-[earlier Regulatory Country v1 wire contract](protocol/regulatory-country-v1.md)
-and its [old synthetic vector](protocol/vectors/regulatory-signed-v1.json), including
-B07A000C and signed ACK. Those bytes are not the new design. Kind registration,
-shared vectors, coordinated implementation and BES qualification remain required.
+Read the [country-config v1 wire contract](protocol/country-config-v1.md) and
+[shared vector](protocol/vectors/country-config-v1.json). Rust validates the fixed
+264-byte package; the generated-JS control facade sends kind 8 through existing
+transport and requires ATT MTU >=67 plus an exact firmware-version match.
+The old B07A000C facade rejects before I/O; its UUIDs remain reserved and old
+BOTAREG1/BOTARAK1 bytes are not reinterpreted. Publication, paired backend/App
+adoption and external BES qualification remain separate.
 New token installation stays encrypted-only; historical completed bindings are
 not forced to rebind. Country failure after confirm does not undo ownership.
 

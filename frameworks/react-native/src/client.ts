@@ -1,4 +1,6 @@
 import type { RegulatoryCapabilities, RegulatoryDelivery, RegulatoryReceipt } from './regulatory';
+import type { CountryConfigurationDelivery, CountryConfigurationResult } from './countryConfiguration';
+export type { CountryConfigurationDelivery, CountryConfigurationResult } from './countryConfiguration';
 export type { RegulatoryCapabilities, RegulatoryDelivery, RegulatoryReceipt } from './regulatory';
 import type { FindDeviceCapabilities, FindDeviceStatus, FindDeviceRequest } from './findDevice';
 import type { BotaRuntimeSpec } from './runtimeAdapter';
@@ -144,6 +146,7 @@ export type BotaDeprovisionResult = {
 };
 
 export type BotaDeviceSDKControlClient = {
+  applyCountryConfiguration(device: ConnectedDevice, delivery: CountryConfigurationDelivery): Promise<CountryConfigurationResult>;
   readRegulatoryCapabilities(device: ConnectedDevice): Promise<RegulatoryCapabilities>;
   readRegulatoryStatus(device: ConnectedDevice): Promise<{ ready: boolean }>;
   readRegulatoryChallenge(device: ConnectedDevice): Promise<string>;
@@ -1069,17 +1072,20 @@ export const createBotaDeviceSDK = (
       await requireNativeModule().syncTime(toNativeConnectedDevice(device));
     },
 
-    async readRegulatoryCapabilities(device) {
-      return requireNativeModule('readRegulatoryCapabilities').readRegulatoryCapabilities(toNativeConnectedDevice(device));
+    async readRegulatoryCapabilities(_device) {
+      throw new BotaRuntimeCompatibilityError('native_operation_unavailable', 'readRegulatoryCapabilities');
     },
-    async readRegulatoryStatus(device) {
-      return requireNativeModule('readRegulatoryStatus').readRegulatoryStatus(toNativeConnectedDevice(device));
+    async applyCountryConfiguration(device, delivery) {
+      return requireNativeModule('applyCountryConfiguration').applyCountryConfiguration(toNativeConnectedDevice(device), delivery);
     },
-    async readRegulatoryChallenge(device) {
-      return requireNativeModule('readRegulatoryChallenge').readRegulatoryChallenge(toNativeConnectedDevice(device));
+    async readRegulatoryStatus(_device) {
+      throw new BotaRuntimeCompatibilityError('native_operation_unavailable', 'readRegulatoryStatus');
     },
-    async applyRegulatoryConfiguration(device, document) {
-      return requireNativeModule('applyRegulatoryConfiguration').applyRegulatoryConfiguration(toNativeConnectedDevice(device), document);
+    async readRegulatoryChallenge(_device) {
+      throw new BotaRuntimeCompatibilityError('native_operation_unavailable', 'readRegulatoryChallenge');
+    },
+    async applyRegulatoryConfiguration(_device, _document) {
+      throw new BotaRuntimeCompatibilityError('native_operation_unavailable', 'applyRegulatoryConfiguration');
     },
     async readFindChallenge(device) {
       return requireNativeModule('readFindChallenge').readFindChallenge(toNativeConnectedDevice(device));
