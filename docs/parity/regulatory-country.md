@@ -57,6 +57,16 @@ one byte of that nonce. No alert suppression or security-check exclusion is used
 | Reject malformed, stale and all-zero nonce inputs | Short, long, uppercase, non-hex, non-ASCII, mismatched and all-zero inputs refuse; failure clears prepared receipt state. | Original protocol and error behavior retained. |
 | Preserve binding, token and country authority | This change only clarifies nonce decoding and fixture provenance; project-only country source, two-stage binding and BOTATOK1 remain unchanged. | No release, environment or firmware operation. |
 
-The corrected Rust requires canonical Linux JavaScript regeneration and fresh
-exact-head CI, including CodeQL, before merge. Test results and generated artifact
-identity for this follow-up are recorded in PR #84.
+CodeQL passes on source commit `41385586`. Adopted the unmodified
+`core.expected.ts` from exact-source Linux run `42177151846`, artifact
+`13483837123`, after matching all 123 generator inputs. The archive SHA-256 is
+`d55db54848e42e2f7685981581c195415d17340f4e6f7f2b7e93b13f19d4c2a7`;
+the generated runtime SHA-256 is
+`8c197ee15ce583adfda14675393a5f2e519211e4227f9e93932a8c2dffdbc226`.
+Source provenance is
+`67289dd8209a5f28beaf7fecbe57c7184e3fc018a52c4b8b10c7c959d07a2a4d`.
+Rust regulatory tests (3), JS bridge tests (73), formatting and strict Clippy
+pass. The adopted runtime passes all 685 React Native tests, package build,
+typecheck, 22 tooling tests and source provenance verification.
+Fresh exact-head CI, including CodeQL and runtime parity, remains required
+before merge; final results are recorded in PR #84.
