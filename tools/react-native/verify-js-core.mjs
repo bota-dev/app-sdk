@@ -37,6 +37,13 @@ runBoundModelConformance(codec, (response, label) => {
 (actual, expected, message) => assert.deepEqual(actual, expected, message));
 call({ version: 1, action: 'status' });
 codec('protocolMetadata', {});
+for (const detail of ['sequence_gap', 'receive_buffer_overflow', 'checksum_mismatch',
+  'encrypted_chunk_too_short', 'encrypted_header_missing', 'https://private.invalid/?token']) {
+  const normalized = codec('normalizeWorkflowError', { error: { code: 'IntegrityFailed',
+    operation: 'TransferRecording', retryable: true, protocol_status: null, detail } });
+  assert.equal(normalized.ok, true);
+  assert.equal(normalized.result.reason, detail.startsWith('https:') ? null : detail);
+}
 codec('encodeAck', { ack_type: 'ack', sequence: 65535 });
 codec('encodeFirmwareData', { sequence: 513, payload: [0, 128, 255] });
 codec('decodeText', { bytes: [0xe4, 0xb8, 0xad], required: true });

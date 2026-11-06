@@ -437,6 +437,16 @@ consumers use `runtime.createUploadRecoveryProvider` with Rust policy and scoped
 file/HTTP effects. Timers require a live JS runtime; encrypted-v2 receipt recovery
 is unchanged. See `docs/parity/upload-recovery.md` for evidence and limits.
 
+Failed pre-upload Bluetooth tasks can be retried through `syncRecording` using the
+same recording UUID, device, cloud recording ID and `recoveryScope` when
+`RECORDING_TRANSFER_RETRY_VERSION === 1`. The manager keeps the original sink and
+checkpoint, rejects conflicting/concurrent owners, and retains the cloud pointer.
+Complete local files continue through HTTP recovery without another BLE transfer.
+Missing/ambiguous identity or completion-pending evidence must not be discarded.
+`BotaJsHostError.reason` exposes only fixed transfer diagnostics (`sequence_gap`,
+`receive_buffer_overflow`, `checksum_mismatch`, `encrypted_chunk_too_short`,
+`encrypted_header_missing`); the protocol, ACK and durable completion gates are unchanged.
+
 ## Automatic retained uploads
 
 Configure `backgroundSyncEnabled: false` to disable automatic retained-upload

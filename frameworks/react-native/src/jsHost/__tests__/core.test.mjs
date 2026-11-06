@@ -219,3 +219,14 @@ test('generated country codec matches the backend vector at MTU 23 and returns o
   owner.codec('regulatory', { op: 'Clear' });
   assert.throws(() => owner.codec('regulatory', { op: 'Receipt', bytes: receipt }));
 });
+
+
+test('generated workflow diagnostics retain fixed reasons and reject arbitrary native detail', () => {
+  for (const [detail, expected] of [['sequence_gap', 'sequence_gap'], ['receive_buffer_overflow', 'receive_buffer_overflow'],
+    ['checksum_mismatch', 'checksum_mismatch'], ['https://private.invalid/?token', null]]) {
+    const value = core.codec('normalizeWorkflowError', { error: { code: 'IntegrityFailed',
+      operation: 'TransferRecording', retryable: true, protocol_status: null, detail } });
+    assert.equal(value.reason, expected); assert.equal(value.code, 'integrity_failed');
+    assert(!JSON.stringify(value).includes('private'));
+  }
+});

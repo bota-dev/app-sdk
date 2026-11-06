@@ -360,14 +360,18 @@ impl RecordingTransferWorkflow {
         effects
     }
 
-    fn fail_integrity(&mut self, context: &mut WorkflowContext<'_>) -> Vec<EffectRequest> {
+    fn fail_integrity(
+        &mut self,
+        reason: &str,
+        context: &mut WorkflowContext<'_>,
+    ) -> Vec<EffectRequest> {
         let sequence = self.eof_sequence.unwrap_or(0);
         let error = DeviceSdkError::new(
             ErrorCode::IntegrityFailed,
             Operation::TransferRecording,
             true,
         )
-        .with_detail("recording sink rejected the transfer integrity check");
+        .with_detail(reason);
         let mut effects = vec![self.write_ack(AckType::Nack, sequence, context)];
         effects.push(
             context.request(Effect::RecordingSink(RecordingSinkEffect::Discard {
@@ -401,7 +405,7 @@ impl RecordingTransferWorkflow {
                 Operation::TransferRecording,
                 false,
             )
-            .with_detail("encrypted recording transfer is missing its session header"),
+            .with_detail("encrypted_header_missing"),
             context,
         )
     }
@@ -455,7 +459,7 @@ impl WorkflowReducer for RecordingTransferWorkflow {
                 if self.pending_packets.len() >= MAX_PENDING_PACKETS
                     || value.len() > MAX_PENDING_BYTES.saturating_sub(self.pending_bytes)
                 {
-                    return Ok(self.fail_integrity(context));
+                    return Ok(self.fail_integrity("receive_buffer_overflow", context));
                 }
                 self.pending_bytes += value.len();
                 self.pending_packets.push_back(value);
@@ -517,7 +521,7 @@ impl WorkflowReducer for RecordingTransferWorkflow {
                         }
                         if sequence != expected {
                             self.eof_sequence = Some(expected);
-                            return Ok(self.fail_integrity(context));
+                            return Ok(self.fail_integrity("sequence_gap", context));
                         }
                         if self.encrypted == Some(true) {
                             return Ok(self.fail_mixed_transfer(context));
@@ -561,7 +565,14 @@ impl WorkflowReducer for RecordingTransferWorkflow {
                         }
                         if sequence != expected || chunk.len() < 16 {
                             self.eof_sequence = Some(expected);
-                            return Ok(self.fail_integrity(context));
+                            return Ok(self.fail_integrity(
+                                if sequence != expected {
+                                    "sequence_gap"
+                                } else {
+                                    "encrypted_chunk_too_short"
+                                },
+                                context,
+                            ));
                         }
                         let plaintext_length = u16::try_from(chunk.len() - 16)
                             .expect("BLE encrypted chunk length fits in 16 bits");
@@ -681,7 +692,7 @@ impl WorkflowReducer for RecordingTransferWorkflow {
                 if Some(request_id) == self.sink_request_id =>
             {
                 self.sink_request_id = None;
-                Ok(self.fail_integrity(context))
+                Ok(self.fail_integrity("checksum_mismatch", context))
             }
             (Phase::Acknowledging, HostEventKind::Ble(BleEvent::WriteCompleted))
                 if Some(request_id) == self.write_request_id =>

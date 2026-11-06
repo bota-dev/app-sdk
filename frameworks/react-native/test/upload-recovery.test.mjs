@@ -496,3 +496,83 @@ test('cleanup durability failure retains completed metadata until release retry 
   assert.deepEqual(f.persisted, []);
   assert.deepEqual(f.manager.getAllUploads(), []);
 });
+
+
+test('failed BLE transfer retries the original task and cloud pointer, including after restart', async () => {
+  const f = fixture([], async () => fresh());
+  let first = true; const sinks = [];
+  f.client.recordings.syncRecording = async (_device, _recording, _progress, sink) => {
+    sinks.push(sink);
+    if (first) { first = false; throw new Error('integrity_failed'); }
+    return { localPath: '/native/recording.recording', e2eEncrypted: false, fileSizeBytes: 4 };
+  };
+  await f.manager.initialize();
+  await assert.rejects(drain(f.manager.syncRecording(device, recording, fresh())), /integrity_failed/);
+  const failed = f.manager.getAllUploads()[0];
+  assert.equal(failed.localPath, ''); assert.equal(failed.status, 'failed');
+  assert.equal(f.confirms.length, 0); assert.equal(f.uploads.length, 0);
+  await drain(f.manager.syncRecording(device, recording, fresh()));
+  assert.equal(f.manager.getAllUploads().length, 1);
+  assert.equal(f.manager.getAllUploads()[0].recordingId, failed.recordingId);
+  assert.deepEqual(sinks, [failed.id, failed.id]);
+  assert.equal(f.confirms.length, 1);
+  const restarted = fixture([{ ...failed }], async () => fresh());
+  await restarted.manager.initialize();
+  await drain(restarted.manager.syncRecording(device, recording, fresh()));
+  assert.equal(restarted.manager.getAllUploads().length, 1);
+  assert.equal(restarted.manager.getAllUploads()[0].id, failed.id);
+  assert.equal(restarted.transfers, 1);
+});
+
+test('partial transfer retry refuses ambiguous, foreign, completed and uncertain journals', async () => {
+  const failed = { ...task(), localPath: '', status: 'failed' };
+  for (const rows of [[{ ...failed, recoveryScope: 'foreign' }], [failed, { ...failed, id: 'task-2' }],
+    [{ ...failed, recordingId: 'other' }], [{ ...failed, status: 'completed' }],
+    [{ ...failed, completionPending: true }], [{ ...failed, status: 'pending' }]]) {
+    const f = fixture(rows);
+    await f.manager.initialize();
+    await assert.rejects(drain(f.manager.syncRecording(device, recording, fresh())), /requires review/);
+    assert.equal(f.transfers, 0); assert.equal(f.uploads.length, 0);
+    f.manager.destroy();
+  }
+});
+
+test('concurrent calls cannot restart the same BLE task or leave duplicate journal entries', async () => {
+  const f = fixture([{ ...task(), localPath: '', status: 'failed' }]);
+  const gate = deferred(), entered = deferred();
+  f.client.recordings.syncRecording = async () => {
+    entered.resolve(); await gate.promise;
+    return { localPath: '/native/recording.recording', e2eEncrypted: false, fileSizeBytes: 4 };
+  };
+  await f.manager.initialize();
+  const first = drain(f.manager.syncRecording(device, recording, fresh()));
+  await entered.promise;
+  await assert.rejects(drain(f.manager.syncRecording(device, recording, fresh())), /already active/);
+  gate.resolve(); await first;
+  assert.equal(f.manager.getAllUploads().length, 1); assert.equal(f.confirms.length, 1);
+});
+
+
+test('three recording batch isolates a middle BLE failure and retries only that original task', async () => {
+  const f = fixture([], async task => fresh({ recordingId: task.recordingId }));
+  const seen = []; let failMiddle = true;
+  f.client.recordings.syncRecording = async (_device, item) => {
+    seen.push(item.uuid);
+    if (item.uuid === 'middle' && failMiddle) throw new Error('integrity_failed');
+    return { localPath: `/native/${item.uuid}`, e2eEncrypted: false, fileSizeBytes: 4 };
+  };
+  await f.manager.initialize();
+  const results = [];
+  for (const uuid of ['first', 'middle', 'last']) {
+    try { await drain(f.manager.syncRecording(device, { ...recording, uuid }, fresh({ recordingId: `rec_${uuid}` }))); results.push('completed'); }
+    catch { results.push('failed'); }
+  }
+  assert.deepEqual(results, ['completed', 'failed', 'completed']);
+  const retained = f.manager.getAllUploads().find(task => task.recordingUuid === 'middle');
+  failMiddle = false;
+  await drain(f.manager.syncRecording(device, { ...recording, uuid: 'middle' }, fresh({ recordingId: 'rec_middle' })));
+  assert.deepEqual(seen, ['first', 'middle', 'last', 'middle']);
+  assert.equal(f.manager.getAllUploads().length, 3);
+  assert.equal(f.manager.getAllUploads().find(task => task.recordingUuid === 'middle').id, retained.id);
+  assert.deepEqual(f.confirms, ['first', 'last', 'middle']);
+});
