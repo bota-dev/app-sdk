@@ -13,6 +13,12 @@ tracked separately.
 
 ## Unreleased
 
+- Add readable, server-signed country configuration through B07A000C in the
+  generated-JS React Native runtime, with minimum-MTU framing and signed-receipt
+  recovery. Preserve two-stage binding and BOTATOK1. Requires matching API/App
+  adoption and external BES firmware qualification; see
+  [review and release boundaries](docs/parity/regulatory-country.md).
+
 - Add explicit personal WiFi v2/v3 capability selection and v3 credential-binding
   proof independent of token delivery format. React Native exposes
   `wifi.readProvisioningVersion` / `DeviceManager.readWiFiProvisioningVersion`
@@ -36,10 +42,10 @@ tracked separately.
   Unknown identities never become Pin. The BLE PLX host uses the same inspection
   on Android and iOS; see [qualification](docs/parity/connected-model-wifi.md).
 
-- Fix the React Native public client's leftover encrypted-only provisioning
-  check. A valid plaintext token now reaches the compatible adapter instead of
-  failing with `provision: internal`; mixed credentials still fail and encrypted
-  errors never fall back to plaintext.
+- Retire plaintext token provisioning in shared Rust, React Native and Web.
+  Require the existing encrypted envelope before credential writes; mixed or
+  plaintext material is rejected without fallback. Historical installed valid
+  tokens remain valid. This supersedes the earlier plaintext compatibility fix.
 
 ## 2.0.0-beta.22 (candidate)
 

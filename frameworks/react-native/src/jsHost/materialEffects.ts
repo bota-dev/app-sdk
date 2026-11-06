@@ -101,7 +101,7 @@ export class JsMaterialEffects {
         throw new BotaJsHostError('invalid_provisioning_material', request.context.operation);
       }
       let envelope: number[] | null = null;
-      let token: number[] = [];
+      const token: number[] = [];
       if (input.credentialEnvelope !== undefined) {
         const encoded = input.credentialEnvelope;
         if (input.deviceToken !== '' || typeof encoded !== 'string' || !/^[A-Za-z0-9_-]{307,1024}$/.test(encoded)) {
@@ -113,10 +113,7 @@ export class JsMaterialEffects {
         }
         envelope = Array.from(bytes);
       } else {
-        if (!/^[\x21-\x7e]{1,255}$/.test(input.deviceToken)) {
-          throw new BotaJsHostError('invalid_provisioning_material', request.context.operation);
-        }
-        token = Array.from(Buffer.from(input.deviceToken, 'utf8'));
+        throw new BotaJsHostError('encrypted_provisioning_required', request.context.operation);
       }
       request.resolve({ ProvisioningMaterialPrepared: { material: {
         api_endpoint: Array.from(Buffer.from(input.apiEndpoint, 'utf8')),

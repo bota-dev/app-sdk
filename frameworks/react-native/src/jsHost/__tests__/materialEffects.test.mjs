@@ -133,16 +133,15 @@ test('credential envelopes stay opaque and mixed plaintext delivery fails closed
   await rejection;
 });
 
-test('raw-only material is forwarded in the legacy field without an envelope', async () => {
+test('raw-only material is rejected without a legacy write fallback', async () => {
   const f = fixture();
   f.effects.registerProvisioning('op', { serialNumber: 'SERIAL' });
   const pending = f.effects.handler(f.provisioning, f.context);
-  await f.effects.resolveProvisioningMaterial(f.events[0][1].requestId, {
+  const rejected = assert.rejects(pending);
+  await assert.rejects(f.effects.resolveProvisioningMaterial(f.events[0][1].requestId, {
     apiEndpoint: '\0', deviceToken: 'dtok_legacy', mtu: 23,
-  });
-  const material = (await pending).ProvisioningMaterialPrepared.material;
-  assert.deepEqual(material.device_token, Array.from(Buffer.from('dtok_legacy')));
-  assert.equal(material.credential_envelope, null);
+  }), error => error.code === 'encrypted_provisioning_required');
+  await rejected;
 });
 
 test('mobile envelope decoding preserves URL-safe bytes at both bounds and each padding length', async () => {

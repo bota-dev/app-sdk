@@ -1528,21 +1528,11 @@ async function settleWithWatchdog<T>(
   }
 }
 
-test('plaintext provisioning uses only the legacy characteristic and keeps confirmation', async () => {
+test('plaintext provisioning rejects before credential writes or confirmation', async () => {
   const harness = await createHarness()
-  const token = new TextEncoder().encode('dtok_legacy')
-  harness.provider.prepareHandler = async context => ({
-    materialId: context.materialId, apiEndpoint: Uint8Array.of(0),
-    deviceToken: token.slice(), mtu: 185,
-  })
-  const provision = harness.manager.provision({ attemptId: 'legacy-raw' })
-  await eventually(() => harness.transport.writes.some(write => canonicalGattUuid(write.characteristicUuid) === canonicalGattUuid(DEVICE_TOKEN_CHARACTERISTIC)))
-  await settleReducer()
-  const fragments = harness.transport.writes.filter(write => canonicalGattUuid(write.characteristicUuid) === canonicalGattUuid(DEVICE_TOKEN_CHARACTERISTIC))
-  assert.deepEqual(Uint8Array.from(fragments.flatMap(write => [...write.value.slice(2)])), token)
-  assert.equal(harness.transport.writes.some(write => canonicalGattUuid(write.characteristicUuid) === canonicalGattUuid('B07A000A-0001-1000-8000-00805F9B34FB')), false)
-  harness.transport.emitNotification(harness.transport.device, BOTA_PROVISIONING_SERVICE, PROVISIONING_RESULT_CHARACTERISTIC, Uint8Array.of(0))
-  await provision
-  assert.deepEqual(harness.provider.confirms, [{ attemptId: 'legacy-raw', serialNumber: SERIAL }])
-  assert.ok(harness.provider.materials[0]?.deviceToken.every(byte => byte === 0))
+  harness.provider.prepareHandler = async context => ({ materialId: context.materialId,
+    apiEndpoint: Uint8Array.of(0), deviceToken: new TextEncoder().encode('dtok_legacy'), mtu: 185 })
+  await assert.rejects(harness.manager.provision({ attemptId: 'legacy-raw' }))
+  assert.equal(harness.transport.writes.some(write => canonicalGattUuid(write.characteristicUuid) === canonicalGattUuid(DEVICE_TOKEN_CHARACTERISTIC)), false)
+  assert.deepEqual(harness.provider.confirms, [])
 })

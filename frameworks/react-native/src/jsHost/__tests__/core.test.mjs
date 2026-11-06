@@ -180,7 +180,7 @@ test('Find revision 2 control agrees with the shared fixed server/firmware vecto
   assert.equal(core.codec('encodeFindGrant',{grantBlob:v.grantBlob,capacity:193}).length,193);
 });
 
-test('actual generated Rust core provisions plaintext only through the legacy characteristic', () => {
+test('actual generated Rust core rejects plaintext before subscribing or writing credentials', () => {
   const engine = core.createEngine();
   const context = { version: 1, generation: '1', operation: 'Provision', cancellation_id: cancellation };
   const step = input => {
@@ -197,12 +197,25 @@ test('actual generated Rust core provisions plaintext only through the legacy ch
     effects = complete(effects.find(e => e.effect.HostMaterial?.PrepareProvisioning), { ProvisioningMaterialPrepared: { material: {
       api_endpoint: [0], device_token: [...Buffer.from('dtok_compat')], credential_envelope: null, mtu: 185,
     } } });
-    const subscription = effects.find(e => e.effect.Ble?.Subscribe);
-    assert.ok(subscription, 'plaintext must reach subscription in the regenerated core');
-    effects = complete(subscription, { Ble: { Subscribed: { characteristic_uuid: subscription.effect.Ble.Subscribe.characteristic_uuid } } });
-    effects = complete(effects.find(e => e.effect.Ble?.Write), { Ble: 'WriteCompleted' });
-    const write = effects.find(e => e.effect.Ble?.Write)?.effect.Ble.Write;
-    assert.equal(write.characteristic_uuid, 'B07A0003-0002-1000-8000-00805F9B34FB');
-    assert.deepEqual(write.payload, [0, 1, ...Buffer.from('dtok_compat')]);
+    assert.equal(effects.some(e => e.effect.Ble?.Subscribe || e.effect.Ble?.Write), false);
+    assert.equal(effects.find(e => e.effect.Notify?.Failed)?.effect.Notify.Failed.error.code, 'InvalidInput');
   } finally { engine.dispose(); }
+});
+
+test('generated country codec matches the backend vector at MTU 23 and returns only matching evidence', () => {
+  const vector = JSON.parse(readFileSync(new URL('../../../../../protocol/fixtures/regulatory-signed-v1.json', import.meta.url), 'utf8'));
+  const owner = createGeneratedJsCore();
+  assert.deepEqual(owner.codec('regulatory', { op: 'Capabilities', bytes: [1,15,66,2,198,0,120,0] }), { supported: true, protocolVersion: 1 });
+  assert.equal(owner.codec('regulatory', { op: 'Challenge', bytes: [1, ...Array(16).fill(1)] }), vector.nonceHex);
+  const frames = owner.codec('regulatory', { op: 'Prepare', document: vector.document.data, serial: vector.serial, nonce: vector.nonceHex, mtu: 23 });
+  assert.ok(frames.every(frame => frame.length <= 20));
+  assert.equal(Buffer.from(frames.flatMap(frame => frame.slice(2))).toString('hex'), vector.documentHex);
+  const receipt = [...Buffer.from(vector.receiptHex, 'hex')];
+  const stale = [...receipt]; stale[12] ^= 1;
+  assert.equal(owner.codec('regulatory', { op: 'Receipt', bytes: stale }), null);
+  assert.equal(owner.codec('regulatory', { op: 'Receipt', bytes: [] }), null);
+  const result = owner.codec('regulatory', { op: 'Receipt', bytes: receipt });
+  assert.equal(result.result, 0); assert.equal(result.countryAlpha2, 'CN'); assert.equal(result.bindingGeneration, '2');
+  owner.codec('regulatory', { op: 'Clear' });
+  assert.throws(() => owner.codec('regulatory', { op: 'Receipt', bytes: receipt }));
 });

@@ -854,14 +854,12 @@ test('provisioning resolves nonce-bound native material and supports remove-only
 });
 
 for (const deviceToken of ['x', 'x'.repeat(255)]) {
-  test(`provisioning forwards a ${deviceToken.length}-byte plaintext credential through the public client`, async () => {
+  test(`provisioning rejects a ${deviceToken.length}-byte plaintext credential through the public client`, async () => {
     const fixture = nativeFixture();
     const client = createBotaDeviceSDK(fixture.module);
     const material = { apiEndpoint: '\x00', deviceToken, mtu: 247 };
-    await client.provisioning.provision(connected, async () => material);
-    assert.deepEqual(fixture.calls, [
-      ['provision', connected], ['resolveProvisioningMaterial', 'material-request', material],
-    ]);
+    await assert.rejects(client.provisioning.provision(connected, async () => material));
+    assert.equal(fixture.calls.some(call => call[0] === 'resolveProvisioningMaterial'), false);
   });
 }
 
@@ -877,7 +875,7 @@ for (const [label, credential] of [
     const client = createBotaDeviceSDK(fixture.module);
     await assert.rejects(client.provisioning.provision(connected, async () => ({
       apiEndpoint: '\x00', mtu: 247, ...credential,
-    })), /Exactly one valid provisioning credential is required/);
+    })), /An encrypted provisioning credential is required/);
     assert.equal(fixture.calls.some(call => call[0] === 'resolveProvisioningMaterial'), false);
     assert.equal(fixture.calls.filter(call => call[0] === 'rejectApplicationMaterial').length, 1);
   });

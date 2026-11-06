@@ -4,12 +4,11 @@ This candidate keeps bind → provision → confirm/abort and existing refresh
 semantics. HTTPS returns `credential_envelope` with `format=bota-device-token-v1`,
 `encoding=base64url` and unpadded canonical `data`. Encrypted responses never
 include `device_token`. Clients request `credential_delivery=hpke_v1` in the
-existing request for encrypted issuance. The backend switch
-`DEVICE_TOKEN_ENCRYPTION_ENABLED` defaults to false in all environments: in that
-mode it returns only raw `device_token`. First-bind key admission below applies
-independently of this representation.
-Compatible clients must support both representations; mixed responses fail.
-Missing trust or invalid crypto never triggers automatic plaintext fallback.
+existing request for encrypted issuance. New binding and refresh issuance are
+encrypted-only. The historical `DEVICE_TOKEN_ENCRYPTION_ENABLED` switch cannot
+downgrade delivery. Plaintext and mixed material fail before credential writes;
+existing completed bindings and stored tokens remain valid. First-bind key
+admission below is unchanged.
 
 ## Delivery versus subsequent authentication
 
@@ -90,25 +89,23 @@ The initial BLE route accepts purpose1 only. A purpose2 refresh is for a device
 HTTP consumer calling the shared verifier with expected purpose2; this candidate
 does not add a new direct-HTTP activation or refresh workflow.
 
-Plaintext compatibility uses the original characteristic
-`B07A0003-0002-1000-8000-00805F9B34FB` with the same chunk framing and a
-1–255-byte printable ASCII token. Both modes share connection/credential epoch,
-paired/reset fencing, deferred persistence and read-back. The receiver never
-interprets a failed encrypted payload as a raw token; chunks from different
-characteristics cannot be combined. Existing stored credentials are unchanged.
+The historical plaintext characteristic is not used for new installation.
+Firmware must reject new raw-token writes while preserving already stored valid
+tokens. Connection/credential epochs, paired/reset fencing, deferred persistence
+and read-back remain unchanged; encrypted failures never fall back to raw tokens.
 
 ## HTTPS refresh recovery (backend source candidate)
 
 Use `POST /v1/devices/:id/token/refresh` with the original device Bearer and
 `{ "credential_delivery": "hpke_v1" }`; omit `Idempotency-Key`. The server saves
-the selected result atomically with rotation; raw results are protected at rest
-by a KMS/Vault-wrapped AES-GCM key (migration128). For 15 minutes from
+the encrypted result atomically with rotation. Historical wrapped raw recovery
+records are retained as data but cannot authorize recovery. For 15 minutes from
 receipt creation, retrying that same predecessor on the exact same-device route
-returns the same original representation and credential without another rotation or an
+returns the same original encrypted envelope without another rotation or an
 extended deadline. The retired predecessor cannot call ordinary APIs.
 
 Recovery requires unchanged project/owner/generation, live device and EndUser,
-matching trusted key for encrypted receipts, a valid successor and no pending reset. Explicit revocation,
+a matching trusted key, a valid successor and no pending reset. Explicit revocation,
 unbind/transfer/deletion, successor expiry/rotation or deadline expiry stops it.
 Missing signing configuration can block new issuance but does not block saved
 ciphertext recovery. Success responses use `Cache-Control: no-store`.
@@ -118,26 +115,20 @@ and reliable successor persistence complete, retry uncertain outcomes with that
 same credential and bounded backoff, then use the successor for HTTPS. Recovery
 failure outside the window requires supported authenticated binding recovery;
 never fall back after failed crypto or assume indefinite offline replay. The server
-stores only encrypted material, at most one receipt per device. Switching policy
-does not change an in-flight bind or extend a refresh recovery deadline. This
+stores only encrypted material, at most one receipt per device. Encrypted
+in-flight attempts and recovery keep their original deadlines; pending plaintext
+attempts must restart after cutover. This
 change adds no user step, request field, BLE opcode or SDK ABI change. Firmware
 HTTP orchestration and local encrypted storage remain unimplemented separately.
 
 ## SDK and rollout
 
-Rust `ProvisioningMaterial` accepts exactly one nonempty raw `device_token`
-(1–255 printable ASCII bytes) or `credential_envelope` (230–768 bytes with magic
-`BOTATOK1` and an empty token field). Missing, malformed or mixed material fails
-before any write. Apple, Android, Web and Flutter carry bytes; RN exposes raw
-`DeviceManager.provision` and canonical-base64url `provisionEnvelope`. It never
-decrypts envelopes and never retries an encrypted failure via the raw path.
-The public RN client's material callback must accept the same exclusive raw/envelope
-choice before forwarding to the adapter; an encrypted-only callback would reject
-plaintext before any credential write even when the generated core supports it.
-Bota One/Demo keep published dependency pins until the compatible runtime and
-release are qualified. Deploy compatible firmware/SDK/Apps before changing a
-running encrypted-only backend to plaintext. Missing configuration selects
-plaintext; explicitly retain `true` during a staged rollout when needed.
+Rust `ProvisioningMaterial` requires `credential_envelope` (230–768 bytes with
+magic `BOTATOK1`) and an empty `device_token` field. Missing, plaintext, malformed
+or mixed material fails before any credential write. Native facades carry the
+same material; React Native uses `provisionEnvelope`. Existing method signatures
+remain available for source compatibility, but raw provisioning is refused.
+Apps retain published package pins until the matching runtime release is qualified.
 
 Encrypted mode requires migrations124/128/134 and a pinned recipient identity,
 a provisioned device private key and matching backend signing trust, regenerated

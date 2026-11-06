@@ -46,3 +46,6 @@ pub use local_wifi_control::*;
 
 mod wifi_provisioning;
 pub use wifi_provisioning::*;
+
+mod regulatory;
+pub use regulatory::*;
