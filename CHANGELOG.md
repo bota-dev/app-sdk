@@ -13,6 +13,11 @@ tracked separately.
 
 ## Unreleased
 
+- Restore WiFi connection notifications in the generated React Native runtime.
+  Authenticated configuration receipts no longer terminate the independent WiFi
+  status subscription because of a missing codec dispatch entry. See the
+  [integration checks and rollout boundary](docs/parity/wifi-status-notifications.md).
+
 - Retry failed pre-upload React Native transfers with their original scoped cloud
   identity and sink, and expose fixed BLE integrity failure reasons without raw
   native details. HTTP completion and receipt-confirmed cleanup are unchanged.
