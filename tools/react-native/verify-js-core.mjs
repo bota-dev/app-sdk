@@ -37,6 +37,15 @@ runBoundModelConformance(codec, (response, label) => {
 (actual, expected, message) => assert.deepEqual(actual, expected, message));
 call({ version: 1, action: 'status' });
 codec('protocolMetadata', {});
+// Exercise the public dispatch, not just the Rust decoder or a stubbed host.
+const wifiStatus = codec('decodeWiFiStatusEvent', { bytes: [2, 80, 4, 66, 111, 116, 97] });
+assert.equal(wifiStatus.ok, true);
+assert.equal(wifiStatus.result.status, 'connected');
+assert.equal(wifiStatus.result.ssid, 'Bota');
+const wifiReceipt = codec('decodeWiFiStatusEvent', { bytes: [0xb2, 2, ...Array(27).fill(0)] });
+assert.equal(wifiReceipt.ok, true);
+assert.equal(wifiReceipt.result, null);
+assert.equal(codec('decodeWiFiStatusEvent', { bytes: [2, 80, 32, 65] }).ok, false);
 for (const detail of ['sequence_gap', 'receive_buffer_overflow', 'checksum_mismatch',
   'encrypted_chunk_too_short', 'encrypted_header_missing', 'https://private.invalid/?token']) {
   const normalized = codec('normalizeWorkflowError', { error: { code: 'IntegrityFailed',

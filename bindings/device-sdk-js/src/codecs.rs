@@ -298,6 +298,7 @@ impl CodecState {
             | "encodeWiFiScanCommand"
             | "decodeWiFiConfigResult"
             | "decodeWiFiStatus"
+            | "decodeWiFiStatusEvent"
             | "decodeWiFiScanUpdate"
             | "encodeTimeSync" => self.execute_control(name, value),
             "encodeApiEndpoint"
@@ -1202,6 +1203,31 @@ fn metadata() -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wifi_status_event_dispatch_preserves_connection_state_and_filters_receipts() {
+        let mut codecs = CodecState::default();
+        let status = object!({"bytes":[2,80,4,66,111,116,97]});
+        assert_eq!(
+            codecs
+                .execute("decodeWiFiStatusEvent", status.clone())
+                .unwrap(),
+            codecs.execute("decodeWiFiStatus", status).unwrap()
+        );
+        let mut receipt = vec![0; 29];
+        receipt[..2].copy_from_slice(&[0xb2, 2]);
+        assert_eq!(
+            codecs
+                .execute("decodeWiFiStatusEvent", object!({"bytes":receipt}))
+                .unwrap(),
+            b"null"
+        );
+        assert!(
+            codecs
+                .execute("decodeWiFiStatusEvent", object!({"bytes":[2,80,32,65]}))
+                .is_err()
+        );
+    }
 
     fn settings_request(model: &str, bound_model: Value) -> Value {
         let settings =
