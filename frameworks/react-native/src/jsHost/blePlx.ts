@@ -64,6 +64,16 @@ export function createBlePlxPort(manager: BlePlxManager): JsBlePort {
   const cleanupFailure = (cause: unknown) => Object.assign(new Error('BLE cleanup incomplete'), {
     code: 'cleanup_incomplete', cause,
   });
+  const gattError = (error: unknown, address: { characteristicUuid: string; peripheralId?: string }, write = false) => {
+    if (!error || typeof error !== 'object' || !('errorCode' in error)) return error;
+    // BLE PLX reports these local discovery failures before submitting an ATT write.
+    const code = error.errorCode === 404 ? 'characteristic_not_found'
+      : error.errorCode === 302 ? 'service_not_found' : undefined;
+    return code ? Object.assign(new Error('Requested BLE endpoint is absent'), {
+      code, characteristicUuid: address.characteristicUuid, peripheralId: address.peripheralId,
+      ...(write ? { notSubmitted: true } : {}),
+    }) : error;
+  };
   let transaction = 0;
   const oneShot = async <T>(context: JsHostContext, body: (transactionId: string) => Promise<T>): Promise<T> => {
     check(context);
@@ -333,34 +343,32 @@ export function createBlePlxPort(manager: BlePlxManager): JsBlePort {
         result = await oneShot(context, transactionId => manager.readCharacteristicForDevice(
           id(address.peripheralId), address.serviceUuid, address.characteristicUuid, transactionId));
       } catch (error) {
-        if (error && typeof error === 'object' && 'errorCode' in error && error.errorCode === 404) {
-          throw Object.assign(new Error('Requested BLE characteristic is absent'), {
-            code: 'characteristic_not_found', characteristicUuid: address.characteristicUuid,
-            peripheralId: address.peripheralId,
-          });
-        }
-        throw error;
+        throw gattError(error, address);
       }
       if (result.value == null) throw new Error('BLE read returned no value');
       return Uint8Array.from(Buffer.from(result.value, 'base64'));
     },
     async write(address, value, withResponse, context) {
       const method = withResponse ? manager.writeCharacteristicWithResponseForDevice : manager.writeCharacteristicWithoutResponseForDevice;
-      await oneShot(context, transactionId => method.call(manager, id(address.peripheralId),
-        address.serviceUuid, address.characteristicUuid, Buffer.from(value).toString('base64'), transactionId));
+      try {
+        await oneShot(context, transactionId => method.call(manager, id(address.peripheralId),
+          address.serviceUuid, address.characteristicUuid, Buffer.from(value).toString('base64'), transactionId));
+      } catch (error) { throw gattError(error, address, true); }
     },
     async subscribe(address, onValue, context, onError) {
       check(context);
       let active = true;
       let removed = false;
       const transactionId = `bota:monitor:${context.generation}:${context.requestId}:${++transaction}`;
-      manager.monitorCharacteristicForDevice(id(address.peripheralId),
-        address.serviceUuid, address.characteristicUuid, (error, result) => {
-          if (!active || context.signal.aborted) return;
-          if (error) { onError?.(error); return; }
-          if (result?.value == null) return;
-          onValue(Uint8Array.from(Buffer.from(result.value, 'base64')));
-        }, transactionId);
+      try {
+        manager.monitorCharacteristicForDevice(id(address.peripheralId),
+          address.serviceUuid, address.characteristicUuid, (error, result) => {
+            if (!active || context.signal.aborted) return;
+            if (error) { onError?.(gattError(error, address)); return; }
+            if (result?.value == null) return;
+            onValue(Uint8Array.from(Buffer.from(result.value, 'base64')));
+          }, transactionId);
+      } catch (error) { throw gattError(error, address); }
       let removal: Promise<void> | undefined;
       const remove = () => {
         if (removed) return Promise.resolve();

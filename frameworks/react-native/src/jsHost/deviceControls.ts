@@ -356,6 +356,12 @@ export class JsDeviceControls {
       await exchange.sendSignedBlob(prepared.blobKind, document, context);
       this.requireOwner(connection, context);
       return prepared.result!;
+    } catch (error) {
+      if (!this.ownershipUncertain && error && typeof error === 'object' && 'code' in error &&
+          (error.code === 'characteristic_not_found' || error.code === 'service_not_found')) {
+        throw controlError('country_configuration_unsupported', context.operation);
+      }
+      throw error;
     } finally {
       document.fill(0);
       try { await exchange.close(); }
