@@ -314,7 +314,15 @@ export class JsUploadContextExchange {
         try {
           if (index === frames.length - 1) accepting = true;
           began = true;
-          await this.write(frame, 'CHAR_TRANSFER_SIGNED_BLOB_V2', context);
+          try { await this.write(frame, 'CHAR_TRANSFER_SIGNED_BLOB_V2', context); }
+          catch (error) {
+            // Only an explicitly unsubmitted first BEGIN has no device-side state
+            // to abort. Later failures and unknown write outcomes retain cleanup.
+            if (index === 0 && error && typeof error === 'object' &&
+                'notSubmitted' in error && error.notSubmitted === true && 'code' in error &&
+                (error.code === 'characteristic_not_found' || error.code === 'service_not_found')) began = false;
+            throw error;
+          }
           if (transportFailed) throw transportError;
         } finally { frame.fill(0); }
       }

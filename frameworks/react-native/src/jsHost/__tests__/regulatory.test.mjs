@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import { loadSource } from './loadSource.mjs';
 const { createGeneratedJsCore } = loadSource('core.ts');
 const { JsDeviceControls } = loadSource('deviceControls.ts');
+const { createBlePlxPort } = loadSource('blePlx.ts');
 const vector = JSON.parse(readFileSync(new URL('../../../../../protocol/vectors/country-config-v1.json', import.meta.url), 'utf8'));
 const wire = Buffer.from(vector.document.data, 'base64url');
 const delivery = () => ({ protocolVersion: 1, bindingGeneration: 7, countryAlpha2: 'CN', countryRevision: '3', expectedFirmwareVersion: '1.2.3', document: vector.document });
@@ -33,10 +34,12 @@ function fixture(options = {}) {
       if (address.characteristicUuid === meta.CHAR_FIRMWARE_REVISION) return new Uint8Array(Buffer.from(options.firmwareVersion ?? '1.2.3'));
       throw Error('unexpected read');
     },
-    async subscribe(address, notify) { assert.equal(address.characteristicUuid, meta.CHAR_TRANSFER_SIGNED_BLOB_V2); calls.push(['subscribe']); callback = notify; return { async remove() { calls.push(['remove']); if (options.removeFailure) throw Error('remove failed'); } }; },
+    async subscribe(address, notify) { assert.equal(address.characteristicUuid, meta.CHAR_TRANSFER_SIGNED_BLOB_V2); calls.push(['subscribe']); if (options.subscribeFailure) throw options.subscribeFailure; callback = notify; return { async remove() { calls.push(['remove']); if (options.removeFailure) throw Error('remove failed'); } }; },
     async write(address, bytes) {
       assert.equal(address.characteristicUuid, meta.CHAR_TRANSFER_SIGNED_BLOB_V2);
       calls.push(['write', address.characteristicUuid, [...bytes]]);
+      const failure = options.writeFailure?.(bytes);
+      if (failure) throw failure;
       if (options.cancel === 'scope') scope.abort();
       if (options.cancel === 'connection') connection = { device, generation: 'replacement' };
       if (bytes[0] === 98) {
@@ -46,6 +49,14 @@ function fixture(options = {}) {
       }
     },
   } };
+  if (options.nativeWrite) {
+    const write = ports.ble.write;
+    const plx = createBlePlxPort({ async writeCharacteristicWithResponseForDevice(peripheralId, serviceUuid, characteristicUuid, base64) {
+      await write({ peripheralId, serviceUuid, characteristicUuid }, new Uint8Array(Buffer.from(base64, 'base64')));
+      return { value: null };
+    } });
+    ports.ble.write = (address, value, response, context) => plx.write(address, value, response, context);
+  }
   const controls = new JsDeviceControls({ core, ports, connection: () => connection, emit() {}, gatt: (_context, body) => body() });
   return { controls, core, device, context, calls, apply: (value = delivery()) => controls.execute('applyCountryConfiguration', [device, value], context) };
 }
@@ -61,6 +72,63 @@ test('actual generated Rust uses existing signed-blob framing, firmware qualific
     assert.equal(f.calls.filter(c => c[0] === 'remove').length, 1);
     assert.ok(f.calls.filter(c => c[0] === 'read').length === 2);
   } finally { await f.controls.close(); }
+});
+
+test('absent country transport before BEGIN submission does not ABORT or poison later controls', async () => {
+  for (const code of ['characteristic_not_found', 'service_not_found']) {
+    const failure = Object.assign(new Error('absent GATT endpoint'), { errorCode: code === 'characteristic_not_found' ? 404 : 302 });
+    const options = { nativeWrite: true, writeFailure: () => failure };
+    const f = fixture(options);
+    try {
+      let rejection;
+      await assert.rejects(f.apply(), error => { rejection = error; return true; });
+      assert.equal(f.calls.filter(c => c[0] === 'write').length, 1, 'no ABORT for a locally rejected BEGIN');
+      assert.equal(rejection.code, 'country_configuration_unsupported');
+      assert.equal(f.calls.filter(c => c[0] === 'remove').length, 1);
+      options.writeFailure = undefined;
+      assert.equal((await f.apply()).result, 0, 'later control still admitted after firmware becomes available');
+    } finally { await f.controls.close(); }
+  }
+});
+
+test('missing country subscription returns an actionable error without writes', async () => {
+  const options = { subscribeFailure: Object.assign(new Error('absent'), { code: 'characteristic_not_found' }) };
+  const f = fixture(options);
+  try {
+    await assert.rejects(f.apply(), { code: 'country_configuration_unsupported' });
+    assert.equal(f.calls.filter(c => c[0] === 'write').length, 0);
+    options.subscribeFailure = undefined;
+    assert.equal((await f.apply()).result, 0);
+  } finally { await f.controls.close(); }
+});
+
+test('unknown BEGIN failures and missing endpoints after BEGIN preserve uncertain cleanup fencing', async () => {
+  for (const mode of ['unknown-begin', 'unmarked-missing-begin', 'missing-after-begin']) {
+    const options = { writeFailure: bytes => {
+      if (mode === 'missing-after-begin' && bytes[0] === 96) return;
+      return Object.assign(new Error('transport failure'), { code: mode === 'unknown-begin' ? 'unknown_error' : 'characteristic_not_found',
+        ...(mode === 'missing-after-begin' ? { notSubmitted: true } : {}) });
+    } };
+    const f = fixture(options);
+    try {
+      await assert.rejects(f.apply());
+      assert.equal(f.calls.filter(c => c[0] === 'write').at(-1)[2][0], 99, 'ABORT still attempted');
+      const writes = f.calls.length;
+      options.writeFailure = undefined;
+      await assert.rejects(f.apply());
+      assert.equal(f.calls.length, writes, 'uncertain cleanup blocks reuse');
+    } finally { await f.controls.close().catch(() => {}); }
+  }
+});
+
+test('failed unsubscribe after an absent BEGIN still fences the connection', async () => {
+  const options = { removeFailure: true, writeFailure: () => Object.assign(new Error('absent'), { code: 'characteristic_not_found', notSubmitted: true }) };
+  const f = fixture(options);
+  try {
+    await assert.rejects(f.apply(), /remove failed/);
+    options.removeFailure = false; options.writeFailure = undefined;
+    await assert.rejects(f.apply(), /remove failed/);
+  } finally { await f.controls.close().catch(() => {}); }
 });
 
 test('stale firmware metadata, small MTU and country metadata mismatch refuse before subscription or write', async () => {

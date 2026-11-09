@@ -13,6 +13,41 @@ const deferred = () => {
 };
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
+test('GATT discovery refusals are typed for writes and monitor errors without classifying arbitrary failures', async () => {
+  for (const [errorCode, code] of [[404, 'characteristic_not_found'], [302, 'service_not_found'], [400, undefined]]) {
+    const failure = Object.assign(new Error('native message'), { errorCode });
+    const errors = [];
+    let cancelled = 0;
+    const port = createBlePlxPort({
+      async writeCharacteristicWithResponseForDevice() { throw failure; },
+      monitorCharacteristicForDevice(_id, _service, _characteristic, listener) {
+        listener(failure, null); return { remove() { assert.fail('use awaited cancellation'); } };
+      },
+      async cancelTransaction() { cancelled++; },
+    });
+    await assert.rejects(port.write(address, Uint8Array.of(1), true, context()), error =>
+      code ? error.code === code : error === failure);
+    const subscription = await port.subscribe(address, () => assert.fail('no value'), context(), error => errors.push(error));
+    assert.equal(errors.length, 1);
+    if (code) assert.equal(errors[0].code, code); else assert.equal(errors[0], failure);
+    await subscription.remove(); assert.equal(cancelled, 1);
+  }
+});
+
+test('synchronous missing monitor has no write evidence and failed cancellation cannot claim non-submission', async () => {
+  const failure = Object.assign(new Error('absent'), { errorCode: 404 });
+  const controller = new AbortController();
+  const port = createBlePlxPort({
+    monitorCharacteristicForDevice() { throw failure; },
+    async writeCharacteristicWithResponseForDevice() { controller.abort(); throw failure; },
+    async cancelTransaction() { throw failure; },
+  });
+  await assert.rejects(port.subscribe(address, () => {}, context()), error =>
+    error.code === 'characteristic_not_found' && error.notSubmitted === undefined);
+  await assert.rejects(port.write(address, Uint8Array.of(1), true, { ...context(), signal: controller.signal }), error =>
+    error.code === 'cleanup_incomplete' && error.notSubmitted === undefined);
+});
+
 test('service inspection uses the captured discovered connection and normalizes OS UUID formats', async () => {
   const device = { id: 'note', mtu: 247, async discoverAllServicesAndCharacteristics() { return this; } };
   let services = [{ uuid: 'B07A0006-0000-1000-8000-00805F9B34FB' }, { uuid: '180A' }];
