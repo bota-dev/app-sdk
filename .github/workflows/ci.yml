@@ -583,6 +583,8 @@ jobs:
           name: apple-package-${{ github.sha }}
           path: target/apple-release/
           if-no-files-found: error
+          # Main candidates use repository retention for release promotion.
+          retention-days: ${{ github.event_name == 'pull_request' && 7 || 0 }}
           compression-level: 0
 
       - name: Run generated comparison binding
