@@ -976,10 +976,13 @@ not forced to rebind. Country failure after confirm does not undo ownership.
 The [managed WiFi v2 contract](protocol/managed-wifi-v2.md) defines direct-cloud
 configuration delivery without a firmware capability or nonce in the first
 heartbeat. Supporting firmware validates and persists the encrypted snapshot,
-then reports its exact application receipt; unsupported firmware ignores the
-optional extension. Valid legacy v1 offers keep their existing path.
+then confirms durable storage even if WiFi cannot connect; unsupported firmware ignores the
+optional extension. Enterprise WiFi uses only v2; the retired v1 nonce path is
+not supported.
 
-This path is firmware-to-cloud HTTPS. It adds no SDK operation, GATT service or
+After confirmation, ordinary heartbeats omit WiFi state and the cloud stops
+repeating the snapshot. Configuration changes or explicit journal-loss recovery
+restart delivery. This path is firmware-to-cloud HTTPS. It adds no SDK operation, GATT service or
 BLE relay of enterprise credentials, and does not change personal WiFi setup.
 Delivery, durable storage and successful connection are distinct outcomes.
 The external firmware team owns receiver integration and physical acceptance;

@@ -6,14 +6,18 @@ owns the v2 wire contract. The [heartbeat API reference](https://docs.bota.dev/a
 describes API behavior; publication, backend deployment, external receiver
 implementation and physical acceptance are separate stages.
 
-## Delivery and compatibility
+## Delivery
 
 After activation, use the existing authenticated device-token HTTPS heartbeat.
 No initial `managed_wifi` request field, capability or nonce is required.
 The cloud can return `managed_wifi: {version:2, revision, envelope}`. Unknown
 optional response versions are ignored without breaking normal heartbeat.
 Malformed or unknown-version request extensions do not prevent v2 delivery.
-A valid legacy v1 nonce offer selects the unchanged v1 response path.
+Only v2 is supported. Retired v1 nonce offers are ignored as unsupported
+metadata; they cannot request a v1 envelope or acknowledge configuration.
+The cloud offers the latest v2 snapshot until that device confirms durable
+storage. Later ordinary heartbeats omit WiFi fields and receive no repeated
+snapshot until configuration or delivery authority changes, or recovery is requested.
 
 Only the exact authenticated direct device can receive credentials. App and
 project-key relays cannot. No prior managed list means no extension; removing
@@ -66,8 +70,10 @@ and twenty after merging; receivers support the forty-entry wire capacity.
 
 The credential commitment is SHA256 of ASCII `bota/enc-v2/credential/v1`, a NUL
 byte, the installed token byte length as u16 little-endian, and token bytes.
-Neither the delivery ID nor commitment appears outside the encrypted body.
-Never log these values, passwords, envelopes or credentials.
+In configuration responses, the delivery ID and commitment appear only inside
+the encrypted body. Later receipts and ACKs carry the delivery ID over the
+authenticated HTTPS channel. Never log these values, passwords, envelopes or
+credentials.
 
 ## Validation and application
 
@@ -86,38 +92,59 @@ Credential rotation can replace the delivery ID for the same snapshot, but
 cannot reset the revision floor. Existing lifecycle isolation must prevent
 former-owner profiles from reappearing. Do not acknowledge an interrupted write.
 
+Save valid configuration even if its AP is unavailable, the signal is weak or
+the credentials cannot currently connect. Storage confirmation does not require
+a connection attempt. Preserve the current connection and local fallback; do not
+discard a valid snapshot solely because network access fails.
+
 The server reuses the delivery ID for retries with fresh signed timestamps.
 New desired configuration, binding or credential creates a new delivery ID.
 Storage success is not proof of association or internet access. Preserve the
 existing cloud/local fallback and qualified driver callback rules.
 
-## Application receipts and recovery
+## Durable-storage receipt and recovery
 
-After durable application, send the optional heartbeat extension:
+After the complete snapshot is durably saved, send this optional extension on
+subsequent authenticated direct heartbeats until the server acknowledges it:
 
 ```json
-{"managed_wifi":{"version":2,"delivery_id":"01010101010101010101010101010101","binding_generation":7,"revision":3,"status_revision":10,"results":[{"id":"12121212121212121212121212121212","version":3,"state":"stored"}]}}
+{"managed_wifi":{"version":2,"delivery_id":"01010101010101010101010101010101","binding_generation":7,"revision":3,"outcome":"stored"}}
 ```
 
-`delivery_id` is 32 lowercase hex digits, nonzero. `status_revision` is the durable
-journal sequence, 1..4294967295. Results cover each current profile exactly once
-with its exact version. States: `stored`, `verified`, `auth_rejected`,
-`local_fallback`, `unavailable`, `dhcp_failed`. Only an empty desired snapshot
-accepts `results:[]`. Do not include a nonce or claim application before storage.
+`delivery_id` is 32 lowercase hexadecimal digits, nonzero. The receipt identifies
+the exact encrypted delivery and desired revision under the current credential
+and binding. `stored` means the complete validated snapshot survived the atomic
+storage boundary, including when WiFi is unreachable. Merely receiving bytes,
+starting a write or connecting a network is not a storage receipt. Storage
+failure leaves receipt retry disabled and the cloud continues snapshot delivery.
+There are no per-profile results or status sequence fields in this protocol.
 
-After committing an exact current-delivery/credential/binding/revision report,
-the server responds with `managed_wifi: {version:2, revision, status_ack:
-{delivery_id,binding_generation,status_revision}}`. Firmware checks the exact
-current request and credential epoch before accepting it. Lost ACKs retain full
-report retries; duplicate reports are idempotent. Older status and conflicting
-same-sequence results cannot overwrite saved evidence.
+The server commits storage confirmation before returning
+`managed_wifi: {version:2, revision, status_ack:{delivery_id,binding_generation}}`.
+Firmware checks the exact current snapshot, credential epoch and outstanding
+request before accepting the ACK. Lost ACKs retain receipt retries; duplicate
+receipts are acknowledged without rewriting the original saved time. Stale or
+mismatched receipts cannot confirm another snapshot or a replacement credential.
 
-After ACK, omit `results` but retain the other fields. Matching compact receipts
-may receive no extension. `status_required` carries the same receipt fields and
-requests a complete report. Reboot sends a full report again; ACK bookkeeping
-itself requires no flash write. If local state is missing/mismatched, the server
-redelivers the snapshot even after an earlier ACK. Missing responses never clear
-saved configuration or authorize a radio action.
+After ACK, omit the **entire** `managed_wifi` request field. The cloud remembers
+confirmation per device and omits the configuration from ordinary heartbeat
+responses. No ongoing WiFi state advertisement or compact receipt is required.
+Unchanged effective configuration does not restart delivery. New configuration,
+binding or credential context does. An explicit empty new revision removes the
+managed list and follows the same storage/receipt flow.
+
+A normal reboot retains the saved snapshot and confirmation; it does not require
+redelivery. If the managed journal was lost, reset or found corrupt, request
+recovery explicitly using `managed_wifi: {version:2, request_config:true}`.
+A pending recovery retries the same delivery identity. Recovery after prior
+confirmation creates a new identity so a delayed old receipt cannot suppress
+replacement delivery. Send the normal stored receipt after recovery; an omitted
+field is never itself a recovery request. Missing responses never clear profiles.
+
+The device must persist receipt/confirmation bookkeeping or conservatively retry
+its saved receipt after reboot. Bookkeeping must not report success before the
+snapshot and rollback floor are durable. The server's confirmation proves only
+that firmware reported storage; it is not a verified connection result.
 
 ## Interoperability and qualification
 
@@ -126,8 +153,9 @@ keys, exact plaintext and ciphertext; it is byte-identical to the backend test
 fixture. It proves cryptographic/layout interoperability only. Its old timestamps
 must fail current-time admission unless a test clock is explicitly controlled.
 
-External firmware qualification must cover unknown-version ignore, lost
-responses/ACKs, reboot, stale replay, equal-revision conflicts, token rotation,
+External firmware qualification must cover storage while disconnected, write
+failure, confirmation followed by field-free heartbeats, lost responses/ACKs,
+reboot and journal-loss recovery, stale replay, equal-revision conflicts, token rotation,
 binding replacement, empty removal, trusted-time loss and interrupted atomic
 storage. Apply the backend's additive migration before its writer. No firmware
 capability flag or version allowlist is a prerequisite for cloud delivery.
