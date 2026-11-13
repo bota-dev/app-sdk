@@ -36,6 +36,7 @@ specification or proof that every firmware build or SDK package enables them.
 - [Direct-cloud Find revision 2](#direct-cloud-use-of-find-revision-2-unreleased)
 - [BLE advertising name](#ble-advertising-name)
 - [Device credential envelope](#unreleased-device-credential-envelope)
+- [Cloud-initiated enterprise WiFi](#cloud-initiated-enterprise-wifi-unreleased)
 
 ## Protocol Authority and Notation
 
@@ -969,6 +970,20 @@ BOTAREG1/BOTARAK1 bytes are not reinterpreted. Publication, paired backend/App
 adoption and external BES qualification remain separate.
 New token installation stays encrypted-only; historical completed bindings are
 not forced to rebind. Country failure after confirm does not undo ownership.
+
+## Cloud-initiated enterprise WiFi (unreleased)
+
+The [managed WiFi v2 contract](protocol/managed-wifi-v2.md) defines direct-cloud
+configuration delivery without a firmware capability or nonce in the first
+heartbeat. Supporting firmware validates and persists the encrypted snapshot,
+then reports its exact application receipt; unsupported firmware ignores the
+optional extension. Valid legacy v1 offers keep their existing path.
+
+This path is firmware-to-cloud HTTPS. It adds no SDK operation, GATT service or
+BLE relay of enterprise credentials, and does not change personal WiFi setup.
+Delivery, durable storage and successful connection are distinct outcomes.
+The external firmware team owns receiver integration and physical acceptance;
+this reference and its synthetic vector do not establish installed support.
 
 ## Unreleased device credential envelope
 
