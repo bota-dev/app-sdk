@@ -465,7 +465,7 @@ jobs:
         run: npm ci
 
       - name: Select pinned Ruby independently of the runner image
-        uses: ruby/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f # v1.335.0
+        uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
         with:
           ruby-version: ${{ env.BOTA_EXPECTED_RUBY_VERSION }}
           bundler: none
