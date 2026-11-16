@@ -2,7 +2,7 @@
   "manifestVersion": 2,
   "sdkFamily": "bota-app-sdk",
   "sdkVersion": "2.0.0-beta.23",
-  "sourceRevision": "7bcf2d591d8f2dc7170ba839dd21b599aaad96e8",
+  "sourceRevision": "6e27c4ce1c43c294a0e71ffb84b54c505328b7ce",
   "protocolFixtureDigest": "e3803e1e7774b9a7513d1c8059a7ea6ee30bf37d91a8b6662bf2f6fb06dd9639",
   "firmwareCompatibility": {
     "minimum": "1.0.17",
@@ -16,7 +16,7 @@
       "name": "BotaDeviceSDKCore.xcframework.zip",
       "ecosystem": "swiftpm",
       "version": "2.0.0-beta.23",
-      "checksumSha256": "2dd11418b3cdc88958f08cadbb54ef3daa033b7aa601166390c72954b17fb7ae",
+      "checksumSha256": "7492a334fc2d645aab313d8ac434f289c8c89757503d4d8ffa10d24fe7d9b218",
       "capabilities": [
         "connection_settings",
         "device_logs",
@@ -73,9 +73,9 @@
       "name": "bota_app_sdk-2.0.0-beta.23.tar.gz",
       "ecosystem": "pub",
       "version": "2.0.0-beta.23",
-      "checksumSha256": "6ffa2b7e14f767f86664e150d391b774a0a465c0f95147cb148b00a2723a90d1",
-      "sourceRevision": "7bcf2d591d8f2dc7170ba839dd21b599aaad96e8",
-      "normalizedArchiveSha256": "d11ba4d293a262d6dc52b9d278f04e7e11a5b6782406c3ccfea64f3126353416",
+      "checksumSha256": "1246ff046da393adb1cd7c660914722196228805b1f8d8f9e9d393c7ef0046ae",
+      "sourceRevision": "6e27c4ce1c43c294a0e71ffb84b54c505328b7ce",
+      "normalizedArchiveSha256": "21e4890e25b721d1bed3190e80418197ee6abc9dc1b2a36f3755312afa69955b",
       "generator": {
         "name": "pigeon",
         "version": "28.0.0"
@@ -98,8 +98,8 @@
         },
         {
           "path": "README.md",
-          "byteLength": 13469,
-          "sha256": "95b290db0fe7d294c609e6d46ecb4a72f664ed8b6a1d2b0b8ed1f9e91cacd22e"
+          "byteLength": 14157,
+          "sha256": "cd9391f65a67dcdf0d6220734e31759bdeabe14e4c82e231dfd3c48a1b12e45d"
         },
         {
           "path": "analysis_options.yaml",
@@ -138,13 +138,18 @@
         },
         {
           "path": "android/src/main/kotlin/dev/bota/sdk/flutter/BotaApi.g.kt",
-          "byteLength": 218322,
-          "sha256": "0f59d3dc5cb2df3948a11210f84512154bbcba4ffea81c003e8ddb7de821d336"
+          "byteLength": 231021,
+          "sha256": "c6ef96aee7199c95a6529e6ee93e9c50cad2f5c17cb43e7c39983e402d2d444a"
         },
         {
           "path": "android/src/main/kotlin/dev/bota/sdk/flutter/BotaFlutterSdkPlugin.kt",
-          "byteLength": 3267,
-          "sha256": "706c06f075db20554234dd98e4489c445c818b6ee5d79576da4e5a294f03ec02"
+          "byteLength": 4538,
+          "sha256": "5835e917a85d0d9a6e2cbaee92dc9cdc6b65833dd0e04aa9e8159798022bcb2b"
+        },
+        {
+          "path": "android/src/main/kotlin/dev/bota/sdk/flutter/BotaRecordingSpeechAdapter.kt",
+          "byteLength": 9546,
+          "sha256": "e62242e5c1b251278abe1130f3773762fb2b94a06b89d3a6c2ef0aba31a02935"
         },
         {
           "path": "android/src/main/kotlin/dev/bota/sdk/flutter/BotaSpeechAdapter.kt",
@@ -160,6 +165,11 @@
           "path": "android/src/test/kotlin/dev/bota/sdk/flutter/BotaAndroidAdapterTest.kt",
           "byteLength": 41589,
           "sha256": "51b6a841894df3f5c6380f35e0f8db2d38afd9cab4e4a2e0a419f2ee172ee1f3"
+        },
+        {
+          "path": "android/src/test/kotlin/dev/bota/sdk/flutter/BotaRecordingSpeechAdapterTest.kt",
+          "byteLength": 4281,
+          "sha256": "207df257e6be1e4b90c892ed3c238c7d7d786914e283e332ea82cdd2cc6a864f"
         },
         {
           "path": "android/src/test/kotlin/dev/bota/sdk/flutter/BotaSpeechAdapterTest.kt",
@@ -203,13 +213,13 @@
         },
         {
           "path": "ios/Tests/SpeechBridgeChecks.swift",
-          "byteLength": 10410,
-          "sha256": "9da28fb35ff6ace1f608becce73bd8bbd4d2c21b0a0e1b8e4275ab21b114cfe6"
+          "byteLength": 13642,
+          "sha256": "4849c5ec8d0f47a9eb0d92200ace172c01689a86a0df9a4ec3b6f3834941be51"
         },
         {
           "path": "ios/Tests/SpeechBridgeTests.swift",
-          "byteLength": 1223,
-          "sha256": "dc6dd86ca8c1758511e31ba67aa0d17923f634cdd9b20339e740c0e0b2fa77a5"
+          "byteLength": 1597,
+          "sha256": "32b8d4204610be3eaa34a89e9ac98a8b4a3cf9338a7c30840429f77340d170bc"
         },
         {
           "path": "ios/bota_app_sdk.podspec",
@@ -223,8 +233,8 @@
         },
         {
           "path": "ios/bota_app_sdk/Sources/bota_app_sdk/BotaApi.g.swift",
-          "byteLength": 222685,
-          "sha256": "ccfd26e6feaf510e204aa1fceb38bbcfe2cb2d6df0ec97df06beacd42d92b6c1"
+          "byteLength": 235615,
+          "sha256": "11d05ad7c148025aa96c6570d959978ee1bcc753028383dce954e73b27cdb966"
         },
         {
           "path": "ios/bota_app_sdk/Sources/bota_app_sdk/BotaAppleAdapter.swift",
@@ -238,13 +248,18 @@
         },
         {
           "path": "ios/bota_app_sdk/Sources/bota_app_sdk/BotaFlutterSdkPlugin.swift",
-          "byteLength": 2587,
-          "sha256": "efa9ca16a09f1712b75c36b30ebfcf4ddbbe5073bfd61f8a6bb0649ea9b38553"
+          "byteLength": 3548,
+          "sha256": "2fa1014accbbbb05a9faf9663db4db5404ae45cf37898599d0234bf4de1ac4a5"
+        },
+        {
+          "path": "ios/bota_app_sdk/Sources/bota_app_sdk/BotaRecordingSpeechAdapter.swift",
+          "byteLength": 9383,
+          "sha256": "076ce4b1add4d901172bddaf3f888cf27f1ecb1b756e6cd2fea524a65caa1408"
         },
         {
           "path": "ios/bota_app_sdk/Sources/bota_app_sdk/BotaSpeechAdapter.swift",
-          "byteLength": 17141,
-          "sha256": "a3ab5d0504d0f64f58f58d3c5419635ca58db1296ca9dbc7e0a1002ef163ddda"
+          "byteLength": 17114,
+          "sha256": "1dee331c2f3a8da884cd60dfe1f621b19f896016d723032f0b3d020d5a8bec24"
         },
         {
           "path": "ios/bota_app_sdk/Sources/bota_app_sdk/NativeLeaseCoordinator.swift",
@@ -253,8 +268,8 @@
         },
         {
           "path": "lib/bota_app_sdk.dart",
-          "byteLength": 3234,
-          "sha256": "8602ad5ad86cf80cbf78c97f57a0e819100d5dca7e8c7c38e9c8920544c8c993"
+          "byteLength": 3502,
+          "sha256": "746dfe66cce43bfe8d96de306d1cc80e52d6c80263e106a8004854f0bd9fda3f"
         },
         {
           "path": "lib/src/bridge_mapper.dart",
@@ -278,8 +293,8 @@
         },
         {
           "path": "lib/src/generated/bota_api.g.dart",
-          "byteLength": 184202,
-          "sha256": "f63a4af71719bf307539acb7af55fcbdf17366069384fc12e6b6375b13c9f6fc"
+          "byteLength": 194967,
+          "sha256": "02e92663fccc7f09c3d7cd7140f69dfaf621a8ffaf9547f479f2d718d46fb281"
         },
         {
           "path": "lib/src/managers.dart",
@@ -347,14 +362,24 @@
           "sha256": "72f79836a33228d4669b064e2e1eba189b7a7483cafe2eb17c154b3773aa4d48"
         },
         {
+          "path": "lib/src/speech/recording_client.dart",
+          "byteLength": 6744,
+          "sha256": "918eefb694a721ec400a88a66536b76cb4fa895d73c289abef4751b5b7fb1a14"
+        },
+        {
+          "path": "lib/src/speech/recording_models.dart",
+          "byteLength": 1360,
+          "sha256": "7e127141c9dc275855fad9c4470f5589d4727c7030eb44d8a3d674c8895f8f1e"
+        },
+        {
           "path": "pigeon_options.yaml",
           "byteLength": 326,
           "sha256": "7d95c712941f63eebecd2157598df8844a0e236f5f5b0a870b25e6947bc7f4f4"
         },
         {
           "path": "pigeons/bota_api.dart",
-          "byteLength": 27070,
-          "sha256": "aba8ce8455daf9a8127e8e0a6048b2e265a4a8bbdd8afb142578e77fce6dd577"
+          "byteLength": 28469,
+          "sha256": "d4e3219e063ec6b94137873100cc6dc264b8e7178a8d72ab74304087eb33f2e8"
         },
         {
           "path": "pubspec.yaml",
@@ -393,8 +418,13 @@
         },
         {
           "path": "test/public_api_test.dart",
-          "byteLength": 13430,
-          "sha256": "e70a78b9a284bec992a6666568c806cb98ba6b005b2299ac74ee8ca081d73813"
+          "byteLength": 13592,
+          "sha256": "c1c222e674ab7ce91a0c444db3c0b2cfa20be59bf014d38143b64097c872caf4"
+        },
+        {
+          "path": "test/recording_speech_test.dart",
+          "byteLength": 4253,
+          "sha256": "0a5ecf5643314415082cf2ed66613312f3059ae90733897c5541b371e051ddfc"
         },
         {
           "path": "test/speech_client_test.dart",
