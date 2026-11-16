@@ -1,0 +1,30 @@
+{
+  "installedToken": "dtok_synthetic_wifi_binding_only",
+  "notice": "Synthetic test keys only. Never use for deployed devices.",
+  "recipientPrivateJwk": {
+    "kty": "EC",
+    "x": "ysfNZmzcQvC8sSvWE7MkNhPlLTl0NKd03OYkL2grwnw",
+    "y": "B3n7pYHC5Onix6QRJAm6MgT8r2_vSTTgGmsoiZZV-KY",
+    "crv": "P-256",
+    "d": "KTjnKrEvw43t1EMavXPazLPN0iH212jitKgwUFMAIz0"
+  },
+  "signerPublicJwk": {
+    "kty": "EC",
+    "x": "kIio_TP6CE7T5I10KE08Dc5Cf34pMmdmTDfiIt2JRJQ",
+    "y": "0CERGfWI8r_YfzvGoNoT_R8P5QzFsZZxqSe8ktuMekM",
+    "crv": "P-256"
+  },
+  "response": {
+    "format": "bota-wifi-config-v3",
+    "envelope_base64": "Qk9UQVdGUDMAEAABAAMAAehCRFCf3qlfexA2oEssnmktOw82fdOedysqw7Z8k7W6tGtPYQRzER/I1pN5Lh/Pv30C4D3YrC1HSYaCl2gePpyhzrDHhNHU4g4qY5nealRS46xRtYLbUN3emcgcKx04IpWCybAhILzY8PPxvWaouhjmQC1lndRN/a/+8OR2Vctg0FZ3j2MUGp2RYEqEPpByrZd8FI1VGcrgPMDnP3ScGtLRpMtZfug+Z30PZCEAXmTVMuVgWbX619OIgDWavFh7gJj9G0fRtqI0xOmHGqIAyhVCk8M7LIwiNhGEV6QJQ9FEPX3QXwzvPKojj2pmoUt+ptfyV2xTPolImXmx8sKU0BEF1ycj2U8RvWPEaIImXAE7q/j45w1gF84UAUxF+c5WjZq85Sdh1T6k8G2m5jRK+XZ6UjumJmZl3faHnDdT+fdgwT7rrSa4IVIyaNAY1Pi4WmgQGLHX9z9CdDIueysju13ROEXrlyyhIdkoS1LnZR5q5PIO0QVhjkiJT4eSD/TmVozOFooQd5pBfMzYqSqBdUBW48tfdTgc67rgKTXUrDr+GR+Awj7UeoLMHC8yWhiGAANmVX/QscX8xi/DahqGe8vc1+7TnqVF6BXfyWTHQI0WoPebPiwO3xIoOdGLLJER3nrbqu67pDC/8e70TbtDi6e1kRmp+j4+sK7LEy3MgkUKJeuYv0Uj1etp4cYNnQ==",
+    "key_base64": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=",
+    "request_id": "41",
+    "auth_nonce": "09090909090909090909090909090909",
+    "action": "set",
+    "serial_number": "TEST000001",
+    "binding_generation": 2,
+    "expires_at": "2027-01-15T08:01:00.000Z"
+  },
+  "credentialHex": "b2010100290000000000000071fda863abcb6b72a1a225c4e6906a0ed7b71d0a63de7b8258bb98632b9d1a9a58d7214de1d4d99ba6e4d49f69",
+  "successHex": "b202010029000000000000003069f2ea9cbcf7ab964f3e0fb855f31070"
+}

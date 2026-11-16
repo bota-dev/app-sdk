@@ -4784,6 +4784,152 @@ class BotaSpeechEventMessage {
   }
 }
 
+/// Display metadata only. Native owners retain capture, audio, grants and sockets.
+class BotaRecordingSpeechCaptionMessage {
+  BotaRecordingSpeechCaptionMessage({
+    required this.unitId,
+    required this.sourceId,
+    required this.sourceEpoch,
+    required this.revision,
+    required this.startSample,
+    required this.endSample,
+    required this.sourceLanguage,
+    this.targetLanguage,
+    required this.text,
+    required this.isFinal,
+  });
+
+  String unitId;
+
+  String sourceId;
+
+  int sourceEpoch;
+
+  int revision;
+
+  int startSample;
+
+  int endSample;
+
+  String sourceLanguage;
+
+  String? targetLanguage;
+
+  String text;
+
+  bool isFinal;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      unitId,
+      sourceId,
+      sourceEpoch,
+      revision,
+      startSample,
+      endSample,
+      sourceLanguage,
+      targetLanguage,
+      text,
+      isFinal,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static BotaRecordingSpeechCaptionMessage decode(Object result) {
+    result as List<Object?>;
+    return BotaRecordingSpeechCaptionMessage(
+      unitId: result[0]! as String,
+      sourceId: result[1]! as String,
+      sourceEpoch: result[2]! as int,
+      revision: result[3]! as int,
+      startSample: result[4]! as int,
+      endSample: result[5]! as int,
+      sourceLanguage: result[6]! as String,
+      targetLanguage: result[7] as String?,
+      text: result[8]! as String,
+      isFinal: result[9]! as bool,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! BotaRecordingSpeechCaptionMessage || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(unitId, other.unitId) && _deepEquals(sourceId, other.sourceId) && _deepEquals(sourceEpoch, other.sourceEpoch) && _deepEquals(revision, other.revision) && _deepEquals(startSample, other.startSample) && _deepEquals(endSample, other.endSample) && _deepEquals(sourceLanguage, other.sourceLanguage) && _deepEquals(targetLanguage, other.targetLanguage) && _deepEquals(text, other.text) && _deepEquals(isFinal, other.isFinal);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'BotaRecordingSpeechCaptionMessage(unitId: $unitId, sourceId: $sourceId, sourceEpoch: $sourceEpoch, revision: $revision, startSample: $startSample, endSample: $endSample, sourceLanguage: $sourceLanguage, targetLanguage: $targetLanguage, text: $text, isFinal: $isFinal)';
+  }
+}
+
+class BotaRecordingSpeechEventMessage {
+  BotaRecordingSpeechEventMessage({
+    required this.connectionId,
+    this.caption,
+    this.status,
+  });
+
+  String connectionId;
+
+  BotaRecordingSpeechCaptionMessage? caption;
+
+  String? status;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      connectionId,
+      caption,
+      status,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static BotaRecordingSpeechEventMessage decode(Object result) {
+    result as List<Object?>;
+    return BotaRecordingSpeechEventMessage(
+      connectionId: result[0]! as String,
+      caption: result[1] as BotaRecordingSpeechCaptionMessage?,
+      status: result[2] as String?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! BotaRecordingSpeechEventMessage || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(connectionId, other.connectionId) && _deepEquals(caption, other.caption) && _deepEquals(status, other.status);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'BotaRecordingSpeechEventMessage(connectionId: $connectionId, caption: $caption, status: $status)';
+  }
+}
+
 
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
@@ -5044,6 +5190,12 @@ class _PigeonCodec extends StandardMessageCodec {
     }    else if (value is BotaSpeechEventMessage) {
       buffer.putUint8(212);
       writeValue(buffer, value.encode());
+    }    else if (value is BotaRecordingSpeechCaptionMessage) {
+      buffer.putUint8(213);
+      writeValue(buffer, value.encode());
+    }    else if (value is BotaRecordingSpeechEventMessage) {
+      buffer.putUint8(214);
+      writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
     }
@@ -5222,6 +5374,10 @@ class _PigeonCodec extends StandardMessageCodec {
         return BotaSpeechOriginalMessage.decode(readValue(buffer)!);
       case 212:
         return BotaSpeechEventMessage.decode(readValue(buffer)!);
+      case 213:
+        return BotaRecordingSpeechCaptionMessage.decode(readValue(buffer)!);
+      case 214:
+        return BotaRecordingSpeechEventMessage.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
     }
@@ -6185,6 +6341,160 @@ abstract class BotaSpeechFlutterApi {
         pigeonVar_channel.setMessageHandler((Object? message) async {
           final List<Object?> args = message! as List<Object?>;
           final BotaSpeechEventMessage arg_event = args[0]! as BotaSpeechEventMessage;
+          try {
+            await api.onEvent(arg_event);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          }          catch (e) {
+            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
+          }
+        });
+      }
+    }
+  }
+}
+
+class BotaRecordingSpeechHostApi {
+  /// Constructor for [BotaRecordingSpeechHostApi]. The [binaryMessenger] named argument is
+  /// available for dependency injection. If it is left null, the default
+  /// BinaryMessenger will be used which routes to the host platform.
+  BotaRecordingSpeechHostApi({BinaryMessenger? binaryMessenger, String messageChannelSuffix = ''})
+      : pigeonVar_binaryMessenger = binaryMessenger,
+        pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty ? '.$messageChannelSuffix' : '';
+  final BinaryMessenger? pigeonVar_binaryMessenger;
+
+  static const MessageCodec<Object?> pigeonChannelCodec = _PigeonCodec();
+
+  final String pigeonVar_messageChannelSuffix;
+
+  Future<void> start(String connectionId, String activityId) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bota_flutter_sdk.BotaRecordingSpeechHostApi.start$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[connectionId, activityId]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  Future<void> changeTarget(String connectionId, String language, String requestId) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bota_flutter_sdk.BotaRecordingSpeechHostApi.changeTarget$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[connectionId, language, requestId]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  Future<bool> qualifyHeadphones(String connectionId) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bota_flutter_sdk.BotaRecordingSpeechHostApi.qualifyHeadphones$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[connectionId]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as bool;
+  }
+
+  Future<void> finish(String connectionId) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bota_flutter_sdk.BotaRecordingSpeechHostApi.finish$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[connectionId]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  Future<void> close(String connectionId) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bota_flutter_sdk.BotaRecordingSpeechHostApi.close$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[connectionId]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  Future<void> destroy() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bota_flutter_sdk.BotaRecordingSpeechHostApi.destroy$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+}
+
+abstract class BotaRecordingSpeechFlutterApi {
+  static const MessageCodec<Object?> pigeonChannelCodec = _PigeonCodec();
+
+  Future<void> onEvent(BotaRecordingSpeechEventMessage event);
+
+  static void setUp(BotaRecordingSpeechFlutterApi? api, {BinaryMessenger? binaryMessenger, String messageChannelSuffix = '',}) {
+    messageChannelSuffix = messageChannelSuffix.isNotEmpty ? '.$messageChannelSuffix' : '';
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+          'dev.flutter.pigeon.bota_flutter_sdk.BotaRecordingSpeechFlutterApi.onEvent$messageChannelSuffix', pigeonChannelCodec,
+          binaryMessenger: binaryMessenger);
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final BotaRecordingSpeechEventMessage arg_event = args[0]! as BotaRecordingSpeechEventMessage;
           try {
             await api.onEvent(arg_event);
             return wrapResponse(empty: true);

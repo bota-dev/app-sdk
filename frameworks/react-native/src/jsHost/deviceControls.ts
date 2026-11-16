@@ -1,5 +1,6 @@
 import type { NativeConnectedDevice } from '../specs/NativeBotaDeviceSDK';
 import { normalizeConnectedDeviceType } from '../deviceModel';
+import { JsUploadContextExchange } from './encryptedUploadV2';
 import type {
   BotaJsHostPorts, GattAddress, JsGattValue, JsHostContext, JsHostSubscription,
   JsValue, RawJsCoreFactory,
@@ -21,7 +22,7 @@ export type ResolveBoundDeviceModel = (serialNumber: string, context: JsHostCont
   BoundDeviceModelHint | null | Promise<BoundDeviceModelHint | null>;
 
 export interface JsDeviceControlsOptions {
-  readonly ports: Pick<BotaJsHostPorts, 'ble' | 'persistence' | 'signal' | 'checkScope'>;
+  readonly ports: Pick<BotaJsHostPorts, 'ble' | 'persistence' | 'signal' | 'checkScope' | 'randomBytes'>;
   readonly core: Pick<RawJsCoreFactory, 'codec'>;
   readonly connection: () => JsControlConnection | null;
   readonly emit: (event: string, value: unknown) => void;
@@ -137,6 +138,9 @@ export class JsDeviceControls {
   }
 
   private async perform(operation: string, args: readonly unknown[], context: JsHostContext): Promise<unknown> {
+    if (['readRegulatoryCapabilities', 'readRegulatoryStatus', 'readRegulatoryChallenge', 'applyRegulatoryConfiguration'].includes(operation)) {
+      throw controlError('unsupported_capability', operation);
+    }
     const stopKey = ({ stopStatusUpdates: 'status', stopRecordingStateUpdates: 'recording',
       stopWiFiStatusUpdates: 'wifi', stopDeviceLogs: 'logs' } as Record<string, string>)[operation];
     if (stopKey) {
@@ -153,6 +157,8 @@ export class JsDeviceControls {
       return;
     }
     switch (operation) {
+      case 'applyCountryConfiguration':
+        return this.applyCountryConfiguration(args[1], connection, context);
       case 'readStatus':
         return this.decodeRead('decodeDeviceStatus', 'SERVICE_BOTA_CONTROL', 'CHAR_DEVICE_STATUS', connection, context,
           { timestampMs: Date.now() });
@@ -245,6 +251,8 @@ export class JsDeviceControls {
         return this.configureWiFi(json(args[1]), json(args[2]), json(args[3]), connection, context);
       case 'disconnectWiFi':
         return this.configureWiFi('', '', undefined, connection, context);
+      case 'readWiFiProvisioningVersion':
+        return this.readWiFiProvisioningVersion(connection, context);
       case 'readWiFiStatus':
         return this.decodeRead('decodeWiFiStatus', 'SERVICE_BOTA_WIFI_CONFIG', 'CHAR_WIFI_STATUS', connection, context);
       case 'scanWiFiNetworks':
@@ -333,6 +341,34 @@ export class JsDeviceControls {
     } finally { value.fill(0); }
   }
 
+  private async applyCountryConfiguration(value: unknown, connection: JsControlConnection, context: JsHostContext): Promise<JsValue> {
+    const firmwareVersion = await this.decodeRead('decodeText', 'SERVICE_DEVICE_INFO', 'CHAR_FIRMWARE_REVISION', connection, context, { required: true });
+    const prepared = record(this.codec('prepareCountryConfiguration', { delivery: json(value), firmwareVersion, mtu: connection.device.mtu }));
+    if (typeof prepared.blobKind !== 'number' || typeof prepared.maximumBlobBytes !== 'number') {
+      throw controlError('protocol_error', context.operation);
+    }
+    const document = bytes(prepared.bytes!);
+    const exchange = new JsUploadContextExchange({ core: this.options.core, ports: this.options.ports,
+      peripheralId: connection.device.id, maximumWriteBytes: this.capacity(connection), maximumSignedBlobBytes: prepared.maximumBlobBytes,
+      gatt: this.options.gatt, checkOwner: owner => this.requireOwner(connection, owner),
+      onCleanupFailure: (error, owner) => this.markCleanupFailure(error, owner) });
+    try {
+      await exchange.sendSignedBlob(prepared.blobKind, document, context);
+      this.requireOwner(connection, context);
+      return prepared.result!;
+    } catch (error) {
+      if (!this.ownershipUncertain && error && typeof error === 'object' && 'code' in error &&
+          (error.code === 'characteristic_not_found' || error.code === 'service_not_found')) {
+        throw controlError('country_configuration_unsupported', context.operation);
+      }
+      throw error;
+    } finally {
+      document.fill(0);
+      try { await exchange.close(); }
+      catch (error) { this.markCleanupFailure(error, context); throw error; }
+    }
+  }
+
   private async recordingControl(action: 'start' | 'stop', grant: unknown,
     connection: JsControlConnection, context: JsHostContext): Promise<JsValue> {
     const encodedGrant = bytes(this.codec('encodeGrant', { grantBlob: json(grant), capacity: this.capacity(connection) }));
@@ -349,21 +385,30 @@ export class JsDeviceControls {
     } finally { encodedGrant.fill(0); command.fill(0); }
   }
 
+  private async readWiFiProvisioningVersion(connection: JsControlConnection, context: JsHostContext): Promise<JsValue> {
+    const capability = await this.step(connection, context, () => this.options.ports.ble.read(
+      this.address('SERVICE_BOTA_WIFI_CONFIG', 'CHAR_WIFI_GRANT', connection), context));
+    return this.codec('wifiProvisioning', { Capability: { bytes: publicBytes(capability) } });
+  }
+
   private async configureWiFi(ssid: JsValue, password: JsValue, grant: unknown,
     connection: JsControlConnection, context: JsHostContext): Promise<JsValue> {
     let authority: Record<string, JsValue>;
     try { authority = record(typeof grant === 'string' ? JSON.parse(grant) : json(grant)); }
     catch { throw controlError('invalid_input', context.operation); }
     const expiry = typeof authority.expiresAt === 'string' ? Date.parse(authority.expiresAt) : NaN;
-    if (authority.format !== 'bota-wifi-config-v2' || !Number.isFinite(expiry) || expiry <= Date.now()) {
+    if (!['bota-wifi-config-v2', 'bota-wifi-config-v3'].includes(String(authority.format)) || !Number.isFinite(expiry) || expiry <= Date.now()) {
       throw controlError('invalid_input', context.operation);
     }
-    const capability = await this.step(connection, context, () => this.options.ports.ble.read(
-      this.address('SERVICE_BOTA_WIFI_CONFIG', 'CHAR_WIFI_GRANT', connection), context));
-    this.codec('wifiProvisioning', { Capability: { bytes: publicBytes(capability) } });
+    const version = await this.readWiFiProvisioningVersion(connection, context);
+    if (authority.format !== `bota-wifi-config-v${version}`) {
+      throw controlError('unsupported_capability', context.operation);
+    }
     const nonce = await this.decodeRead('decodeHex', 'SERVICE_BOTA_AUTH', 'CHAR_AUTH_NONCE', connection, context, { length: 16 });
+    // An ATT MTU of 517 can carry 514 bytes, but a GATT attribute value holds at most 512.
+    const capacity = Math.min(this.capacity(connection), 512);
     const prepared = record(this.codec('wifiProvisioning', { Create: {
-      grant: authority, ssid, password, nonce, serial: connection.device.serialNumber, capacity: this.capacity(connection),
+      grant: authority, ssid, password, nonce, serial: connection.device.serialNumber, capacity,
     } }));
     const id = prepared.id!;
     const credentials = bytes(prepared.credentials);

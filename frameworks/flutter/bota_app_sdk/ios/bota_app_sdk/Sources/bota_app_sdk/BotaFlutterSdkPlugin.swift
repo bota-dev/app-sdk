@@ -11,6 +11,8 @@ public final class BotaFlutterSdkPlugin: NSObject, @preconcurrency FlutterPlugin
   private let messenger: FlutterBinaryMessenger
   private let adapter: BotaAppleAdapter
   private let speech: BotaAppleSpeechAdapter
+  private let recordingSpeech: BotaAppleRecordingSpeechAdapter
+  public private(set) var recordingSpeechShutdown: Task<Void, Error>?
   public private(set) var speechShutdown: Task<Void, Error>?
 
   private init(messenger: FlutterBinaryMessenger) {
@@ -21,6 +23,12 @@ public final class BotaFlutterSdkPlugin: NSObject, @preconcurrency FlutterPlugin
         speechApi.onEvent(event: event, completion: reply)
       }
     }, terminal: { event in speechApi.onEvent(event: event) { _ in } })
+    let recordingApi = BotaRecordingSpeechFlutterApi(binaryMessenger: messenger)
+    recordingSpeech = BotaAppleRecordingSpeechAdapter(emit: { event in
+      try await SpeechFlutterDelivery.send(event) { event, reply in
+        recordingApi.onEvent(event: event, completion: reply)
+      }
+    }, terminal: { event in recordingApi.onEvent(event: event) { _ in } })
     let root =
       FileManager.default.urls(
         for: .applicationSupportDirectory,
@@ -45,12 +53,15 @@ public final class BotaFlutterSdkPlugin: NSObject, @preconcurrency FlutterPlugin
     let plugin = BotaFlutterSdkPlugin(messenger: messenger)
     BotaHostApiSetup.setUp(binaryMessenger: messenger, api: plugin.adapter)
     BotaSpeechHostApiSetup.setUp(binaryMessenger: messenger, api: plugin.speech)
+    BotaRecordingSpeechHostApiSetup.setUp(binaryMessenger: messenger, api: plugin.recordingSpeech)
     registrar.publish(plugin)
   }
 
   public func detachFromEngine(for registrar: FlutterPluginRegistrar) {
     BotaHostApiSetup.setUp(binaryMessenger: messenger, api: nil)
     BotaSpeechHostApiSetup.setUp(binaryMessenger: messenger, api: nil)
+    BotaRecordingSpeechHostApiSetup.setUp(binaryMessenger: messenger, api: nil)
+    recordingSpeechShutdown = recordingSpeech.retire()
     speechShutdown = speech.retire()
     let adapter = adapter
     Task { @MainActor in await adapter.detach() }
@@ -64,5 +75,9 @@ public final class BotaFlutterSdkPlugin: NSObject, @preconcurrency FlutterPlugin
   /// Install a native composition with independent original capture.
   public func setSpeechConnectionFactory(_ factory: @escaping BotaFlutterSpeechConnectionFactory) throws {
     try speech.setFactory(factory)
+  }
+  /// Direct activity admission and capture are provided by the native App.
+  public func setRecordingSpeechFactory(_ factory: @escaping BotaFlutterRecordingSpeechFactory) throws {
+    try recordingSpeech.setFactory(factory)
   }
 }

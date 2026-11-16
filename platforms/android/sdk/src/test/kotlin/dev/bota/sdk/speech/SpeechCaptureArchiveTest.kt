@@ -37,6 +37,21 @@ class SpeechCaptureArchiveTest {
         .put("format", "pcm_s16le").put("cipher", "AES-256-GCM").put("maximum_chunk_samples", 48000)
         .put("upload_until", "2099-01-01T00:00:00Z").put("data_key", Base64.getEncoder().encodeToString(ByteArray(32) { 7 })).toString().toByteArray()
 
+    @Test fun stereoUsesFrameCountsAndRecoversItsAuthenticatedChannelLayout(): Unit = runBlocking {
+        val capture = "10000000-0000-4000-8000-000000000007"; val clock = "20000000-0000-4000-8000-000000000007"
+        val prepared = JSONObject(String(preparation(capture))).put("protocol_version", 2).put("profile", "speech_capture_pcm_v2").put("channels", 2)
+            .put("channel_layout", org.json.JSONArray("""[{"sourceId":"local","role":"local"},{"sourceId":"remote","role":"remote"}]"""))
+        val keys = Keys(); val root = RuntimeEnvironment.getApplication().noBackupFilesDir
+        var archive = SpeechCaptureArchive.create("stereo-owner", prepared.toString().toByteArray(), root, keys)
+        archive.beginClock(clock)
+        assertTrue(runCatching { archive.append(0, byteArrayOf(1, 0, 2, 0)) }.isFailure)
+        val mapping = RecordingCaptureMapping(clock, 1, 0, 48000, 48000, 1, false)
+        archive.append(0, ByteArray(192000) { 7 }, listOf(mapping, mapping))
+        archive.endClock(48000); archive.close()
+        SpeechCaptureStorage("stereo-owner", capture, root).use { assertTrue(it.packet(0)!!.size > 140000) }
+        archive = SpeechCaptureArchive.recover("stereo-owner", capture, root, keys)
+        assertEquals(48000L, archive.snapshot().archiveSamples); archive.close()
+    }
     @Test fun exactReceiptDeletesKeyAndCiphertextButWrongReceiptKeepsRecovery(): Unit = runBlocking {
         val capture = "10000000-0000-4000-8000-000000000005"; val clock = "20000000-0000-4000-8000-000000000005"
         val keys = Keys(); val root = RuntimeEnvironment.getApplication().noBackupFilesDir; val scope = "receipt-owner"
@@ -116,6 +131,26 @@ class SpeechCaptureArchiveTest {
         val aad = JSONObject(String(SpeechCapturePolicy.evaluate(JSONObject().put("op", "aad").put("captureId", fixture.getString("captureId"))
             .put("kind", "manifest").toString().toByteArray())))
         assertEquals(manifest.getString("aad"), aad.getString("aad"))
+    }
+
+    @Test fun nonrecordingMicrophoneKeepsTheFinalPartialFrame(): Unit = runBlocking {
+        val read = java.util.concurrent.atomic.AtomicInteger(); val received = java.util.concurrent.CopyOnWriteArrayList<Pair<Long, Int>>()
+        var closed = false
+        val source = object : SpeechMicrophoneSource {
+            override val route = 1
+            override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+                val count = when (read.getAndIncrement()) { 0 -> 960; 1 -> 400; else -> 0 }
+                for (i in offset until offset + count) buffer[i] = 7
+                return count
+            }
+            override fun close() { closed = true }
+        }
+        val microphone = SpeechMicrophoneCapture.start(null, 1500, {}, {}, { source }, { 1000 }, { 0 },
+            onAudio = { sample, bytes -> received += sample to bytes.size })
+        withTimeout(5000) { while (read.get() < 3) kotlinx.coroutines.delay(1) }
+        microphone.stop()
+        assertEquals(listOf(0L to 960, 480L to 400), received.toList()); assertTrue(closed)
+        assertEquals(680L, microphone.nextLiveSample)
     }
 
     @Test fun revokedMicrophonePermissionStopsThePumpAndPreservesRecovery(): Unit = runBlocking {

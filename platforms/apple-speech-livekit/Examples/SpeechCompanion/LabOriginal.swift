@@ -234,7 +234,7 @@ private final class OriginalMedia: SpeechMediaPort, @unchecked Sendable {
 
 /// Only the standalone companion owns global audio routing; reusable capture
 /// requires the host to supply its own audio session and preserves its settings.
-@MainActor private final class OriginalAudioRoute {
+@MainActor final class OriginalAudioRoute {
     #if os(iOS)
     private static var held = false
     private let session = AVAudioSession.sharedInstance()

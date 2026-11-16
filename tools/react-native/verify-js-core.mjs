@@ -37,6 +37,22 @@ runBoundModelConformance(codec, (response, label) => {
 (actual, expected, message) => assert.deepEqual(actual, expected, message));
 call({ version: 1, action: 'status' });
 codec('protocolMetadata', {});
+// Exercise the public dispatch, not just the Rust decoder or a stubbed host.
+const wifiStatus = codec('decodeWiFiStatusEvent', { bytes: [2, 80, 4, 66, 111, 116, 97] });
+assert.equal(wifiStatus.ok, true);
+assert.equal(wifiStatus.result.status, 'connected');
+assert.equal(wifiStatus.result.ssid, 'Bota');
+const wifiReceipt = codec('decodeWiFiStatusEvent', { bytes: [0xb2, 2, ...Array(27).fill(0)] });
+assert.equal(wifiReceipt.ok, true);
+assert.equal(wifiReceipt.result, null);
+assert.equal(codec('decodeWiFiStatusEvent', { bytes: [2, 80, 32, 65] }).ok, false);
+for (const detail of ['sequence_gap', 'receive_buffer_overflow', 'checksum_mismatch',
+  'encrypted_chunk_too_short', 'encrypted_header_missing', 'https://private.invalid/?token']) {
+  const normalized = codec('normalizeWorkflowError', { error: { code: 'IntegrityFailed',
+    operation: 'TransferRecording', retryable: true, protocol_status: null, detail } });
+  assert.equal(normalized.ok, true);
+  assert.equal(normalized.result.reason, detail.startsWith('https:') ? null : detail);
+}
 codec('encodeAck', { ack_type: 'ack', sequence: 65535 });
 codec('encodeFirmwareData', { sequence: 513, payload: [0, 128, 255] });
 codec('decodeText', { bytes: [0xe4, 0xb8, 0xad], required: true });
@@ -48,6 +64,22 @@ runByoConformance(codec, (response, label) => {
 (actual, expected, message) => assert.deepEqual(actual, expected, message),
 text => Uint8Array.from(Buffer.from(text, 'utf8')));
 const localCapabilities = [2, 2, 16, 0, 31, 0, 0, 0, 3, 0, 185, 0, 182, 0, 182, 0];
+
+const countryVector = JSON.parse(readFileSync(resolve(root, 'protocol/vectors/country-config-v1.json'), 'utf8'));
+const countryRequest = { delivery: { protocolVersion: 1, bindingGeneration: 7, countryAlpha2: 'CN', countryRevision: '3',
+  expectedFirmwareVersion: '1.2.3', document: countryVector.document }, firmwareVersion: '1.2.3', mtu: 67 };
+const countryPrepared = codec('prepareCountryConfiguration', countryRequest);
+assert.equal(countryPrepared.ok, true);
+assert.equal(countryPrepared.result.blobKind, 8);
+assert.equal(Buffer.from(countryPrepared.result.bytes).toString('hex'), countryVector.documentHex);
+assert.equal(codec('prepareCountryConfiguration', { ...countryRequest, mtu: 66 }).ok, false);
+assert.equal(codec('prepareCountryConfiguration', { ...countryRequest, firmwareVersion: 'old' }).ok, false);
+assert.equal(codec('prepareCountryConfiguration', { ...countryRequest, delivery: { ...countryRequest.delivery, countryRevision: '2' } }).ok, false);
+const countryPlan = codec('planEncryptedUploadV2SignedBlob', { blobKind: 8, writeId: 7, bytes: countryPrepared.result.bytes, capacity: 64, maximumBlobBytes: 264 });
+assert.equal(countryPlan.ok, true);
+assert.equal(codec('acceptEncryptedUploadV2SignedBlobResult', { blobKind: 8, writeId: 7, bytes: [100, 2, 8, 0, 7, 0, 0, 0, 0, 0] }).result, 'accepted');
+assert.equal(codec('acceptEncryptedUploadV2SignedBlobResult', { blobKind: 8, writeId: 7, bytes: [100, 2, 8, 0, 8, 0, 0, 0, 0, 0] }).result, null);
+assert.equal(codec('acceptEncryptedUploadV2SignedBlobResult', { blobKind: 8, writeId: 7, bytes: [100, 2, 8, 0, 7, 0, 0, 0, 14, 0] }).ok, false);
 
 const controlVector = JSON.parse(readFileSync(resolve(root, 'protocol/local-wifi-control-v1.vector.json'), 'utf8'));
 const control = codec('localWifiTransfer', { op: 'ControlCreate', session_id: controlVector.sessionId, response_json: JSON.stringify(controlVector.response) });

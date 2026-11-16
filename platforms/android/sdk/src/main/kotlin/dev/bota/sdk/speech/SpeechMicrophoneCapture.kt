@@ -74,13 +74,19 @@ private class AndroidSpeechMicrophone(context: Context) : SpeechMicrophoneSource
  * 10 ms of the same 48 kHz mono PCM16LE submitted to the archive; do not retain or block it. */
 public class SpeechMicrophoneCapture private constructor(
     private val source: SpeechMicrophoneSource,
-    private val pump: SpeechCapturePump,
+    private val pump: SpeechCapturePump?,
     expiresAt: Long,
     private val rtcFrame: (ByteArray) -> Unit,
     private val ended: (SpeechCaptureEnd) -> Unit,
     private val now: () -> Long,
     private val monotonic: () -> Long,
+    public val clockId: String,
+    private val onAudio: (Long, ByteArray) -> Unit,
+    private val onArchiveError: () -> Unit,
 ) {
+    private val archiveFailed = java.util.concurrent.atomic.AtomicBoolean()
+    private val liveSample = AtomicLong()
+    public val nextLiveSample: Long get() = liveSample.get()
     private val until = AtomicLong(expiresAt)
     private val reason = AtomicReference<SpeechCaptureEnd?>(null)
     private val lifetime = SupervisorJob()
@@ -89,32 +95,38 @@ public class SpeechMicrophoneCapture private constructor(
 
     public companion object {
         /** The host must declare RECORD_AUDIO and obtain its runtime grant. */
-        public suspend fun start(context: Context, archive: SpeechCaptureArchive, expiresAt: Instant,
-            rtcFrame: (ByteArray) -> Unit, ended: (SpeechCaptureEnd) -> Unit = {}): SpeechMicrophoneCapture {
+        public suspend fun start(context: Context, archive: SpeechCaptureArchive?, expiresAt: Instant,
+            rtcFrame: (ByteArray) -> Unit = {}, ended: (SpeechCaptureEnd) -> Unit = {},
+            clockId: String = java.util.UUID.randomUUID().toString(), onAudio: (Long, ByteArray) -> Unit = { _, _ -> }, onArchiveError: () -> Unit = {}): SpeechMicrophoneCapture {
             if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                 throw SpeechCaptureException(SpeechCaptureError.UNAUTHORIZED)
             }
-            return start(archive, expiresAt.toEpochMilli(), rtcFrame, ended, { AndroidSpeechMicrophone(context) })
+            return start(archive, expiresAt.toEpochMilli(), rtcFrame, ended, { AndroidSpeechMicrophone(context) }, clockId = clockId, onAudio = onAudio, onArchiveError = onArchiveError)
         }
-        internal suspend fun start(archive: SpeechCaptureArchive, expiresAt: Long, rtcFrame: (ByteArray) -> Unit,
+        internal suspend fun start(archive: SpeechCaptureArchive?, expiresAt: Long, rtcFrame: (ByteArray) -> Unit,
             ended: (SpeechCaptureEnd) -> Unit, open: () -> SpeechMicrophoneSource,
-            now: () -> Long = System::currentTimeMillis, monotonic: () -> Long = System::nanoTime): SpeechMicrophoneCapture {
+            now: () -> Long = System::currentTimeMillis, monotonic: () -> Long = System::nanoTime,
+            clockId: String = java.util.UUID.randomUUID().toString(), onAudio: (Long, ByteArray) -> Unit = { _, _ -> }, onArchiveError: () -> Unit = {}): SpeechMicrophoneCapture {
             var acquired: SpeechMicrophoneCapture? = null
             try { return withContext(Dispatchers.IO) {
             if (expiresAt <= now()) throw SpeechCaptureException(SpeechCaptureError.UNAUTHORIZED)
             val failed = AtomicReference<SpeechMicrophoneCapture?>(null)
-            val pump = SpeechCapturePump.start(archive) { failed.get()?.interrupt() }
+            val pump = archive?.let {
+                try { SpeechCapturePump.start(it, clockId) { failed.get()?.archiveFailure() } }
+                catch (error: CancellationException) { throw error }
+                catch (_: Exception) { runCatching { onArchiveError() }; null }
+            }
             var source: SpeechMicrophoneSource? = null
             try {
                 if (expiresAt <= now()) throw SpeechCaptureException(SpeechCaptureError.UNAUTHORIZED)
                 source = open()
-                val owner = SpeechMicrophoneCapture(source, pump, expiresAt, rtcFrame, ended, now, monotonic)
+                val owner = SpeechMicrophoneCapture(source, pump, expiresAt, rtcFrame, ended, now, monotonic, clockId, onAudio, onArchiveError)
                 failed.set(owner)
                 owner.reader = CoroutineScope(owner.lifetime + owner.dispatcher).async { owner.read() }
                 acquired = owner
                 owner
             } catch (error: Exception) {
-                runCatching { source?.close() }; pump.stop(endKnown = false)
+                runCatching { source?.close() }; pump?.stop(endKnown = false)
                 if (error is CancellationException) throw error
                 if (error is SpeechCaptureException) throw error
                 throw SpeechCaptureException(if (error is SecurityException) SpeechCaptureError.UNAUTHORIZED else SpeechCaptureError.UNAVAILABLE)
@@ -127,6 +139,7 @@ public class SpeechMicrophoneCapture private constructor(
         if (reason.get() != null || expiresAt.toEpochMilli() <= now()) throw SpeechCaptureException(SpeechCaptureError.UNAUTHORIZED)
         until.set(expiresAt.toEpochMilli())
     }
+    private fun archiveFailure() { if (archiveFailed.compareAndSet(false, true)) runCatching { onArchiveError() } }
     private fun interrupt() { reason.compareAndSet(null, SpeechCaptureEnd.INTERRUPTED) }
     private suspend fun read() {
         val frame = ByteArray(960)
@@ -145,8 +158,10 @@ public class SpeechMicrophoneCapture private constructor(
                 progress = tick
                 size += count
                 if (size == frame.size) {
-                    if (!pump.offer(frame)) { interrupt(); break }
+                    if (!archiveFailed.get() && pump?.offer(frame) == false) archiveFailure()
                     // A retired RTC branch does not own or stop this original capture.
+                    val first = liveSample.getAndAdd(480)
+                    runCatching { onAudio(first, frame) }
                     runCatching { rtcFrame(frame) }
                     frame.fill(0); size = 0
                 }
@@ -157,12 +172,16 @@ public class SpeechMicrophoneCapture private constructor(
                 try { source.close() } catch (_: Exception) { reason.set(SpeechCaptureEnd.INTERRUPTED) }
                 if (size > 0) {
                     val tail = frame.copyOf(size)
-                    try { if (!pump.offer(tail)) reason.set(SpeechCaptureEnd.INTERRUPTED) } finally { tail.fill(0) }
+                    try {
+                        if (!archiveFailed.get() && pump?.offer(tail) == false) archiveFailure()
+                        val first = liveSample.getAndAdd((tail.size / 2).toLong())
+                        runCatching { onAudio(first, tail) }
+                    } finally { tail.fill(0) }
                 }
                 frame.fill(0)
                 val result = reason.get() ?: SpeechCaptureEnd.INTERRUPTED
-                try { pump.stop(endKnown = result != SpeechCaptureEnd.INTERRUPTED) }
-                catch (error: Exception) { reason.set(SpeechCaptureEnd.INTERRUPTED); throw error }
+                try { pump?.stop(endKnown = result != SpeechCaptureEnd.INTERRUPTED && !archiveFailed.get()) }
+                catch (_: Exception) { archiveFailure() }
                 finally { runCatching { ended(reason.get() ?: SpeechCaptureEnd.INTERRUPTED) } }
             } finally { lifetime.complete(); dispatcher.close() }
         }

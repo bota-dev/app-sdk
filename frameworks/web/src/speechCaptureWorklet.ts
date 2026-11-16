@@ -12,13 +12,30 @@ class SpeechCaptureProcessor extends AudioWorkletProcessor {
   private view = new DataView(this.buffer)
   private credits = 4
   private stopped = false
-  constructor() {
+  private live = false
+  private liveUsed = 0
+  private liveFirst = 0
+  private liveBuffer = new ArrayBuffer(1920)
+  private liveView = new DataView(this.liveBuffer)
+  private liveCredits = 10
+  constructor(options?: { processorOptions?: { directFrames?: boolean } }) {
     super()
+    this.live = options?.processorOptions?.directFrames === true
     if (sampleRate !== 48000) throw Error('speech_capture_sample_rate')
     this.port.onmessage = event => {
       if (event.data?.type === 'credit') this.credits = Math.min(4, this.credits + 1)
+      if (event.data?.type === 'live_credit') this.liveCredits = Math.min(10, this.liveCredits + 1)
       if (event.data?.type === 'stop') this.stop()
     }
+  }
+  private flushLive() {
+    if (!this.liveUsed) return
+    if (this.liveCredits > 0) {
+      const bytes = this.liveUsed === 960 ? this.liveBuffer : this.liveBuffer.slice(0, this.liveUsed * 2)
+      this.port.postMessage({ type: 'live', firstSample: this.liveFirst, bytes }, [bytes]); this.liveCredits--
+      this.liveBuffer = new ArrayBuffer(1920); this.liveView = new DataView(this.liveBuffer)
+    }
+    this.liveUsed = 0
   }
   private flush() {
     if (!this.used) return
@@ -32,7 +49,7 @@ class SpeechCaptureProcessor extends AudioWorkletProcessor {
   }
   private stop() {
     if (this.stopped) return
-    this.stopped = true; this.flush()
+    this.stopped = true; this.flushLive(); this.flush()
     this.port.postMessage({ type: 'ended', samples: this.samples })
   }
   process(inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
@@ -42,7 +59,7 @@ class SpeechCaptureProcessor extends AudioWorkletProcessor {
     if (this.stopped) return false
     const input = inputs[0]?.[0]
     if (!input || input.length !== output.length) {
-      this.flush(); this.samples += output.length
+      this.flushLive(); this.flush(); this.samples += output.length
       if (this.samples >= 345600000) this.stop()
       return !this.stopped
     }
@@ -53,6 +70,11 @@ class SpeechCaptureProcessor extends AudioWorkletProcessor {
       output[i] = pcm / 32768
       if (this.used === 0) this.firstSample = this.samples
       this.view.setInt16(this.used * 2, pcm, true)
+      if (this.live) {
+        if (this.liveUsed === 0) this.liveFirst = this.samples
+        this.liveView.setInt16(this.liveUsed * 2, pcm, true); this.liveUsed++
+        if (this.liveUsed === 960) this.flushLive()
+      }
       this.samples++; this.used++
       if (this.used === 48000) this.flush()
     }

@@ -35,8 +35,8 @@ public final class SpeechCapturePump: @unchecked Sendable {
         (stream, wake) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
         partial.reserveCapacity(96000)
     }
-    public static func start(archive: SpeechCaptureArchive, failed: @escaping @Sendable () -> Void = {}) async throws -> SpeechCapturePump {
-        try await start(sink: ArchiveCaptureSink(archive: archive), clock: UUID().uuidString.lowercased(), failed: failed)
+    public static func start(archive: SpeechCaptureArchive, clockId: String = UUID().uuidString.lowercased(), failed: @escaping @Sendable () -> Void = {}) async throws -> SpeechCapturePump {
+        try await start(sink: ArchiveCaptureSink(archive: archive), clock: clockId, failed: failed)
     }
     static func start(sink: any SpeechCaptureSink, clock: String, failed: @escaping @Sendable () -> Void = {}) async throws -> SpeechCapturePump {
         try await sink.begin(clock)

@@ -600,6 +600,13 @@ BotaDeviceSdkStatusV1 bota_device_sdk_v1_speech_capture(
     BotaDeviceSdkSpeechOutputV1 **out_json,
     BotaDeviceSdkErrorV1 **out_error);
 
+/* Direct recording transport metadata policy. No PCM enters this boundary;
+ * command JSON is bounded to 32768 bytes and uses speech_output_free. */
+BotaDeviceSdkStatusV1 bota_device_sdk_v1_recording_speech(
+    BotaDeviceSdkSliceV1 command,
+    BotaDeviceSdkSpeechOutputV1 **out_json,
+    BotaDeviceSdkErrorV1 **out_error);
+
 #ifdef __cplusplus
 }
 #endif

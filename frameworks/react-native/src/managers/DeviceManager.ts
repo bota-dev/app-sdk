@@ -1,3 +1,5 @@
+import type { RegulatoryCapabilities, RegulatoryDelivery, RegulatoryReceipt } from '../regulatory';
+import type { CountryConfigurationDelivery, CountryConfigurationResult } from '../countryConfiguration';
 import type { FindBindingProvider } from '../findDevice';
 import type { FindDeviceCapabilities, FindDeviceStatus } from '../findDevice';
 import EventEmitter from 'eventemitter3';
@@ -333,9 +335,7 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     options?: ProvisionOptions
   ): Promise<void> {
     this.requireConnected(device.id);
-    if (typeof deviceToken !== 'string' || (options?.credentialEnvelope !== undefined
-      ? deviceToken !== '' || !options.credentialEnvelope
-      : !/^[\x21-\x7e]{1,255}$/.test(deviceToken))) {
+    if (deviceToken !== '' || !options?.credentialEnvelope) {
       throw ProvisioningError.invalidToken(device.id);
     }
     const provision = () => this.client.provisioning.provision(
@@ -435,6 +435,31 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
       throw new Error('Factory reset resume completed without a persisted result');
     }
     return persisted;
+  }
+
+  async readRegulatoryCapabilities(device: ConnectedDevice): Promise<RegulatoryCapabilities> {
+    this.requireConnected(device.id);
+    return this.client.controls.readRegulatoryCapabilities(device);
+  }
+
+  async applyCountryConfiguration(device: ConnectedDevice, delivery: CountryConfigurationDelivery): Promise<CountryConfigurationResult> {
+    this.requireConnected(device.id);
+    return this.client.controls.applyCountryConfiguration(device, delivery);
+  }
+
+  async readRegulatoryStatus(device: ConnectedDevice): Promise<{ ready: boolean }> {
+    this.requireConnected(device.id);
+    return this.client.controls.readRegulatoryStatus(device);
+  }
+
+  async readRegulatoryChallenge(device: ConnectedDevice): Promise<string> {
+    this.requireConnected(device.id);
+    return this.client.controls.readRegulatoryChallenge(device);
+  }
+
+  async applyRegulatoryConfiguration(device: ConnectedDevice, document: RegulatoryDelivery): Promise<RegulatoryReceipt> {
+    this.requireConnected(device.id);
+    return this.client.controls.applyRegulatoryConfiguration(device, document);
   }
 
   async getFindCapabilities(device: ConnectedDevice): Promise<FindDeviceCapabilities> {
@@ -618,6 +643,10 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
   ): Promise<void> {
     this.requireConnected(device.id);
     await this.client.provisioning.writeConnectionSettings(device, settings);
+  }
+
+  async readWiFiProvisioningVersion(deviceId: string): Promise<2 | 3> {
+    return this.client.wifi.readProvisioningVersion(this.requireConnected(deviceId));
   }
 
   /** Secure-only entry point used to prevent older packages from sending plaintext. */

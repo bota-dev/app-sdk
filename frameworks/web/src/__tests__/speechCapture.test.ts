@@ -28,6 +28,20 @@ const prepared = { protocol_version: 1, profile: 'speech_capture_pcm_v1', captur
   recording_id: 'rec_fixture', sample_rate: 48000, channels: 1, format: 'pcm_s16le', cipher: 'AES-256-GCM',
   data_key: Buffer.from(raw).toString('base64'), maximum_chunk_samples: 48000,
   upload_until: new Date(Date.now() + 60000).toISOString() }
+test('stereo capture persists two channels as one recording and recovers frame counts', async () => {
+  environment()
+  const channels = [{ sourceId: 'local', role: 'local' as const }, { sourceId: 'remote', role: 'remote' as const }] as const
+  let archive = await createWebSpeechCapture({ scope, prepared: { ...prepared, protocol_version: 2, profile: 'speech_capture_pcm_v2', channels: 2, channel_layout: [...channels] }, wasm })
+  await archive.beginClock(clockId)
+  const mapping = { sourceClockId: clockId, sourceEpoch: 1, firstSample: 0, samples: 2, sampleRate: 48000, revision: 1, discontinuity: false, gaps: [] }
+  await assert.rejects(archive.append(0, new Uint8Array([1, 0, 2, 0])))
+  await archive.append(0, new Uint8Array([1, 0, 3, 0, 2, 0, 4, 0]), [mapping, mapping])
+  await archive.endClock(2); await archive.close()
+  archive = await recoverWebSpeechCapture({ scope, captureId, wasm })
+  assert.equal(archive.snapshot.archiveSamples, 2)
+  assert.equal(archive.snapshot.protocolVersion, 2)
+  await archive.close()
+})
 function environment() {
   Object.defineProperty(globalThis, 'indexedDB', { configurable: true, value: new IDBFactory() })
   Object.defineProperty(globalThis, 'IDBKeyRange', { configurable: true, value: IDBKeyRange })

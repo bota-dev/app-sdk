@@ -140,6 +140,6 @@ class SpeechLabHost(context: ReactApplicationContext) : ReactContextBaseJavaModu
     }
 }
 class SpeechLabPackage : ReactPackage {
-    override fun createNativeModules(context: ReactApplicationContext): List<NativeModule> = listOf(SpeechLabHost(context))
+    override fun createNativeModules(context: ReactApplicationContext): List<NativeModule> = listOf(SpeechLabHost(context), RecordingLabHost(context))
     override fun createViewManagers(context: ReactApplicationContext): List<ViewManager<*, *>> = emptyList()
 }

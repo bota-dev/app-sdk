@@ -12,6 +12,38 @@ fn state() -> Value {
     )
 }
 #[test]
+fn stereo_is_versioned_and_authenticates_source_mapping_before_durable_commit() {
+    let channels = json!([{"sourceId":"local","role":"local"},{"sourceId":"remote","role":"remote"}]);
+    let initial = call(json!({"op":"create","captureId":CAPTURE,"recordingId":"rec_stereo","retention":"original_audio_and_text","profileVersion":2,"channels":channels}));
+    let initial = call(json!({"op":"begin_clock","state":initial,"clockId":CLOCK}));
+    let source = json!({"sourceClockId":CLOCK,"sourceEpoch":1,"firstSample":0,"samples":480,"sampleRate":48000,
+        "revision":1,"discontinuity":false,"gaps":[]});
+    assert!(dispatch_json(&json!({"op":"plan","state":initial,"firstSample":0,"samples":480}).to_string()).is_err());
+    let plan = call(json!({"op":"plan","state":initial,"firstSample":0,"samples":480,"channels":[source,source]}));
+    assert_eq!(plan["header"]["protocolVersion"],2);
+    let committed = call(json!({"op":"commit","state":initial,"header":plan["header"],"sha256":"a".repeat(64)}));
+    assert!(dispatch_json(&json!({"op":"plan","state":committed,"firstSample":480,"samples":480,"channels":[source,source]}).to_string()).is_err());
+    let ended = call(json!({"op":"end_clock","state":committed,"samples":480}));
+    let result = call(json!({"op":"finish","state":ended}));
+    assert_eq!(result["manifest"]["protocolVersion"],2); assert_eq!(result["manifest"]["channels"],channels);
+}
+#[test]
+fn stereo_wire_vector_matches_backend_aad_and_manifest_chain() {
+    let fixture: Value = serde_json::from_str(include_str!("../../../protocol/speech-session/capture-v2.json")).unwrap();
+    let mut state = call(json!({"op":"create","captureId":fixture["captureId"],"recordingId":fixture["recordingId"],
+        "retention":"original_audio_and_text","profileVersion":2,"channels":fixture["manifest"]["value"]["channels"]}));
+    let header = &fixture["chunks"][0]["packet"]["header"];
+    state = call(json!({"op":"begin_clock","state":state,"clockId":header["clockId"]}));
+    let plan = call(json!({"op":"plan","state":state,"firstSample":header["firstSample"],"samples":header["samples"],"channels":header["channels"]}));
+    assert_eq!(plan["aad"],fixture["chunks"][0]["aad"]);
+    assert_eq!(plan["header"],*header);
+    state = call(json!({"op":"commit","state":state,"header":header,"sha256":fixture["chunks"][0]["sha256"]}));
+    state = call(json!({"op":"end_clock","state":state,"samples":4}));
+    let end = call(json!({"op":"finish","state":state}));
+    assert_eq!(end["manifest"],fixture["manifest"]["value"]);
+    assert_eq!(end["aad"],fixture["manifest"]["aad"]);
+}
+#[test]
 fn archive_policy_refuses_nonrecording_modes_before_capture() {
     for retention in ["text_only", "live_only"] {
         assert!(dispatch_json(&json!({"op":"create","captureId":CAPTURE,"recordingId":"rec_original","retention":retention}).to_string()).is_err());

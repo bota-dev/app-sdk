@@ -52,8 +52,14 @@ public final class SpeechMicrophoneCapture: @unchecked Sendable {
     private let gate = NSLock()
     private let control = DispatchQueue(label: "dev.bota.speech.capture")
     private let engine = AVAudioEngine()
-    private let pump: SpeechCapturePump
+    private let pump: SpeechCapturePump?
     private let rtcFrame: @Sendable (Data) -> Void
+    private let onAudio: @Sendable (UInt64, Data) -> Void
+    public let clockId: String
+    private var archiveFailed = false
+    private let onArchiveError: @Sendable () -> Void
+    private var liveSample: UInt64 = 0
+    public var nextLiveSample: UInt64 { gate.withLock { liveSample } }
     private let ended: @Sendable (SpeechCaptureEnd) -> Void
     private var expiresAt: Date
     private var converter: SpeechCaptureConversion?
@@ -61,30 +67,46 @@ public final class SpeechMicrophoneCapture: @unchecked Sendable {
     private var rtcPartial = Data()
     private var observers: [any NSObjectProtocol] = []
     private var timer: DispatchSourceTimer?
+    #if os(iOS)
+    private var inputPorts: [String] = []
+    #endif
     private var tapped = false
     private var reason: SpeechCaptureEnd?
     private var retirement: Task<Void, any Error>?
-    private init(pump: SpeechCapturePump, expiresAt: Date, rtcFrame: @escaping @Sendable (Data) -> Void,
-                 ended: @escaping @Sendable (SpeechCaptureEnd) -> Void) {
+    private init(pump: SpeechCapturePump?, expiresAt: Date, rtcFrame: @escaping @Sendable (Data) -> Void, clockId: String,
+                 onAudio: @escaping @Sendable (UInt64, Data) -> Void,
+                 onArchiveError: @escaping @Sendable () -> Void, ended: @escaping @Sendable (SpeechCaptureEnd) -> Void) {
         self.pump = pump; self.expiresAt = expiresAt; self.rtcFrame = rtcFrame; self.ended = ended
+        self.clockId = clockId; self.onAudio = onAudio; self.onArchiveError = onArchiveError
     }
     private final class FailureRelay: @unchecked Sendable {
         let lock = NSLock()
         weak var owner: SpeechMicrophoneCapture?
-        func fail() { lock.withLock { owner }?.requestStop(.interrupted) }
+        func fail() { lock.withLock { owner }?.archiveFailure() }
     }
     /// Permission and the app-owned recording route must be ready before calling.
     /// rtcFrame borrows exactly 480 mono PCM16LE samples and must return without blocking.
-    public static func start(archive: SpeechCaptureArchive, expiresAt: Date,
-                             rtcFrame: @escaping @Sendable (Data) -> Void,
+    public static func start(archive: SpeechCaptureArchive?, expiresAt: Date,
+                             rtcFrame: @escaping @Sendable (Data) -> Void = { _ in },
+                             clockId: String = UUID().uuidString.lowercased(),
+                             onAudio: @escaping @Sendable (UInt64, Data) -> Void = { _, _ in },
+                             onArchiveError: @escaping @Sendable () -> Void = {},
                              ended: @escaping @Sendable (SpeechCaptureEnd) -> Void = { _ in }) async throws -> SpeechMicrophoneCapture {
         guard expiresAt > Date() else { throw SpeechCaptureFailure.invalidInput }
         let relay = FailureRelay()
-        let pump = try await SpeechCapturePump.start(archive: archive) { relay.fail() }
-        let owner = SpeechMicrophoneCapture(pump: pump, expiresAt: expiresAt, rtcFrame: rtcFrame, ended: ended)
+        let pump: SpeechCapturePump?
+        if let archive {
+            do { pump = try await SpeechCapturePump.start(archive: archive, clockId: clockId) { relay.fail() } }
+            catch { onArchiveError(); pump = nil }
+        } else { pump = nil }
+        let owner = SpeechMicrophoneCapture(pump: pump, expiresAt: expiresAt, rtcFrame: rtcFrame, clockId: clockId, onAudio: onAudio, onArchiveError: onArchiveError, ended: ended)
         relay.lock.withLock { relay.owner = owner }
         do { try await owner.configure(); return owner }
         catch { try? await owner.interruptAndStop(); throw SpeechCaptureFailure.unavailable }
+    }
+    private func archiveFailure() {
+        let notify = gate.withLock { if archiveFailed { return false }; archiveFailed = true; return true }
+        if notify { onArchiveError() }
     }
     private func configure() async throws {
         try await withCheckedThrowingContinuation { (done: CheckedContinuation<Void, any Error>) in
@@ -95,17 +117,20 @@ public final class SpeechMicrophoneCapture: @unchecked Sendable {
                     #if os(iOS)
                     try input.setVoiceProcessingEnabled(true)
                     #endif
+                    #if os(iOS)
+                    inputPorts = AVAudioSession.sharedInstance().currentRoute.inputs.map(\.uid)
+                    #endif
                     let format = input.outputFormat(forBus: 0)
                     converter = try SpeechCaptureConversion(format: format)
                     input.installTap(onBus: 0, bufferSize: 480, format: format) { [weak self] buffer, time in self?.receive(buffer, time) }
                     tapped = true
                     observers.append(NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange,
-                        object: engine, queue: nil) { [weak self] _ in self?.requestStop(.interrupted) })
+                        object: engine, queue: nil) { [weak self] _ in self?.configurationChanged() })
                     #if os(iOS)
                     observers.append(NotificationCenter.default.addObserver(forName: AVAudioSession.interruptionNotification,
                         object: nil, queue: nil) { [weak self] _ in self?.requestStop(.interrupted) })
                     observers.append(NotificationCenter.default.addObserver(forName: AVAudioSession.routeChangeNotification,
-                        object: nil, queue: nil) { [weak self] _ in self?.requestStop(.interrupted) })
+                        object: nil, queue: nil) { [weak self] _ in self?.configurationChanged() })
                     #endif
                     engine.prepare(); try engine.start()
                     let timer = DispatchSource.makeTimerSource(queue: control)
@@ -115,6 +140,25 @@ public final class SpeechMicrophoneCapture: @unchecked Sendable {
                     }
                     self.timer = timer; timer.resume(); done.resume()
                 } catch { done.resume(throwing: error) }
+            }
+        }
+    }
+    // Output-only route changes belong to playback. Continue capture when its
+    // input port, format and sample clock remain intact; never manufacture a
+    // continuous clock when an actual input restart resets the native timestamp.
+    private func configurationChanged() {
+        control.async { [self] in
+            guard gate.withLock({ reason == nil }) else { return }
+            #if os(iOS)
+            guard inputPorts == AVAudioSession.sharedInstance().currentRoute.inputs.map(\.uid) else {
+                requestStop(.interrupted); return
+            }
+            #endif
+            guard gate.withLock({ converter?.inputFormat == engine.inputNode.outputFormat(forBus: 0) }) else {
+                requestStop(.interrupted); return
+            }
+            if !engine.isRunning {
+                do { try engine.start() } catch { requestStop(.interrupted) }
             }
         }
     }
@@ -134,10 +178,13 @@ public final class SpeechMicrophoneCapture: @unchecked Sendable {
     private func convert(_ input: AVAudioPCMBuffer?, final: Bool) -> Bool {
         guard let converter else { return false }
         return converter.convert(input, final: final) { bytes in
-            guard pump.offer(bytes) else { return false }
+            if !archiveFailed && pump?.offer(bytes) == false {
+                archiveFailed = true; control.async { [self] in onArchiveError() }
+            }
             rtcPartial.append(bytes)
             while rtcPartial.count >= 960 {
                 let frame = rtcPartial.prefix(960)
+                onAudio(liveSample, Data(frame)); liveSample += 480
                 rtcFrame(Data(frame)); rtcPartial.resetBytes(in: 0..<960); rtcPartial = Data(rtcPartial.dropFirst(960))
             }
             return true
@@ -167,14 +214,18 @@ public final class SpeechMicrophoneCapture: @unchecked Sendable {
                 if tapped { engine.inputNode.removeTap(onBus: 0); tapped = false }
                 let result = gate.withLock { () -> SpeechCaptureEnd in
                     let result = initial != .interrupted && converter != nil && !convert(nil, final: true) ? SpeechCaptureEnd.interrupted : initial
+                    if !rtcPartial.isEmpty {
+                        onAudio(liveSample, rtcPartial); liveSample += UInt64(rtcPartial.count / 2)
+                    }
                     converter = nil; rtcPartial.resetBytes(in: 0..<rtcPartial.count); rtcPartial.removeAll()
                     reason = result; return result
                 }
                 done.resume(returning: result)
             }
         }
-        do { try await pump.stop(endKnown: result != .interrupted); ended(result) }
-        catch { ended(.interrupted); throw error }
+        do { try await pump?.stop(endKnown: result != .interrupted && !gate.withLock { archiveFailed }) }
+        catch { archiveFailure() }
+        ended(result)
     }
     /// Joins physical capture and accepted archive writes. HTTP remains independent.
     public func stop() async throws { try await requestStop(.stopped).value }

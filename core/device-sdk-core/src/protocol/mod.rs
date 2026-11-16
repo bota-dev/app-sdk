@@ -1,5 +1,7 @@
 mod find_device;
 pub use find_device::*;
+mod country_config;
+pub use country_config::*;
 mod byo_ble;
 mod cursor;
 mod diagnostics;
@@ -46,3 +48,6 @@ pub use local_wifi_control::*;
 
 mod wifi_provisioning;
 pub use wifi_provisioning::*;
+
+mod regulatory;
+pub use regulatory::*;

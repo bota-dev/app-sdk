@@ -1,11 +1,17 @@
 import initWasm, { speechCapture } from './generated/bota_device_sdk_core.js'
 
 export interface SpeechCapturePacket { nonce: string; ciphertext: string }
-export interface SpeechCaptureHeader { sequence: number; clockId: string; firstSample: number; samples: number; archiveSample: number }
+export interface RecordingCaptureChannel { sourceId: string; role: 'local' | 'remote' }
+export interface RecordingCaptureMapping {
+  sourceClockId: string; sourceEpoch: number; firstSample: number; samples: number; sampleRate: number;
+  revision: number; discontinuity: boolean; gaps: { offset: number; samples: number }[]
+}
+export interface SpeechCaptureHeader { sequence: number; clockId: string; firstSample: number; samples: number; archiveSample: number;
+  protocolVersion?: 2; channels?: [RecordingCaptureMapping, RecordingCaptureMapping] }
 export interface SpeechCaptureChunk extends SpeechCapturePacket { header: SpeechCaptureHeader }
 export interface SpeechCapturePreparation {
   protocol_version: number; profile: string; capture_id: string; recording_id: string; sample_rate: number;
-  channels: number; format: string; cipher: string; data_key: string; maximum_chunk_samples: number; upload_until: string
+  channels: number; channel_layout?: RecordingCaptureChannel[]; format: string; cipher: string; data_key: string; maximum_chunk_samples: number; upload_until: string
 }
 export interface SpeechCaptureHost {
   upload(packet: SpeechCaptureChunk, signal: AbortSignal): Promise<unknown>
@@ -146,10 +152,11 @@ export class WebSpeechCapture {
   static async create(options: Options & { prepared: SpeechCapturePreparation }): Promise<WebSpeechCapture> {
     await initialize(options.wasm)
     const p = options.prepared
-    if (p.protocol_version !== 1 || p.profile !== 'speech_capture_pcm_v1' || p.sample_rate !== 48000 || p.channels !== 1 ||
+    if (![1, 2].includes(p.protocol_version) || p.profile !== `speech_capture_pcm_v${p.protocol_version}` || p.sample_rate !== 48000 || p.channels !== p.protocol_version ||
       p.format !== 'pcm_s16le' || p.cipher !== 'AES-256-GCM' || p.maximum_chunk_samples !== 48000 ||
       !Number.isFinite(Date.parse(p.upload_until)) || Date.parse(p.upload_until) <= Date.now()) throw fail()
-    const state = policy<SpeechCaptureSnapshot>({ op: 'create', captureId: p.capture_id, recordingId: p.recording_id, retention: 'original_audio_and_text' })
+    const state = policy<SpeechCaptureSnapshot>({ op: 'create', captureId: p.capture_id, recordingId: p.recording_id, retention: 'original_audio_and_text',
+      profileVersion: p.protocol_version, ...(p.channel_layout ? { channels: p.channel_layout } : {}) })
     const release = await own(options.scope, p.capture_id, true)
     let db: IDBDatabase | undefined
     try {
@@ -217,12 +224,19 @@ export class WebSpeechCapture {
   }
   /** Copies at most one second. The capture pump limits pending calls to four.
    * Successful completion means both ciphertext and its journal are durable. */
-  append(firstSample: number, pcm: Uint8Array): Promise<void> {
-    if (pcm.length === 0 || pcm.length > 96000 || pcm.length % 2 !== 0 || this.pendingPcm >= 4) return Promise.reject(fail())
+  append(firstSample: number, pcm: Uint8Array, channels?: [RecordingCaptureMapping, RecordingCaptureMapping]): Promise<void> {
+    channels = channels === undefined ? undefined : structuredClone(channels)
+    const frameBytes = this.journal.state.protocolVersion === 2 ? 4 : 2
+    if (pcm.length === 0 || pcm.length > 48000 * frameBytes || pcm.length % frameBytes !== 0 || this.pendingPcm >= 4) return Promise.reject(fail())
     this.pendingPcm++
     const bytes = new Uint8Array(pcm)
     return this.serialize(async () => {
-      const planned = policy<{ header: SpeechCaptureHeader; aad: string }>({ op: 'plan', state: this.journal.state, firstSample, samples: bytes.length / 2 })
+      const planned = policy<{ header: SpeechCaptureHeader; aad: string }>({ op: 'plan', state: this.journal.state, firstSample, samples: bytes.length / frameBytes, channels })
+      for (const [channel, map] of (channels ?? []).entries()) for (const gap of map.gaps) {
+        for (let sample = gap.offset; sample < gap.offset + gap.samples; sample++) {
+          if (bytes[sample * 4 + channel * 2] !== 0 || bytes[sample * 4 + channel * 2 + 1] !== 0) throw fail()
+        }
+      }
       const aad = decode(planned.aad), packet = { ...await seal(this.row.key, bytes, aad), header: planned.header }
       const sha256 = await hash(concat(aad, decode(packet.nonce), decode(packet.ciphertext)))
       const state = policy<SpeechCaptureSnapshot>({ op: 'commit', state: this.journal.state, header: packet.header, sha256 })

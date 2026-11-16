@@ -23,4 +23,11 @@
     <string-array name="modes"><item>Translated</item><item>Original</item><item>Captions only</item></string-array>
     <string name="stop_original">Stop and save original</string>
     <string name="original_preview">%1$s\n\n%2$s</string>
+    <string name="recording_language_ack">Language change acknowledged.</string>
+    <string name="recording_stopped">Capture stopped. Original upload and final text continue.</string>
+    <string name="recording_unavailable">Operation unavailable. Original audio remains independent.</string>
+    <string name="recording_connecting">Connecting…</string>
+    <string name="recording_start_failed">Could not start recording translation.</string>
+    <string name="recording_closed">Closed.</string>
+    <string name="recording_cleanup_failed">Cleanup failed. Reopen the App.</string>
 </resources>

@@ -12,6 +12,9 @@ import kotlinx.coroutines.launch
 public class BotaFlutterSdkPlugin : FlutterPlugin {
     private var adapter: BotaAndroidAdapter? = null
     private var speech: BotaAndroidSpeechAdapter? = null
+    private var recordingSpeech: BotaAndroidRecordingSpeechAdapter? = null
+    public var recordingSpeechShutdown: Deferred<Unit>? = null
+        private set
     public var speechShutdown: Deferred<Unit>? = null
         private set
 
@@ -34,11 +37,21 @@ public class BotaFlutterSdkPlugin : FlutterPlugin {
         )
         speech = attachedSpeech
         BotaSpeechHostApi.setUp(binding.binaryMessenger, attachedSpeech)
+        val recordingApi = BotaRecordingSpeechFlutterApi(binding.binaryMessenger)
+        val attachedRecording = BotaAndroidRecordingSpeechAdapter(
+            emit = { deliverRecordingSpeechEvent(recordingApi, it) },
+            terminal = { event -> recordingApi.onEvent(event) {} },
+        )
+        recordingSpeech = attachedRecording
+        BotaRecordingSpeechHostApi.setUp(binding.binaryMessenger, attachedRecording)
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         BotaHostApi.setUp(binding.binaryMessenger, null)
         BotaSpeechHostApi.setUp(binding.binaryMessenger, null)
+        BotaRecordingSpeechHostApi.setUp(binding.binaryMessenger, null)
+        recordingSpeechShutdown = recordingSpeech?.retire()
+        recordingSpeech = null
         speechShutdown = speech?.retire()
         speech = null
         val detached = adapter ?: return
@@ -63,5 +76,11 @@ public class BotaFlutterSdkPlugin : FlutterPlugin {
         check(Looper.myLooper() == Looper.getMainLooper()) { "Speech integration requires the main thread" }
         speechShutdown?.let { check(it.isCompleted && !it.isCancelled) { "Previous speech cleanup has not succeeded" } }
         checkNotNull(speech) { "Flutter engine is detached" }.setFactory { id, observer -> factory.create(id, observer) }
+    }
+    /** Install direct activity admission, with credentials and input remaining native. */
+    public fun setRecordingSpeechFactory(factory: BotaFlutterRecordingSpeechFactory) {
+        check(Looper.myLooper() == Looper.getMainLooper()) { "Speech integration requires the main thread" }
+        recordingSpeechShutdown?.let { check(it.isCompleted && !it.isCancelled) { "Previous recording speech cleanup has not succeeded" } }
+        checkNotNull(recordingSpeech) { "Flutter engine is detached" }.setFactory(factory)
     }
 }

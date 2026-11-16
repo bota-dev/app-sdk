@@ -2,6 +2,12 @@ import XCTest
 
 @MainActor
 final class SpeechBridgeTests: XCTestCase {
+  func testDirectCloseDuringAdmissionJoinsTheEventuallyCreatedOwner() async throws {
+    try await SpeechBridgeChecks().testDirectCloseDuringAdmissionJoinsTheEventuallyCreatedOwner()
+  }
+  func testDirectCaptionsPreserveTheirTargetAndControlsRemainNative() async throws {
+    try await SpeechBridgeChecks().testDirectCaptionsPreserveTheirTargetAndControlsRemainNative()
+  }
   func testCloseDuringReadyJoinsAndRetiresCallbacks() async throws {
     try await SpeechBridgeChecks().testCloseDuringReadyJoinsAndRetiresCallbacks()
   }

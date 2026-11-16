@@ -1,6 +1,21 @@
 import BotaDeviceSDKC
 import Foundation
 
+/// Shared direct transport decisions. Native audio never enters this boundary.
+public enum RecordingSpeechPolicy {
+    public static func evaluate(_ commandJSON: Data) throws -> Data {
+        var output: OpaquePointer?
+        var error: OpaquePointer?
+        let status = withSpeechBytes(commandJSON) { bota_device_sdk_v1_recording_speech($0, &output, &error) }
+        defer { bota_device_sdk_v1_speech_output_free(output); bota_device_sdk_v1_error_free(error) }
+        guard status == BOTA_DEVICE_SDK_V1_OK, let output else { throw speechError(status, error) }
+        var view = BotaDeviceSdkSliceV1()
+        guard bota_device_sdk_v1_speech_output_view(output, &view) == BOTA_DEVICE_SDK_V1_OK,
+              view.len <= 65536, let bytes = view.data else { throw speechError(BOTA_DEVICE_SDK_V1_OPERATION_FAILED, nil) }
+        return Data(bytes: bytes, count: Int(view.len))
+    }
+}
+
 /// Shared, metadata-only archive protocol. Native IO authenticates its journal
 /// before restoring it; PCM, content keys and encrypted audio stay outside this API.
 public enum SpeechCapturePolicy {

@@ -349,3 +349,15 @@ additionally preserves the exact archive, sorted file inventory, normalized
 archive digest, dependency lock and license evidence, dry-run result, consumer
 result, and v2 release manifest under `target/flutter-release/`; it performs no
 publication.
+
+## Recording-owned realtime speech preview
+
+The current direct recording activity, microphone/archive ownership, native
+bridges and consuming examples are documented in the [integration guide](../../../docs/parity/recording-speech.md).
+This source preview is unreleased and requires backend and platform qualification.
+
+The explicit public recording surface consists of `BotaRecordingSpeechClient`,
+`BotaRecordingSpeechSession`, `BotaRecordingSpeechObserver`,
+`BotaRecordingSpeechCaption` and `BotaRecordingSpeechException`. Install the
+native recording factory before starting a session; Dart receives controls and
+bounded text/status, never microphone samples, grants or archive keys.

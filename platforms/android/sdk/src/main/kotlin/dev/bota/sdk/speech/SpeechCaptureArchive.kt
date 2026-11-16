@@ -111,11 +111,13 @@ public class SpeechCaptureArchive private constructor(
             var acquired: SpeechCaptureArchive? = null
             try { return withContext(Dispatchers.IO) { safe {
                 val p = parse(owned, 8192)
-                if (p.get("protocol_version") != 1 || p.get("profile") != "speech_capture_pcm_v1" || p.get("sample_rate") != 48000 ||
-                    p.get("channels") != 1 || p.get("format") != "pcm_s16le" || p.get("cipher") != "AES-256-GCM" ||
+                val version = p.getInt("protocol_version")
+                if (version !in 1..2 || p.get("profile") != "speech_capture_pcm_v$version" || p.get("sample_rate") != 48000 ||
+                    p.get("channels") != version || p.get("format") != "pcm_s16le" || p.get("cipher") != "AES-256-GCM" ||
                     p.get("maximum_chunk_samples") != 48000 || !Instant.parse(p.getString("upload_until")).isAfter(Instant.now())) invalid()
                 val captureId = p.getString("capture_id")
-                val state = policy(command("create", "captureId" to captureId, "recordingId" to p.getString("recording_id"), "retention" to "original_audio_and_text"))
+                val state = policy(command("create", "captureId" to captureId, "recordingId" to p.getString("recording_id"), "retention" to "original_audio_and_text",
+                    "profileVersion" to version, "channels" to p.optJSONArray("channel_layout")))
                 val store = SpeechCaptureStorage(scope, captureId, directory)
                 try {
                     if (store.journal() != null || store.receipt() != null) throw SpeechCaptureException(SpeechCaptureError.BUSY)
@@ -175,11 +177,23 @@ public class SpeechCaptureArchive private constructor(
         save(JSONObject(journal.toString()).put("state", policy(command("begin_clock", "state" to journal.getJSONObject("state"), "clockId" to clockId))))
     }
     /** Call from a bounded native queue; this copies at most one second. */
-    public suspend fun append(firstSample: Long, pcm: ByteArray) {
-        if (pcm.isEmpty() || pcm.size > 96000 || pcm.size % 2 != 0) invalid()
+    public suspend fun append(firstSample: Long, pcm: ByteArray, channels: List<RecordingCaptureMapping>? = null) {
+        if (pcm.isEmpty() || pcm.size > 192000 || pcm.size % 2 != 0) invalid()
+        val mappings = channels?.let { org.json.JSONArray().apply { it.forEach { value -> put(value.json()) } } }
         val owned = pcm.copyOf()
         try { local {
-            val plan = policy(command("plan", "state" to journal.getJSONObject("state"), "firstSample" to firstSample, "samples" to owned.size / 2))
+            val frameBytes = if (journal.getJSONObject("state").getInt("protocolVersion") == 2) 4 else 2
+            if (owned.size > 48000 * frameBytes || owned.size % frameBytes != 0) invalid()
+            val plan = policy(command("plan", "state" to journal.getJSONObject("state"), "firstSample" to firstSample, "samples" to owned.size / frameBytes, "channels" to (mappings ?: JSONObject.NULL)))
+            val verified = plan.getJSONObject("header").optJSONArray("channels")
+            for (channel in 0 until (verified?.length() ?: 0)) {
+                val gaps = verified!!.getJSONObject(channel).getJSONArray("gaps")
+                for (index in 0 until gaps.length()) {
+                val gap = gaps.getJSONObject(index)
+                for (sample in gap.getInt("offset") until gap.getInt("offset") + gap.getInt("samples")) {
+                    if (owned[sample * 4 + channel * 2].toInt() != 0 || owned[sample * 4 + channel * 2 + 1].toInt() != 0) invalid()
+                }
+            } }
             val header = plan.getJSONObject("header")
             val aad = decode(plan.getString("aad"))
             val packet = seal(owned, active(), aad)

@@ -1,10 +1,16 @@
 import type { WebSpeechCapture } from './speechCapture.ts'
 
 export interface WebSpeechCaptureInputOptions {
-  archive: WebSpeechCapture
+  archive?: WebSpeechCapture
+  /** Bind the first capture clock before live admission. A restart needs a new
+   * clock and explicit live source mapping. */
+  clockId?: string
   /** Serve the packaged speechCaptureWorklet.js under the host's CSP. */
   workletUrl?: string | URL
   onError?(code: 'archive_write_failed' | 'capture_interrupted'): void
+  /** Synchronous borrowed same-source frames; copy before retaining. A live
+   * transport failure must leave this independently owned archive running. */
+  onAudio?(firstSample: number, pcm: Uint8Array): void
 }
 export interface WebSpeechCaptureInput {
   /** Borrowed, same-source microphone output. RTC must own only its branch. */
@@ -64,8 +70,8 @@ export async function createWebSpeechCaptureInput(options: WebSpeechCaptureInput
     }
     await writes
     try {
-      if (samples === undefined) { await options.archive.interruptClock(); report('capture_interrupted') }
-      else await options.archive.endClock(samples)
+      if (samples === undefined) { await options.archive?.interruptClock(); report('capture_interrupted') }
+      else await options.archive?.endClock(samples)
     } finally { clock = false; reportEnd = undefined; ended = undefined }
   }
   return {
@@ -73,7 +79,7 @@ export async function createWebSpeechCaptureInput(options: WebSpeechCaptureInput
     get capturing() { return capturing },
     start() {
       return enqueue(async () => {
-        if (closing || options.archive.snapshot.finished) throw Error('speech_capture_closed')
+        if (closing || options.archive?.snapshot.finished) throw Error('speech_capture_closed')
         if (capturing) return
         interrupted = false
         try {
@@ -81,15 +87,23 @@ export async function createWebSpeechCaptureInput(options: WebSpeechCaptureInput
           stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 48000,
             echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false })
           if (closing || context.state !== 'running') throw Error('speech_capture_closed')
-          await options.archive.beginClock(crypto.randomUUID()); clock = true
+          await options.archive?.beginClock(options.clockId ?? crypto.randomUUID()); clock = true
           ended = new Promise(resolve => { reportEnd = resolve })
           source = context.createMediaStreamSource(stream)
           node = new AudioWorkletNode(context, 'bota-speech-capture-v1', { numberOfInputs: 1, numberOfOutputs: 1,
-            outputChannelCount: [1], channelCount: 1, channelCountMode: 'explicit' })
+            outputChannelCount: [1], channelCount: 1, channelCountMode: 'explicit', processorOptions: { directFrames: !!options.onAudio } })
           const owned = node
           node.onprocessorerror = interrupt
           node.port.onmessage = event => {
             const value = event.data
+            if (value?.type === 'live') {
+              if (!(value.bytes instanceof ArrayBuffer) || !value.bytes.byteLength || value.bytes.byteLength > 1920 || value.bytes.byteLength % 2 ||
+                !Number.isSafeInteger(value.firstSample) || value.firstSample < 0) { interrupt(); return }
+              const bytes = new Uint8Array(value.bytes)
+              try { options.onAudio?.(value.firstSample, bytes) } catch { /* Live IO does not own archival. */ }
+              finally { bytes.fill(0); if (node === owned) owned.port.postMessage({ type: 'live_credit' }) }
+              return
+            }
             if (value?.type === 'ended' && Number.isSafeInteger(value.samples) && value.samples >= 0) {
               reportEnd?.(value.samples)
               if (capturing) { void enqueue(stop).catch(() => report('archive_write_failed')) }
@@ -100,7 +114,7 @@ export async function createWebSpeechCaptureInput(options: WebSpeechCaptureInput
             const bytes = new Uint8Array(value.bytes)
             if (pending >= 4) { bytes.fill(0); interrupt(); return }
             pending++
-            const write = options.archive.append(value.firstSample, bytes)
+            const write = options.archive ? options.archive.append(value.firstSample, bytes) : Promise.resolve()
             bytes.fill(0)
             const observed = write.catch(() => report('archive_write_failed')).finally(() => {
               pending--; if (node === owned) owned.port.postMessage({ type: 'credit' })
@@ -119,7 +133,7 @@ export async function createWebSpeechCaptureInput(options: WebSpeechCaptureInput
       })
     },
     stop: () => enqueue(stop),
-    finish: () => enqueue(async () => { await stop(); if (!options.archive.snapshot.finished) await options.archive.finish() }),
+    finish: () => enqueue(async () => { await stop(); if (!options.archive?.snapshot.finished) await options.archive?.finish() }),
     close() {
       if (retirement) return retirement
       closing = true; track.enabled = false

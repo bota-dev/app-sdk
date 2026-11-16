@@ -330,13 +330,6 @@ impl WorkflowReducer for ProvisioningWorkflow {
                         self.encrypted = true;
                         bytes
                     }
-                    None if (1..=255).contains(&device_token.len())
-                        && device_token.iter().all(|b| (0x21..=0x7e).contains(b))
-                        && (23..=517).contains(&mtu) =>
-                    {
-                        self.encrypted = false;
-                        device_token
-                    }
                     _ => {
                         return Ok(self.fail(
                             DeviceSdkError::new(
@@ -344,7 +337,7 @@ impl WorkflowReducer for ProvisioningWorkflow {
                                 Operation::Provision,
                                 false,
                             )
-                            .with_detail("exactly one valid device credential is required"),
+                            .with_detail("an encrypted device credential is required"),
                             context,
                         ));
                     }

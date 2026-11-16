@@ -36,6 +36,7 @@ public actor SpeechCaptureArchive {
     private struct Preparation: Decodable {
         let protocol_version: Int, profile: String, capture_id: String, recording_id: String, sample_rate: Int, channels: Int
         let format: String, cipher: String, data_key: String, maximum_chunk_samples: Int, upload_until: String
+        let channel_layout: [RecordingCaptureChannel]?
     }
     private let store: SpeechCaptureStorage
     private let keys: any SpeechCaptureKeys
@@ -88,10 +89,12 @@ public actor SpeechCaptureArchive {
         let p = try JSONDecoder().decode(Preparation.self, from: preparation)
         let dates = ISO8601DateFormatter(); dates.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let expiry = dates.date(from: p.upload_until) ?? ISO8601DateFormatter().date(from: p.upload_until)
-        guard p.protocol_version == 1, p.profile == "speech_capture_pcm_v1", p.sample_rate == 48000, p.channels == 1,
+        guard [1, 2].contains(p.protocol_version), p.profile == "speech_capture_pcm_v\(p.protocol_version)", p.sample_rate == 48000, p.channels == p.protocol_version,
               p.format == "pcm_s16le", p.cipher == "AES-256-GCM", p.maximum_chunk_samples == 48000,
               let expiry, expiry > Date() else { throw SpeechCaptureFailure.invalidInput }
-        let state = try policy(["op": "create", "captureId": p.capture_id, "recordingId": p.recording_id, "retention": "original_audio_and_text"])
+        var command: [String: Any] = ["op": "create", "captureId": p.capture_id, "recordingId": p.recording_id, "retention": "original_audio_and_text", "profileVersion": p.protocol_version]
+        if let channels = p.channel_layout { command["channels"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(channels)) }
+        let state = try policy(command)
         let store = try SpeechCaptureStorage(scope: scope, captureId: p.capture_id, directory: directory)
         do {
             guard try store.journal() == nil, try store.receipt() == nil else { throw SpeechCaptureFailure.busy }
@@ -149,9 +152,17 @@ public actor SpeechCaptureArchive {
     }
     /// Copies at most one second. Call from a bounded native capture queue; its
     /// success proves atomic ciphertext/journal durability, never publication.
-    public func append(firstSample: UInt64, pcm: Data) throws {
-        guard !pcm.isEmpty, pcm.count <= 96000, pcm.count.isMultiple(of: 2) else { throw SpeechCaptureFailure.invalidInput }
-        let value = try Self.object(Self.policy(["op": "plan", "state": Self.object(journal.state), "firstSample": firstSample, "samples": pcm.count / 2]))
+    public func append(firstSample: UInt64, pcm: Data, channels: [RecordingCaptureMapping]? = nil) throws {
+        let state = try Self.object(journal.state), frameBytes = state["protocolVersion"] as? Int == 2 ? 4 : 2
+        guard !pcm.isEmpty, pcm.count <= 48000 * frameBytes, pcm.count.isMultiple(of: frameBytes) else { throw SpeechCaptureFailure.invalidInput }
+        var command: [String: Any] = ["op": "plan", "state": state, "firstSample": firstSample, "samples": pcm.count / frameBytes]
+        if let channels { command["channels"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(channels)) }
+        let value = try Self.object(Self.policy(command))
+        for (channel, map) in (channels ?? []).enumerated() { for gap in map.gaps {
+            for sample in Int(gap.offset)..<Int(gap.offset + gap.samples) {
+                guard pcm[pcm.startIndex + sample * 4 + channel * 2] == 0, pcm[pcm.startIndex + sample * 4 + channel * 2 + 1] == 0 else { throw SpeechCaptureFailure.invalidInput }
+            }
+        } }
         guard let header = value["header"] as? [String: Any], let sequence = header["sequence"] as? Int, let aad = value["aad"] as? String else { throw SpeechCaptureFailure.invalidInput }
         let authenticated = try Self.decode(aad), packet = try Self.seal(pcm, key: active(), aad: authenticated)
         let sha256 = try Self.digest(authenticated + Self.decode(packet.nonce) + Self.decode(packet.ciphertext))

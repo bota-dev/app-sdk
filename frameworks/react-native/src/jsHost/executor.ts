@@ -9,14 +9,16 @@ export class BotaJsHostError extends Error {
   readonly operation: string;
   readonly retryable: boolean;
   readonly protocolStatus?: number;
+  readonly reason?: string;
 
-  constructor(code: string, operation: string, retryable = false, protocolStatus?: number) {
+  constructor(code: string, operation: string, retryable = false, protocolStatus?: number, reason?: string) {
     super(`${operation}: ${code}`);
     this.name = 'BotaJsHostError';
     this.code = code;
     this.operation = operation;
     this.retryable = retryable;
     this.protocolStatus = protocolStatus;
+    this.reason = reason;
   }
 }
 
@@ -509,7 +511,8 @@ export class BotaJsHostExecutor {
         if (notification === 'Failed') {
           const error = record(this.core.codec('normalizeWorkflowError', { error: record(payload).error! }));
           owner.failure = new BotaJsHostError(string(error.code), string(error.operation), error.retryable === true,
-            typeof error.protocolStatus === 'number' ? error.protocolStatus : undefined);
+            typeof error.protocolStatus === 'number' ? error.protocolStatus : undefined,
+            typeof error.reason === 'string' ? error.reason : undefined);
         }
         return;
       }

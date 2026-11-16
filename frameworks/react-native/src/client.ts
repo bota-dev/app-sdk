@@ -1,3 +1,7 @@
+import type { RegulatoryCapabilities, RegulatoryDelivery, RegulatoryReceipt } from './regulatory';
+import type { CountryConfigurationDelivery, CountryConfigurationResult } from './countryConfiguration';
+export type { CountryConfigurationDelivery, CountryConfigurationResult } from './countryConfiguration';
+export type { RegulatoryCapabilities, RegulatoryDelivery, RegulatoryReceipt } from './regulatory';
 import type { FindDeviceCapabilities, FindDeviceStatus, FindDeviceRequest } from './findDevice';
 import type { BotaRuntimeSpec } from './runtimeAdapter';
 import { Buffer } from 'buffer';
@@ -142,6 +146,11 @@ export type BotaDeprovisionResult = {
 };
 
 export type BotaDeviceSDKControlClient = {
+  applyCountryConfiguration(device: ConnectedDevice, delivery: CountryConfigurationDelivery): Promise<CountryConfigurationResult>;
+  readRegulatoryCapabilities(device: ConnectedDevice): Promise<RegulatoryCapabilities>;
+  readRegulatoryStatus(device: ConnectedDevice): Promise<{ ready: boolean }>;
+  readRegulatoryChallenge(device: ConnectedDevice): Promise<string>;
+  applyRegulatoryConfiguration(device: ConnectedDevice, document: RegulatoryDelivery): Promise<RegulatoryReceipt>;
   readFindChallenge(device: ConnectedDevice): Promise<string>;
   readFindBindingChallenge(device: ConnectedDevice): Promise<string>;
   confirmFindBinding(device: ConnectedDevice, confirmation: string): Promise<string>;
@@ -342,6 +351,7 @@ export type BotaDeviceSDKLogClient = {
 };
 
 export type BotaDeviceSDKWiFiClient = {
+  readProvisioningVersion(device: ConnectedDevice): Promise<2 | 3>;
   configure(
     device: ConnectedDevice,
     credentials: WiFiCredentials,
@@ -968,14 +978,11 @@ export const createBotaDeviceSDK = (
               nonce: request.nonce,
               devicePublicKey: request.devicePublicKey,
             });
-            const plaintext = typeof material.deviceToken === 'string'
-              && /^[\x21-\x7e]{1,255}$/.test(material.deviceToken)
-              && material.credentialEnvelope === undefined;
             const encrypted = material.deviceToken === ''
               && typeof material.credentialEnvelope === 'string'
               && material.credentialEnvelope.length > 0;
-            if (!plaintext && !encrypted) {
-              throw new Error('Exactly one valid provisioning credential is required');
+            if (!encrypted) {
+              throw new Error('An encrypted provisioning credential is required');
             }
             await module.resolveProvisioningMaterial(request.requestId, material);
           } catch (error) {
@@ -1065,6 +1072,21 @@ export const createBotaDeviceSDK = (
       await requireNativeModule().syncTime(toNativeConnectedDevice(device));
     },
 
+    async readRegulatoryCapabilities(_device) {
+      throw new BotaRuntimeCompatibilityError('native_operation_unavailable', 'readRegulatoryCapabilities');
+    },
+    async applyCountryConfiguration(device, delivery) {
+      return requireNativeModule('applyCountryConfiguration').applyCountryConfiguration(toNativeConnectedDevice(device), delivery);
+    },
+    async readRegulatoryStatus(_device) {
+      throw new BotaRuntimeCompatibilityError('native_operation_unavailable', 'readRegulatoryStatus');
+    },
+    async readRegulatoryChallenge(_device) {
+      throw new BotaRuntimeCompatibilityError('native_operation_unavailable', 'readRegulatoryChallenge');
+    },
+    async applyRegulatoryConfiguration(_device, _document) {
+      throw new BotaRuntimeCompatibilityError('native_operation_unavailable', 'applyRegulatoryConfiguration');
+    },
     async readFindChallenge(device) {
       return requireNativeModule('readFindChallenge').readFindChallenge(toNativeConnectedDevice(device));
     },
@@ -1588,6 +1610,11 @@ export const createBotaDeviceSDK = (
   };
 
   const wifi: BotaDeviceSDKWiFiClient = {
+    async readProvisioningVersion(device) {
+      const version = await requireNativeModule('readWiFiProvisioningVersion').readWiFiProvisioningVersion(toNativeConnectedDevice(device));
+      if (version !== 2 && version !== 3) throw new BotaRuntimeCompatibilityError('native_contract_unsupported', 'readWiFiProvisioningVersion');
+      return version;
+    },
     async configure(device, credentials, grant) {
       return mapWiFiConfigResult(
         await requireNativeModule('configureSecureWiFi').configureSecureWiFi(

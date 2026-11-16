@@ -72,12 +72,14 @@ interface QueuedControl {
 }
 
 const controls = [
+  'applyCountryConfiguration',
+  'readRegulatoryCapabilities', 'readRegulatoryStatus', 'readRegulatoryChallenge', 'applyRegulatoryConfiguration',
   'readStatus', 'isProvisioned', 'readPublicKey', 'readAuthNonce', 'setApiEndpoint',
   'deliverCertificate', 'deliverBackendPublicKey', 'writeGrant', 'syncTime',
   'requestStartRecording', 'requestStopRecording', 'readRecordingState',
   'readFindChallenge', 'readFindBindingChallenge', 'confirmFindBinding', 'readFindCapabilities', 'readFindStatus', 'requestFindDevice',
   'startRecordingStateUpdates', 'stopRecordingStateUpdates', 'configureSecureWiFi', 'configureWiFi', 'disconnectWiFi',
-  'readConnectionSettings', 'writeConnectionSettings', 'readWiFiStatus', 'scanWiFiNetworks',
+  'readConnectionSettings', 'writeConnectionSettings', 'readWiFiStatus', 'readWiFiProvisioningVersion', 'scanWiFiNetworks',
   'startStatusUpdates', 'stopStatusUpdates', 'startWiFiStatusUpdates', 'stopWiFiStatusUpdates',
   'startDeviceLogs', 'stopDeviceLogs',
   'readDiagnosticEvents', 'acknowledgeDiagnosticEvents',

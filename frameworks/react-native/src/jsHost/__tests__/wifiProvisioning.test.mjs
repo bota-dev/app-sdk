@@ -53,7 +53,11 @@ test('both directions depend on every operation-key byte and the complete grant'
 });
 
 const { JsDeviceControls } = loadSource('deviceControls.ts');
-function host(mode = 'success') {
+function host(t, mode = 'success', version = 2) {
+ const vector=version===2?v:JSON.parse(readFileSync(new URL('../../../../../protocol/wifi-config-v3.vector.json',import.meta.url),'utf8'));
+ const r=vector.response;
+ const beforeExpiry = Date.parse(r.expires_at) - 1000;
+ t.mock.method(Date, 'now', () => beforeExpiry);
  const core=createGeneratedJsCore(), meta=core.codec('protocolMetadata',{}), writes=[], listeners=new Set();
  const device={id:'peripheral',serialNumber:r.serial_number,mtu:185};
  let generation='1', removed=0;
@@ -63,7 +67,7 @@ function host(mode = 'success') {
   async read(address) {
    if(address.characteristicUuid===meta.CHAR_SERIAL_NUMBER)return Buffer.from(r.serial_number);
    if(address.characteristicUuid===meta.CHAR_AUTH_NONCE)return Buffer.from(mode==='nonce'?'01'.repeat(16):r.auth_nonce,'hex');
-   return mode==='legacy'?new Uint8Array():Uint8Array.from([0xb2,2,7,0,253,1,126,0]);
+   return mode==='legacy'?new Uint8Array():Uint8Array.from(version===2?[0xb2,2,7,0,253,1,126,0]:[0xb2,3,7,0,29,2,126,0]);
   },
   async subscribe(_address,callback) {listeners.add(callback);return {async remove(){removed++;listeners.delete(callback);}};},
   async write(address,value) {
@@ -71,7 +75,7 @@ function host(mode = 'success') {
    if(mode==='reconnect')generation='2';
    if(mode==='cancel')controller.abort();
    if(address.characteristicUuid===meta.CHAR_WIFI_CREDENTIAL) {
-    const receipt=Buffer.from(v.successHex,'hex');if(mode==='tamper')receipt[28]^=1;
+    const receipt=Buffer.from(vector.successHex,'hex');if(mode==='tamper')receipt[28]^=1;
     // A connected notification containing an SSID cannot acknowledge setup.
     for(const callback of listeners){callback(Buffer.from([2,1,65]));callback(receipt);}
    }
@@ -81,8 +85,35 @@ function host(mode = 'success') {
   connection:()=>({device,generation}),gatt:(_ctx,body)=>body(),emit(){}});
  return {core,controls,context,device,writes,meta,removed:()=>removed};
 }
-test('actual generated core and BLE host send only ciphertext and wait for authenticated receipt',async()=>{
- const f=host();try {
+for (const [version, vector] of [[2, v], [3, JSON.parse(readFileSync(new URL('../../../../../protocol/wifi-config-v3.vector.json', import.meta.url), 'utf8'))]]) {
+ test(`v${version} grant fits GATT attribute values at an ATT MTU of 517`, async t => {
+  const f = host(t, 'success', version);
+  f.device.mtu = 517;
+  const response = vector.response;
+  const material = { ...grant, format: response.format, grantBlob: response.envelope_base64, keyBase64: response.key_base64 };
+  try {
+   const result = await f.controls.execute('configureSecureWiFi', [
+    f.device, create.Create.ssid, create.Create.password, JSON.stringify(material),
+   ], f.context);
+   assert.equal(result.success, true);
+   const frames = f.writes.slice(0, -1);
+   assert.equal(frames.length, 2);
+   assert.equal(frames[0].bytes.length, 512);
+   for (const frame of frames) {
+    assert.equal(frame.characteristic, f.meta.CHAR_WIFI_GRANT);
+    assert.ok(frame.bytes.length <= 512);
+   }
+   assert.equal(Buffer.concat(frames.map(frame => frame.bytes.subarray(6))).toString('base64'), response.envelope_base64);
+   assert.equal(f.writes.at(-1).bytes.toString('hex'), vector.credentialHex);
+  } finally {
+   await f.controls.close();
+   f.core.dispose();
+  }
+ });
+}
+
+test('actual generated core and BLE host send only ciphertext and wait for authenticated receipt',async t=>{
+ const f=host(t);try {
   const result=await f.controls.execute('configureSecureWiFi',[f.device,create.Create.ssid,create.Create.password,JSON.stringify(grant)],f.context);
   assert.equal(result.success,true);assert.equal(f.writes.length,4);assert.equal(f.removed(),1);
   assert.equal(f.writes.at(-1).bytes.toString('hex'),v.credentialHex);
@@ -93,11 +124,43 @@ test('actual generated core and BLE host send only ciphertext and wait for authe
   }
  } finally {await f.controls.close();f.core.dispose();}
 });
-for(const mode of ['legacy','nonce','reconnect','cancel','tamper'])test(`secure host refuses ${mode} without plaintext fallback`,async()=>{
- const f=host(mode);try {
+for(const mode of ['legacy','nonce','reconnect','cancel','tamper'])test(`secure host refuses ${mode} without plaintext fallback`,async t=>{
+ const f=host(t,mode);try {
   await assert.rejects(f.controls.execute('configureSecureWiFi',[f.device,create.Create.ssid,create.Create.password,JSON.stringify(grant)],f.context));
   if(['legacy','nonce'].includes(mode))assert.equal(f.writes.length,0);
   if(['reconnect','cancel'].includes(mode))assert.equal(f.writes.length,1);
   if(mode==='tamper')assert.equal(f.writes.length,4);
+ } finally {await f.controls.close();f.core.dispose();}
+});
+
+test('generated runtime binds the v3 grant and refuses mismatched response versions',()=>{
+ const v3=JSON.parse(readFileSync(new URL('../../../../../protocol/wifi-config-v3.vector.json',import.meta.url),'utf8'));
+ const response=v3.response;
+ const material={format:response.format,grantBlob:response.envelope_base64,keyBase64:response.key_base64,
+  requestId:response.request_id,authNonce:response.auth_nonce,action:response.action,serialNumber:response.serial_number,
+  bindingGeneration:response.binding_generation,expiresAt:response.expires_at};
+ const core=createGeneratedJsCore();try {
+  assert.equal(core.codec('wifiProvisioning',{Capability:{bytes:[0xb2,3,7,0,29,2,126,0]}}),3);
+  const input={...create.Create,grant:material};
+  const prepared=core.codec('wifiProvisioning',{Create:input});
+  assert.equal(prepared.chunks.length,4);
+  assert.equal(Buffer.from(prepared.credentials).toString('hex'),v3.credentialHex);
+  assert.equal(core.codec('wifiProvisioning',{Result:{id:prepared.id,bytes:[...Buffer.from(v3.successHex,'hex')]}}).success,true);
+  assert.throws(()=>core.codec('wifiProvisioning',{Create:{...input,grant:{...material,format:'bota-wifi-config-v2'}}}));
+ } finally {core.dispose();}
+});
+
+test('v3 capability selects v3 on the real generated host and refuses a v2 response',async t=>{
+ const v3=JSON.parse(readFileSync(new URL('../../../../../protocol/wifi-config-v3.vector.json',import.meta.url),'utf8'));
+ const r3=v3.response;
+ const material={...grant,format:r3.format,grantBlob:r3.envelope_base64,keyBase64:r3.key_base64};
+ const f=host(t,'success',3);try {
+  assert.equal(await f.controls.execute('readWiFiProvisioningVersion',[f.device],f.context),3);
+  await assert.rejects(f.controls.execute('configureSecureWiFi',[f.device,'Audit-Network','Audit-Only-123',JSON.stringify(grant)],f.context));
+  assert.equal(f.writes.length,0);
+  const result=await f.controls.execute('configureSecureWiFi',[f.device,'Audit-Network','Audit-Only-123',JSON.stringify(material)],f.context);
+  assert.equal(result.success,true);assert.equal(f.writes.length,5);
+  assert.equal(f.writes.at(-1).bytes.toString('hex'),v3.credentialHex);
+  assert.equal(Buffer.concat(f.writes.slice(0,4).map(w=>w.bytes.subarray(6))).toString('base64'),r3.envelope_base64);
  } finally {await f.controls.close();f.core.dispose();}
 });

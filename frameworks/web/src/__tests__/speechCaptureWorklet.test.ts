@@ -3,7 +3,7 @@ import test from 'node:test'
 
 test('one quantized sample stream feeds RTC and bounded archival, preserving dropped positions', async () => {
   const messages: { type: string; firstSample?: number; bytes?: ArrayBuffer; samples?: number }[] = []
-  let Processor: new () => { port: { onmessage: (event: { data: unknown }) => void }; process(inputs: Float32Array[][], outputs: Float32Array[][]): boolean }
+  let Processor: new (options?: { processorOptions: { directFrames: boolean } }) => { port: { onmessage: (event: { data: unknown }) => void }; process(inputs: Float32Array[][], outputs: Float32Array[][]): boolean }
   Object.assign(globalThis, { sampleRate: 48000, AudioWorkletProcessor: class {
     port = { onmessage: () => {}, postMessage: (value: typeof messages[number]) => messages.push(value) }
   }, registerProcessor: (_name: string, constructor: typeof Processor) => { Processor = constructor } })
@@ -22,4 +22,15 @@ test('one quantized sample stream feeds RTC and bounded archival, preserving dro
   assert.deepEqual(messages.at(-1), { type: 'ended', samples: 48000 * 7 })
   assert.equal(processor.process([[input]], [[output]]), false)
   assert.ok(output.every(value => value === 0))
+  messages.length = 0
+  const direct = new Processor!({ processorOptions: { directFrames: true } })
+  for (let sample = 0; sample < 48000; sample += 128) direct.process([[input]], [[output]])
+  const live = messages.filter(value => value.type === 'live'), archive = messages.filter(value => value.type === 'chunk')
+  assert.equal(live.length, 10, 'a stalled live branch has only 200 ms of credits')
+  assert.equal(archive.length, 1, 'live backpressure preserves the independently encrypted original branch')
+  const originalBytes = new Uint8Array(archive[0]!.bytes!)
+  for (let index = 0; index < live.length; index++) {
+    assert.equal(live[index]!.firstSample, index * 960)
+    assert.deepEqual(new Uint8Array(live[index]!.bytes!), originalBytes.subarray(index * 1920, (index + 1) * 1920))
+  }
 })

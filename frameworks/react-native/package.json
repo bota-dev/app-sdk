@@ -35,6 +35,11 @@
       "types": "./lib/typescript/speechLiveKit.d.ts",
       "react-native": "./src/speechLiveKit.ts",
       "default": "./lib/commonjs/speechLiveKit.js"
+    },
+    "./speech/recording": {
+      "types": "./lib/typescript/recordingSpeech.d.ts",
+      "react-native": "./src/recordingSpeech.ts",
+      "default": "./lib/commonjs/recordingSpeech.js"
     }
   },
   "files": [
@@ -129,5 +134,13 @@
   "dependencies": {
     "buffer": "6.0.3",
     "eventemitter3": "5.0.1"
+  },
+  "overrides": {
+    "glob@13.0.6": {
+      "minimatch": {
+        ".": "11.0.1",
+        "@isaacs/nonrecursive-glob-match": "1.0.1"
+      }
+    }
   }
 }

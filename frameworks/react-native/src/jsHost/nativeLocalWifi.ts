@@ -2,6 +2,7 @@ import { Buffer } from 'buffer';
 import type { JsHostContext } from './contracts';
 import type { JsLocalWifiPort, JsLocalWifiReader } from './localWifi';
 import { BotaJsHostError } from './executor';
+import { encodeBase64Url } from './base64Url';
 
 declare const performance: { now(): number };
 
@@ -64,7 +65,7 @@ export function createNativeLocalWifiPort(
       const ssid = material.ssid, password = Buffer.from(material.password).toString('ascii');
       const address = { ipv4: material.ipv4.join('.'), port: material.port,
         spkiHex: Buffer.from(material.tlsSpkiSha256).toString('hex'),
-        bearer: Buffer.from(material.downloadToken).toString('base64url') };
+        bearer: encodeBase64Url(material.downloadToken) };
       await os.preflight(); check(context);
       await options.assertOwner(captured.peripheralId, context); check(context);
       const handle = await os.createLease();

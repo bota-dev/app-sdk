@@ -91,7 +91,7 @@ internal class SpeechCaptureStorage(scope: String, captureId: String, directory:
             } catch (error: Throwable) { database.close(); throw error }
         } catch (error: Throwable) { lock.release(); file.close(); throw error }
     }
-    private fun bytes(sql: String, values: Array<String>? = null, maximum: Int = 140000): ByteArray? =
+    private fun bytes(sql: String, values: Array<String>? = null, maximum: Int = 270000): ByteArray? =
         database.rawQuery(sql, values).use { cursor ->
             if (!cursor.moveToFirst() || cursor.isNull(0)) null else cursor.getBlob(0).also {
                 if (it.isEmpty() || it.size > maximum) throw SpeechCaptureException(SpeechCaptureError.INVALID_INPUT)

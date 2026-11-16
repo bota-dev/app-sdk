@@ -118,7 +118,7 @@ final class SpeechCaptureStorage: @unchecked Sendable {
             return sqlite3_column_int64(statement, 0)
         }
     }
-    private func bytes(_ sql: String, _ values: [Value] = [], maximum: Int = 140000) throws -> Data? {
+    private func bytes(_ sql: String, _ values: [Value] = [], maximum: Int = 270000) throws -> Data? {
         try statement(sql, values) { statement in
             let status = sqlite3_step(statement)
             if status == SQLITE_DONE { return nil }

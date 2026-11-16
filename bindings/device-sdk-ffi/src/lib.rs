@@ -7,6 +7,7 @@ mod protocol;
 mod speech;
 
 pub use speech::{
+    bota_device_sdk_v1_recording_speech,
     BotaDeviceSdkSpeechOutputV1, BotaDeviceSdkSpeechV1, bota_device_sdk_v1_speech_capture,
     bota_device_sdk_v1_speech_free, bota_device_sdk_v1_speech_new,
     bota_device_sdk_v1_speech_output_free, bota_device_sdk_v1_speech_output_view,

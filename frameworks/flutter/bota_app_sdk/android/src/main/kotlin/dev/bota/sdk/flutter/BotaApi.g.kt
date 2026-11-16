@@ -4050,6 +4050,128 @@ data class BotaSpeechEventMessage (
     return "BotaSpeechEventMessage(connectionId=$connectionId, state=$state, caption=$caption, errorCode=$errorCode)"
   }
 }
+
+/**
+ * Display metadata only. Native owners retain capture, audio, grants and sockets.
+ *
+ * Generated class from Pigeon that represents data sent in messages.
+ */
+data class BotaRecordingSpeechCaptionMessage (
+  val unitId: String,
+  val sourceId: String,
+  val sourceEpoch: Long,
+  val revision: Long,
+  val startSample: Long,
+  val endSample: Long,
+  val sourceLanguage: String,
+  val targetLanguage: String? = null,
+  val text: String,
+  val isFinal: Boolean
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): BotaRecordingSpeechCaptionMessage {
+      val unitId = pigeonVar_list[0] as String
+      val sourceId = pigeonVar_list[1] as String
+      val sourceEpoch = pigeonVar_list[2] as Long
+      val revision = pigeonVar_list[3] as Long
+      val startSample = pigeonVar_list[4] as Long
+      val endSample = pigeonVar_list[5] as Long
+      val sourceLanguage = pigeonVar_list[6] as String
+      val targetLanguage = pigeonVar_list[7] as String?
+      val text = pigeonVar_list[8] as String
+      val isFinal = pigeonVar_list[9] as Boolean
+      return BotaRecordingSpeechCaptionMessage(unitId, sourceId, sourceEpoch, revision, startSample, endSample, sourceLanguage, targetLanguage, text, isFinal)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      unitId,
+      sourceId,
+      sourceEpoch,
+      revision,
+      startSample,
+      endSample,
+      sourceLanguage,
+      targetLanguage,
+      text,
+      isFinal,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as BotaRecordingSpeechCaptionMessage
+    return BotaApiPigeonUtils.deepEquals(this.unitId, other.unitId) && BotaApiPigeonUtils.deepEquals(this.sourceId, other.sourceId) && BotaApiPigeonUtils.deepEquals(this.sourceEpoch, other.sourceEpoch) && BotaApiPigeonUtils.deepEquals(this.revision, other.revision) && BotaApiPigeonUtils.deepEquals(this.startSample, other.startSample) && BotaApiPigeonUtils.deepEquals(this.endSample, other.endSample) && BotaApiPigeonUtils.deepEquals(this.sourceLanguage, other.sourceLanguage) && BotaApiPigeonUtils.deepEquals(this.targetLanguage, other.targetLanguage) && BotaApiPigeonUtils.deepEquals(this.text, other.text) && BotaApiPigeonUtils.deepEquals(this.isFinal, other.isFinal)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + BotaApiPigeonUtils.deepHash(this.unitId)
+    result = 31 * result + BotaApiPigeonUtils.deepHash(this.sourceId)
+    result = 31 * result + BotaApiPigeonUtils.deepHash(this.sourceEpoch)
+    result = 31 * result + BotaApiPigeonUtils.deepHash(this.revision)
+    result = 31 * result + BotaApiPigeonUtils.deepHash(this.startSample)
+    result = 31 * result + BotaApiPigeonUtils.deepHash(this.endSample)
+    result = 31 * result + BotaApiPigeonUtils.deepHash(this.sourceLanguage)
+    result = 31 * result + BotaApiPigeonUtils.deepHash(this.targetLanguage)
+    result = 31 * result + BotaApiPigeonUtils.deepHash(this.text)
+    result = 31 * result + BotaApiPigeonUtils.deepHash(this.isFinal)
+    return result
+  }
+  override fun toString(): String {
+    return "BotaRecordingSpeechCaptionMessage(unitId=$unitId, sourceId=$sourceId, sourceEpoch=$sourceEpoch, revision=$revision, startSample=$startSample, endSample=$endSample, sourceLanguage=$sourceLanguage, targetLanguage=$targetLanguage, text=$text, isFinal=$isFinal)"
+  }
+}
+
+/** Generated class from Pigeon that represents data sent in messages. */
+data class BotaRecordingSpeechEventMessage (
+  val connectionId: String,
+  val caption: BotaRecordingSpeechCaptionMessage? = null,
+  val status: String? = null
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): BotaRecordingSpeechEventMessage {
+      val connectionId = pigeonVar_list[0] as String
+      val caption = pigeonVar_list[1] as BotaRecordingSpeechCaptionMessage?
+      val status = pigeonVar_list[2] as String?
+      return BotaRecordingSpeechEventMessage(connectionId, caption, status)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      connectionId,
+      caption,
+      status,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as BotaRecordingSpeechEventMessage
+    return BotaApiPigeonUtils.deepEquals(this.connectionId, other.connectionId) && BotaApiPigeonUtils.deepEquals(this.caption, other.caption) && BotaApiPigeonUtils.deepEquals(this.status, other.status)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + BotaApiPigeonUtils.deepHash(this.connectionId)
+    result = 31 * result + BotaApiPigeonUtils.deepHash(this.caption)
+    result = 31 * result + BotaApiPigeonUtils.deepHash(this.status)
+    return result
+  }
+  override fun toString(): String {
+    return "BotaRecordingSpeechEventMessage(connectionId=$connectionId, caption=$caption, status=$status)"
+  }
+}
 private open class BotaApiPigeonCodec : StandardMessageCodec() {
   override fun readValueOfType(type: Byte, buffer: ByteBuffer): Any? {
     return when (type) {
@@ -4473,6 +4595,16 @@ private open class BotaApiPigeonCodec : StandardMessageCodec() {
           BotaSpeechEventMessage.fromList(it)
         }
       }
+      213.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          BotaRecordingSpeechCaptionMessage.fromList(it)
+        }
+      }
+      214.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          BotaRecordingSpeechEventMessage.fromList(it)
+        }
+      }
       else -> super.readValueOfType(type, buffer)
     }
   }
@@ -4812,6 +4944,14 @@ private open class BotaApiPigeonCodec : StandardMessageCodec() {
       }
       is BotaSpeechEventMessage -> {
         stream.write(212)
+        writeValue(stream, value.toList())
+      }
+      is BotaRecordingSpeechCaptionMessage -> {
+        stream.write(213)
+        writeValue(stream, value.toList())
+      }
+      is BotaRecordingSpeechEventMessage -> {
+        stream.write(214)
         writeValue(stream, value.toList())
       }
       else -> super.writeValue(stream, value)
@@ -5890,6 +6030,173 @@ class BotaSpeechFlutterApi(private val binaryMessenger: BinaryMessenger, private
 {
     val separatedMessageChannelSuffix = if (messageChannelSuffix.isNotEmpty()) ".$messageChannelSuffix" else ""
     val channelName = "dev.flutter.pigeon.bota_flutter_sdk.BotaSpeechFlutterApi.onEvent$separatedMessageChannelSuffix"
+    val channel = BasicMessageChannel<Any?>(binaryMessenger, channelName, codec)
+    channel.send(listOf(eventArg)) {
+      if (it is List<*>) {
+        if (it.size > 1) {
+          callback(Result.failure(FlutterError(it[0] as String, it[1] as String, it[2] as String?)))
+        } else {
+          callback(Result.success(Unit))
+        }
+      } else {
+        callback(Result.failure(BotaApiPigeonUtils.createConnectionError(channelName)))
+      }
+    }
+  }
+}
+/** Generated interface from Pigeon that represents a handler of messages from Flutter. */
+interface BotaRecordingSpeechHostApi {
+  suspend fun start(connectionId: String, activityId: String)
+  suspend fun changeTarget(connectionId: String, language: String, requestId: String)
+  suspend fun qualifyHeadphones(connectionId: String): Boolean
+  suspend fun finish(connectionId: String)
+  suspend fun close(connectionId: String)
+  suspend fun destroy()
+
+  companion object {
+    /** The codec used by BotaRecordingSpeechHostApi. */
+    val codec: MessageCodec<Any?> by lazy {
+      BotaApiPigeonCodec()
+    }
+    /** Sets up an instance of `BotaRecordingSpeechHostApi` to handle messages through the `binaryMessenger`. */
+    @JvmOverloads
+    fun setUp(binaryMessenger: BinaryMessenger, api: BotaRecordingSpeechHostApi?, messageChannelSuffix: String = "") {
+      val separatedMessageChannelSuffix = if (messageChannelSuffix.isNotEmpty()) ".$messageChannelSuffix" else ""
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.bota_flutter_sdk.BotaRecordingSpeechHostApi.start$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val connectionIdArg = args[0] as String
+            val activityIdArg = args[1] as String
+            CoroutineScope(Dispatchers.Main).launch {
+              val wrapped: List<Any?> = try {
+                api.start(connectionIdArg, activityIdArg)
+                listOf(null)
+              } catch (exception: Throwable) {
+                BotaApiPigeonUtils.wrapError(exception)
+              }
+              reply.reply(wrapped)
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.bota_flutter_sdk.BotaRecordingSpeechHostApi.changeTarget$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val connectionIdArg = args[0] as String
+            val languageArg = args[1] as String
+            val requestIdArg = args[2] as String
+            CoroutineScope(Dispatchers.Main).launch {
+              val wrapped: List<Any?> = try {
+                api.changeTarget(connectionIdArg, languageArg, requestIdArg)
+                listOf(null)
+              } catch (exception: Throwable) {
+                BotaApiPigeonUtils.wrapError(exception)
+              }
+              reply.reply(wrapped)
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.bota_flutter_sdk.BotaRecordingSpeechHostApi.qualifyHeadphones$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val connectionIdArg = args[0] as String
+            CoroutineScope(Dispatchers.Main).launch {
+              val wrapped: List<Any?> = try {
+                listOf(api.qualifyHeadphones(connectionIdArg))
+              } catch (exception: Throwable) {
+                BotaApiPigeonUtils.wrapError(exception)
+              }
+              reply.reply(wrapped)
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.bota_flutter_sdk.BotaRecordingSpeechHostApi.finish$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val connectionIdArg = args[0] as String
+            CoroutineScope(Dispatchers.Main).launch {
+              val wrapped: List<Any?> = try {
+                api.finish(connectionIdArg)
+                listOf(null)
+              } catch (exception: Throwable) {
+                BotaApiPigeonUtils.wrapError(exception)
+              }
+              reply.reply(wrapped)
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.bota_flutter_sdk.BotaRecordingSpeechHostApi.close$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val connectionIdArg = args[0] as String
+            CoroutineScope(Dispatchers.Main).launch {
+              val wrapped: List<Any?> = try {
+                api.close(connectionIdArg)
+                listOf(null)
+              } catch (exception: Throwable) {
+                BotaApiPigeonUtils.wrapError(exception)
+              }
+              reply.reply(wrapped)
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.bota_flutter_sdk.BotaRecordingSpeechHostApi.destroy$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            CoroutineScope(Dispatchers.Main).launch {
+              val wrapped: List<Any?> = try {
+                api.destroy()
+                listOf(null)
+              } catch (exception: Throwable) {
+                BotaApiPigeonUtils.wrapError(exception)
+              }
+              reply.reply(wrapped)
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+    }
+  }
+}
+/** Generated class from Pigeon that represents Flutter messages that can be called from Kotlin. */
+class BotaRecordingSpeechFlutterApi(private val binaryMessenger: BinaryMessenger, private val messageChannelSuffix: String = "") {
+  companion object {
+    /** The codec used by BotaRecordingSpeechFlutterApi. */
+    val codec: MessageCodec<Any?> by lazy {
+      BotaApiPigeonCodec()
+    }
+  }
+  fun onEvent(eventArg: BotaRecordingSpeechEventMessage, callback: (Result<Unit>) -> Unit)
+{
+    val separatedMessageChannelSuffix = if (messageChannelSuffix.isNotEmpty()) ".$messageChannelSuffix" else ""
+    val channelName = "dev.flutter.pigeon.bota_flutter_sdk.BotaRecordingSpeechFlutterApi.onEvent$separatedMessageChannelSuffix"
     val channel = BasicMessageChannel<Any?>(binaryMessenger, channelName, codec)
     channel.send(listOf(eventArg)) {
       if (it is List<*>) {

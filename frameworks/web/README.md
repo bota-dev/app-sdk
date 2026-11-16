@@ -927,3 +927,9 @@ Automated Chromium uses deterministic fake Bluetooth and storage boundaries;
 it is not physical-device evidence. Run the supervised matrix
 in [`docs/testing/web-physical-device.md`](../../docs/testing/web-physical-device.md)
 with one exact device and record the result in the matching release evidence.
+
+## Recording-owned realtime speech preview
+
+The current direct recording activity, microphone/archive ownership, native
+bridges and consuming examples are documented in the [integration guide](../../docs/parity/recording-speech.md).
+This source preview is unreleased and requires backend and platform qualification.

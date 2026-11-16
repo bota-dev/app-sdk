@@ -319,8 +319,8 @@ private final class SpeechDeliveryReply: @unchecked Sendable {
 /// returning a reply; late/duplicate replies cannot resume the waiter again.
 @MainActor
 enum SpeechFlutterDelivery {
-  static func send(_ event: BotaSpeechEventMessage,
-                   using send: @MainActor (BotaSpeechEventMessage, @escaping (Result<Void, PigeonError>) -> Void) -> Void) async throws {
+  static func send<Event>(_ event: Event,
+                   using send: @MainActor (Event, @escaping (Result<Void, PigeonError>) -> Void) -> Void) async throws {
     let reply = SpeechDeliveryReply()
     let deadline = Task {
       do { try await Task.sleep(nanoseconds: 5_000_000_000); reply.complete(.failure(.unavailable)) }

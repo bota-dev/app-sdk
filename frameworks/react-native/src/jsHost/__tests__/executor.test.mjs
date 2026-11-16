@@ -570,3 +570,13 @@ test('confirmed direct disconnect clears only its exact tracked device and destr
   await executor.destroy();
   assert.deepEqual(disconnected, ['exact-device']);
 });
+
+
+test('workflow terminal errors preserve the sanitized reason after joined cleanup', async () => {
+  const error = { code: 'integrity_failed', operation: 'transfer_recording', retryable: true, reason: 'sequence_gap' };
+  const f = fixture([read], () => ({ effects: [f.envelope({ Notify: { Failed: { error } } })],
+    status: { Failed: { error } } }));
+  const executor = new BotaJsHostExecutor(f.factory, f.ports);
+  try { await assert.rejects(executor.run({}, options), { code: 'integrity_failed', reason: 'sequence_gap', retryable: true }); }
+  finally { await executor.destroy(); }
+});

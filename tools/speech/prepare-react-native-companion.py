@@ -63,8 +63,9 @@ with (android / "build.gradle").open("a") as output:
 kotlin = android / "app/src/main/java/com/helloworld"
 replace(kotlin / "MainApplication.kt", 'PackageList(this).packages.apply {', 'PackageList(this).packages.apply {\n          add(SpeechLabPackage())')
 shutil.copyfile(app / "native/android/SpeechLabHost.kt", kotlin / "SpeechLabHost.kt")
+shutil.copyfile(app / "native/android/RecordingLabHost.kt", kotlin / "RecordingLabHost.kt")
 native = root / "platforms/android/speech-companion/src/main"
-for name in ["NativeLabTransport.kt", "LabHost.kt", "LabOriginal.kt", "ReactNativeLabOwner.kt"]:
+for name in ["NativeLabTransport.kt", "LabHost.kt", "LabOriginal.kt", "ReactNativeLabOwner.kt", "RecordingLabOwner.kt", "RecordingLabBridge.kt"]:
     shutil.copyfile(native / "kotlin/dev/bota/speech/companion" / name, kotlin / name)
 shutil.copytree(native / "res/xml", android / "app/src/main/res/xml", dirs_exist_ok=True)
 shutil.copyfile(native / "res/drawable/companion_icon.xml", android / "app/src/main/res/drawable/companion_icon.xml")
@@ -83,7 +84,7 @@ ios = app / "ios"
 runner = ios / "SpeechCompanion"
 for source in (app / "native/ios").iterdir():
     shutil.copyfile(source, runner / source.name)
-for name in ["LabTransport.swift", "LabHost.swift", "LabOriginal.swift", "ReactNativeLabOwner.swift"]:
+for name in ["LabTransport.swift", "LabHost.swift", "LabOriginal.swift", "ReactNativeLabOwner.swift", "RecordingLabOwner.swift", "RecordingLabBridge.swift"]:
     shutil.copyfile(root / "platforms/apple-speech-livekit/Examples/SpeechCompanion" / name, runner / name)
 speech = ios / "native/speech-livekit"
 shutil.copytree(root / "platforms/apple-speech-livekit/Sources", speech / "Sources", dirs_exist_ok=True)

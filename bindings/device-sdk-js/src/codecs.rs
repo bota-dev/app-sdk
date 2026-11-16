@@ -20,6 +20,7 @@ pub(crate) struct CodecState {
     speech: crate::speech::SpeechClients,
     wifi_provisioning: crate::wifi_provisioning::WifiProvisioningCodecs,
     local_wifi: crate::local_wifi::LocalWifiCodecs,
+    regulatory: crate::regulatory::RegulatoryCodecs,
     logs: BTreeMap<String, LogState>,
     diagnostics: BTreeMap<String, DeviceDiagnosticsDecoder>,
     hashers: BTreeMap<String, dto::WebIntegrityHasher>,
@@ -251,12 +252,22 @@ struct ReceiverEvent {
 impl CodecState {
     #[inline(never)]
     pub(crate) fn execute(&mut self, name: &str, value: Value) -> Result<Vec<u8>, DeviceSdkError> {
+        if name == "recordingSpeech" {
+            return bota_device_sdk_core::recording_speech::dispatch_json(&value.to_string())
+                .map(String::into_bytes);
+        }
         if name == "speechCapture" {
             return bota_device_sdk_core::speech::capture::dispatch_json(&value.to_string())
                 .map(String::into_bytes);
         }
         if name == "speechSession" {
             return self.speech.call(value);
+        }
+        if name == "prepareCountryConfiguration" {
+            return crate::country_config::prepare(value);
+        }
+        if name == "regulatory" {
+            return self.regulatory.call(value);
         }
         if name == "wifiProvisioning" {
             return self.wifi_provisioning.call(value);
@@ -299,6 +310,7 @@ impl CodecState {
             | "encodeWiFiScanCommand"
             | "decodeWiFiConfigResult"
             | "decodeWiFiStatus"
+            | "decodeWiFiStatusEvent"
             | "decodeWiFiScanUpdate"
             | "encodeTimeSync" => self.execute_control(name, value),
             "encodeApiEndpoint"
@@ -1133,6 +1145,12 @@ fn metadata() -> Value {
         CHAR_RECORDING_STATUS,
         CHAR_TIME_SYNC,
         CHAR_DEVICE_COMMAND,
+        SERVICE_BOTA_REGULATORY,
+        CHAR_REGULATORY_CAPABILITIES,
+        CHAR_REGULATORY_CHALLENGE,
+        CHAR_REGULATORY_CONFIG,
+        CHAR_REGULATORY_STATUS,
+        CHAR_REGULATORY_RECEIPT,
         SERVICE_BOTA_FIND,
         CHAR_FIND_CAPABILITIES,
         CHAR_FIND_CONTROL,
@@ -1197,6 +1215,31 @@ fn metadata() -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wifi_status_event_dispatch_preserves_connection_state_and_filters_receipts() {
+        let mut codecs = CodecState::default();
+        let status = object!({"bytes":[2,80,4,66,111,116,97]});
+        assert_eq!(
+            codecs
+                .execute("decodeWiFiStatusEvent", status.clone())
+                .unwrap(),
+            codecs.execute("decodeWiFiStatus", status).unwrap()
+        );
+        let mut receipt = vec![0; 29];
+        receipt[..2].copy_from_slice(&[0xb2, 2]);
+        assert_eq!(
+            codecs
+                .execute("decodeWiFiStatusEvent", object!({"bytes":receipt}))
+                .unwrap(),
+            b"null"
+        );
+        assert!(
+            codecs
+                .execute("decodeWiFiStatusEvent", object!({"bytes":[2,80,32,65]}))
+                .is_err()
+        );
+    }
 
     fn settings_request(model: &str, bound_model: Value) -> Value {
         let settings =

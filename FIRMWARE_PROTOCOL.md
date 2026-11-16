@@ -36,6 +36,7 @@ specification or proof that every firmware build or SDK package enables them.
 - [Direct-cloud Find revision 2](#direct-cloud-use-of-find-revision-2-unreleased)
 - [BLE advertising name](#ble-advertising-name)
 - [Device credential envelope](#unreleased-device-credential-envelope)
+- [Cloud-initiated enterprise WiFi](#cloud-initiated-enterprise-wifi-unreleased)
 
 ## Protocol Authority and Notation
 
@@ -126,8 +127,9 @@ compatibility field, not a URL or proof that firmware switched environment.
 
 **Encrypted delivery (unreleased candidate):** the existing bind request adds
 `credential_delivery: "hpke_v1"`; its response carries `credential_envelope`
-and omits `device_token`. The backend selects an independently enrolled `PK_D`;
-the observed BLE key only checks identity consistency. The App/SDK forwards the
+and omits `device_token`. The backend pins the explicit `PK_D` at first authorized
+bind using TOFU, or checks an existing pin. This does not attest factory identity;
+later key replacement is rejected. The App/SDK forwards the
 opaque envelope to `000A/0001` without decrypting it. RN uses
 `DeviceManager.provisionEnvelope` with canonical unpadded base64url; native,
 Web and Flutter provisioning material carries bytes. For encrypted delivery, supply the envelope and leave the raw-token slot empty. See [device token envelope v1](protocol/device-token-v1.md)
@@ -143,14 +145,14 @@ through this initial-bind path. Firmware verifies/decrypts, persists and reads
 back the token before reporting the existing result. Missing encrypted support or validation failure must never trigger a fallback
 to `DEVICE_TOKEN`.
 
-**Plaintext compatibility (unreleased):** server configuration
-`DEVICE_TOKEN_ENCRYPTION_ENABLED=false` is the default and returns raw
-`device_token` without trusted-key enrollment. SDK material uses a nonempty token
-and no envelope; `0003/0002` carries 1–255 printable ASCII bytes with the same
-ordered framing. It shares deferred persistence, read-back, paired/reset and
-connection fencing. Interleaved formats cannot combine fragments. Compatible
-clients accept either server response; only the explicit server policy selects
-plaintext, never a failed encrypted operation.
+**Encrypted-only policy:** new binding and refresh return only
+`credential_envelope`. The retired `DEVICE_TOKEN_ENCRYPTION_ENABLED` variable
+cannot enable plaintext, including when false or absent. SDK material requires
+an envelope and an empty raw-token slot; raw or mixed material is rejected before
+credential writes. The legacy `0003/0002` handle is reserved, not a supported new
+token installer. Firmware must reject plaintext installation without changing the
+existing token. Completed historical bindings retain their valid installed token;
+after decryption, firmware still uses the original token for HTTPS Bearer auth.
 
 Encrypted delivery retains bind → provision → confirm/abort and existing result values;
 no additional user action or application request round trip is introduced.
@@ -162,9 +164,11 @@ results are 0 success, 1 invalid token, 2 storage error, 3 chunk error and
 Time sync on `0002/0004` is eight bytes: Unix seconds u32LE, milliseconds
 within the second u16LE, then timezone offset in minutes i16LE.
 
-WiFi configuration uses mandatory [secure personal WiFi v2](protocol/wifi-config-v2.md)
+WiFi configuration uses versioned [secure personal WiFi v2/v3](protocol/wifi-config-v2.md)
 on `0006/0001` (capability and signed HPKE grant), `0006/0002` (one-use AEAD
 credentials), and `0006/0003` (authenticated result and ordinary status).
+V3 verifies the active installed credential commitment independently of token
+delivery format; v2 retains its signed token-envelope prerequisite.
 The shared legacy plaintext credential encoder is disabled. Disconnect also
 requires fresh signed authority; there is no plaintext fallback. Success
 acknowledges encrypted persistence and connection scheduling, not DHCP.
@@ -947,6 +951,42 @@ never a binding identifier or authorization proof.
 This is an unreleased source contract. See the
 [cross-repository checklist and evidence](docs/parity/ble-advertising-name.md)
 for generated-runtime, firmware and physical qualification status.
+
+## Project country synchronization (unreleased source)
+
+The [external firmware design](docs/firmware/regulatory-country-integration.md)
+replaces the earlier integration direction with versioned Project country settings,
+one readable server-signed document, existing SIGNED_BLOB_V2 and heartbeat delivery.
+It preserves two-stage binding and encrypted BOTATOK1. Confirm selects the latest
+Project country; later changes synchronize without rebinding. The target has no
+new BLE service, country nonce, device-signed ACK or permanent country lock.
+
+Read the [country-config v1 wire contract](protocol/country-config-v1.md) and
+[shared vector](protocol/vectors/country-config-v1.json). Rust validates the fixed
+264-byte package; the generated-JS control facade sends kind 8 through existing
+transport and requires ATT MTU >=67 plus an exact firmware-version match.
+The old B07A000C facade rejects before I/O; its UUIDs remain reserved and old
+BOTAREG1/BOTARAK1 bytes are not reinterpreted. Publication, paired backend/App
+adoption and external BES qualification remain separate.
+New token installation stays encrypted-only; historical completed bindings are
+not forced to rebind. Country failure after confirm does not undo ownership.
+
+## Cloud-initiated enterprise WiFi (unreleased)
+
+The [managed WiFi v2 contract](protocol/managed-wifi-v2.md) defines direct-cloud
+configuration delivery without a firmware capability or nonce in the first
+heartbeat. Supporting firmware validates and persists the encrypted snapshot,
+then confirms durable storage even if WiFi cannot connect; unsupported firmware ignores the
+optional extension. Enterprise WiFi uses only v2; the retired v1 nonce path is
+not supported.
+
+After confirmation, ordinary heartbeats omit WiFi state and the cloud stops
+repeating the snapshot. Configuration changes or explicit journal-loss recovery
+restart delivery. This path is firmware-to-cloud HTTPS. It adds no SDK operation, GATT service or
+BLE relay of enterprise credentials, and does not change personal WiFi setup.
+Delivery, durable storage and successful connection are distinct outcomes.
+The external firmware team owns receiver integration and physical acceptance;
+this reference and its synthetic vector do not establish installed support.
 
 ## Unreleased device credential envelope
 

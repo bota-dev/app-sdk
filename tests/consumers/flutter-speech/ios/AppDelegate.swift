@@ -7,11 +7,13 @@ import BotaAppSDK
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
     private(set) var speechBridge: FlutterCompanionBridge?
+    private(set) var recordingBridge: RecordingFlutterHost?
     func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
         GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
         guard let plugin = engineBridge.pluginRegistry.valuePublished(byPlugin: "BotaFlutterSdkPlugin") as? BotaFlutterSdkPlugin,
               let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "SpeechCompanionHost") else { return }
         speechBridge = FlutterCompanionBridge(registrar: registrar, plugin: plugin)
+        recordingBridge = try? RecordingFlutterHost(registrar: registrar, plugin: plugin)
     }
 }
 

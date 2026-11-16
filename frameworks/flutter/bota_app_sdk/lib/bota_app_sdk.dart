@@ -1,4 +1,11 @@
 export 'src/client.dart' show BotaConfiguration, BotaDeviceClient;
+export 'src/speech/recording_client.dart'
+    show BotaRecordingSpeechClient, BotaRecordingSpeechSession;
+export 'src/speech/recording_models.dart'
+    show
+        BotaRecordingSpeechCaption,
+        BotaRecordingSpeechException,
+        BotaRecordingSpeechObserver;
 export 'src/speech/client.dart' show BotaSpeechClient, BotaSpeechSession;
 export 'src/speech/models.dart'
     show

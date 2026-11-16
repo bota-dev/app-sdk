@@ -123,14 +123,14 @@ internal class LabOriginal private constructor(private val context: Context, pri
         if (closed || view.finished || microphone != null || starting != null || !expiry.isAfter(Instant.now())) throw LabFailure()
         input.setMuted(false)
         val task = scope.async(start = CoroutineStart.LAZY) {
-            SpeechMicrophoneCapture.start(context, archive, expiry, { input.offer(ByteBuffer.wrap(it)) }) { reason ->
+            SpeechMicrophoneCapture.start(context, archive, expiry, { input.offer(ByteBuffer.wrap(it)) }, ended = { reason ->
                 scope.launch {
                     view = view.copy(capturing = false)
                     try { archive.finish() } catch (error: Exception) { failure(error) }
                     view = view.copy(finished = true)
                     if (!closed) show(if (reason == SpeechCaptureEnd.INTERRUPTED) "Capture was interrupted; its unknown tail is preserved." else "Microphone stopped. Original upload can continue.")
                 }
-            }
+            })
         }
         starting = task; task.start()
         try {
@@ -218,7 +218,7 @@ internal class LabOriginal private constructor(private val context: Context, pri
 
 /** The companion reserves communication audio explicitly; reusable SDK capture
  * never changes a host application's audio focus or global mode. */
-private class OriginalAudioRoute(context: Context, lost: () -> Unit) {
+internal class OriginalAudioRoute(context: Context, lost: () -> Unit) {
     private val manager = context.getSystemService(AudioManager::class.java) ?: throw LabFailure()
     private val prior = manager.mode
     private val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)

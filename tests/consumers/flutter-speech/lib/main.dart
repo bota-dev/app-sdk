@@ -2,10 +2,11 @@ import 'dart:async';
 import 'package:bota_app_sdk/bota_app_sdk.dart';
 import 'package:flutter/material.dart';
 import 'controller.dart';
+import 'recording.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const SpeechCompanion());
+  runApp(const RecordingCompanion());
 }
 
 class SpeechCompanion extends StatelessWidget {

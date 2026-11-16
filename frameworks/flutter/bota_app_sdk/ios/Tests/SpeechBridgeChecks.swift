@@ -35,6 +35,46 @@ final class SpeechBridgeChecks {
   private let id = "0123456789abcdef0123456789abcdef"
   private let nextID = "abcdef0123456789abcdef0123456789"
 
+  func testDirectCloseDuringAdmissionJoinsTheEventuallyCreatedOwner() async throws {
+    let port = DirectBridgePort(), admitted = BridgeGate(), release = BridgeGate(), closed = BridgeGate()
+    var events: [BotaRecordingSpeechEventMessage] = []
+    let adapter = BotaAppleRecordingSpeechAdapter(emit: { events.append($0) })
+    try adapter.setFactory { _, _, status in
+      admitted.open(); try await release.wait(); status("interrupted"); return port
+    }
+    let starting = Task { try await adapter.start(connectionId: id, activityId: "activity") }
+    try await admitted.wait()
+    let closing = Task { try await adapter.close(connectionId: id); closed.open() }
+    for _ in 0..<10 { await Task.yield() }
+    try check(!closed.isOpen, "Close abandoned native admission")
+    release.open()
+    do { try await starting.value; throw BridgeCheckFailure(message: "Retired activity started") }
+    catch let error as PigeonError { try check(error.code == "closed", "Wrong retired error") }
+    try await closing.value
+    try check(port.closes == 1 && events.isEmpty, "Late native owner or callback escaped")
+    try await adapter.destroy()
+  }
+  func testDirectCaptionsPreserveTheirTargetAndControlsRemainNative() async throws {
+    let port = DirectBridgePort(), delivered = BridgeGate()
+    var sink: (@Sendable (Data) -> Void)?
+    var events: [BotaRecordingSpeechEventMessage] = []
+    let adapter = BotaAppleRecordingSpeechAdapter(emit: { events.append($0); delivered.open() })
+    try adapter.setFactory { _, caption, _ in sink = caption; return port }
+    try await adapter.start(connectionId: id, activityId: "activity")
+    try await adapter.changeTarget(connectionId: id, language: "ja", requestId: "change")
+    sink?(Data(#"{"caption":{"unitId":"unit","sourceId":"source","sourceEpoch":1,"revision":1,"startSample":0,"endSample":480,"sourceLanguage":"en","targetLanguage":"de","text":"Earlier target"},"final":true}"#.utf8))
+    try await delivered.wait()
+    try check(events.first?.caption?.targetLanguage == "de" && events.first?.caption?.revision == 1, "Caption was relabeled")
+    let qualified = try await adapter.qualifyHeadphones(connectionId: id)
+    try check(qualified, "Qualification result was lost")
+    try await adapter.finish(connectionId: id)
+    try check(port.calls == ["target:ja:change", "headphones", "finish"], "Direct controls changed")
+    try await adapter.close(connectionId: id)
+    sink?(Data())
+    try await adapter.destroy()
+    try check(events.count == 1 && port.closes == 1, "Retired event escaped")
+  }
+
   func testCloseDuringReadyJoinsAndRetiresCallbacks() async throws {
     let port = try BridgeTestSession(readyNow: false, closeNow: false)
     var events: [BotaSpeechEventMessage] = []
@@ -196,4 +236,15 @@ private final class BridgeTestSession: FlutterSpeechSession {
     closeCalls += 1; closeEntered.open(); try await closeGate.wait(); closeReturned.open()
     if failClose { throw BridgeCheckFailure(message: "PRIVATE_TOKEN") }
   }
+}
+
+private final class DirectBridgePort: RecordingSpeechConnection, @unchecked Sendable {
+  private let lock = NSLock()
+  private var closeCount = 0, controls: [String] = []
+  var closes: Int { lock.withLock { closeCount } }
+  var calls: [String] { lock.withLock { controls } }
+  func changeTarget(language: String, requestId: String) async throws { lock.withLock { controls.append("target:\(language):\(requestId)") } }
+  func qualifyHeadphones() async throws -> Bool { lock.withLock { controls.append("headphones") }; return true }
+  func finish() async throws { lock.withLock { controls.append("finish") } }
+  func close() async throws { lock.withLock { closeCount += 1 } }
 }

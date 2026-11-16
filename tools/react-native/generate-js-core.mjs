@@ -23,6 +23,8 @@ const inputs = [
   join(root, 'Cargo.toml'), join(root, 'Cargo.lock'), join(root, 'rust-toolchain.toml'), fileURLToPath(import.meta.url),
   join(root, 'package-lock.json'),
   join(root, 'protocol/manifest/speech-capture-v1.json'),
+  join(root, 'protocol/manifest/speech-capture-v2.json'),
+  join(root, 'protocol/manifest/recording-speech-v1.json'),
   join(root, 'tools/react-native/preserve-js-function-boundaries.mjs'),
 ].sort((a, b) => relative(root, a).replaceAll('\\', '/').localeCompare(relative(root, b).replaceAll('\\', '/'), 'en'));
 const hash = createHash('sha256');

@@ -38,6 +38,25 @@ fn invalid() -> DeviceSdkError {
 
 #[unsafe(no_mangle)]
 /// # Safety
+/// Input is readable bounded UTF-8 metadata; output slots are writable, distinct
+/// and empty. PCM is never accepted. Free the owned output exactly once.
+pub unsafe extern "C" fn bota_device_sdk_v1_recording_speech(
+    command: BotaDeviceSdkSliceV1,
+    out_json: *mut *mut BotaDeviceSdkSpeechOutputV1,
+    out_error: *mut *mut BotaDeviceSdkErrorV1,
+) -> BotaDeviceSdkStatusV1 {
+    // The existing panic-contained boundary owns and zeroizes the JSON result.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
+    unsafe {
+        result(out_json, out_error, || {
+            let json = bota_device_sdk_core::recording_speech::dispatch_json(text(command, 32768)?)?;
+            Ok(BotaDeviceSdkSpeechOutputV1 { json: json.into_bytes() })
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+/// # Safety
 /// Input must be readable for this call. Output slots must be writable, distinct
 /// and empty. Only bounded capture metadata is accepted; free the output once.
 pub unsafe extern "C" fn bota_device_sdk_v1_speech_capture(

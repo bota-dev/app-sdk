@@ -34,10 +34,12 @@ class FlutterCompanionActivity : FlutterActivity() {
     private var codeField: EditText? = null
     private var preparing: MethodChannel.Result? = null
     private var permission: Pair<UUID, MethodChannel.Result>? = null
+    private var recording: RecordingFlutterHost? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         owner.bindEngine(engineId)
+        recording = RecordingFlutterHost(this, checkNotNull(flutterEngine.plugins.get(BotaFlutterSdkPlugin::class.java) as? BotaFlutterSdkPlugin), flutterEngine.dartExecutor.binaryMessenger)
         checkNotNull(flutterEngine.plugins.get(BotaFlutterSdkPlugin::class.java) as? BotaFlutterSdkPlugin)
             .setSpeechConnectionFactory { id, observer ->
                 OriginalFlutterConnection(owner, engineId, owner.create(engineId, id, observer))
@@ -97,6 +99,7 @@ class FlutterCompanionActivity : FlutterActivity() {
     }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        recording?.permissionResult(requestCode)
         if (requestCode == 10) {
             val captured = permission; permission = null
             captured?.second?.success(owner.acceptsPermission(engineId, captured.first) && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
@@ -108,9 +111,11 @@ class FlutterCompanionActivity : FlutterActivity() {
         request?.error("closed", "The session was closed", null)
         val prompt = permission; permission = null; prompt?.second?.success(false)
     }
-    override fun onStop() { cancelPrompts(); owner.leave(engineId); super.onStop() }
+    override fun onResume() { super.onResume(); recording?.resume() }
+    override fun onStop() { recording?.stop(); cancelPrompts(); owner.leave(engineId); super.onStop() }
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         cancelPrompts(); owner.leave(engineId); channel?.setMethodCallHandler(null); channel = null
+        recording?.detach(); recording = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
     override fun onDestroy() { scope.cancel(); super.onDestroy() }

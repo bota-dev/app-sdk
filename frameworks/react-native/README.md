@@ -437,6 +437,16 @@ consumers use `runtime.createUploadRecoveryProvider` with Rust policy and scoped
 file/HTTP effects. Timers require a live JS runtime; encrypted-v2 receipt recovery
 is unchanged. See `docs/parity/upload-recovery.md` for evidence and limits.
 
+Failed pre-upload Bluetooth tasks can be retried through `syncRecording` using the
+same recording UUID, device, cloud recording ID and `recoveryScope` when
+`RECORDING_TRANSFER_RETRY_VERSION === 1`. The manager keeps the original sink and
+checkpoint, rejects conflicting/concurrent owners, and retains the cloud pointer.
+Complete local files continue through HTTP recovery without another BLE transfer.
+Missing/ambiguous identity or completion-pending evidence must not be discarded.
+`BotaJsHostError.reason` exposes only fixed transfer diagnostics (`sequence_gap`,
+`receive_buffer_overflow`, `checksum_mismatch`, `encrypted_chunk_too_short`,
+`encrypted_header_missing`); the protocol, ACK and durable completion gates are unchanged.
+
 ## Automatic retained uploads
 
 Configure `backgroundSyncEnabled: false` to disable automatic retained-upload
@@ -698,3 +708,15 @@ candidate. Native linkage, focus interruptions, Bluetooth changes, physical buff
 tails, AEC/double-talk and end-to-end latency still need acceptance. Authorized
 external input and host audio coordination now have source adapters, while actual
 vendor linkage, host integration and physical coexistence remain unqualified.
+## Saving edited audio
+
+The App owns editing and finished files. `createRecordingEditClient` from the
+root or `/runtime` entry coordinates saving, uploads and recovery through an
+authenticated host. See the [recording editing contract](../../docs/recording-editing.md).
+This helper requires the matching qualified package before consumer enablement.
+
+## Recording-owned realtime speech preview
+
+The current direct recording activity, microphone/archive ownership, native
+bridges and consuming examples are documented in the [integration guide](../../docs/parity/recording-speech.md).
+This source preview is unreleased and requires backend and platform qualification.

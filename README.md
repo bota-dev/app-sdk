@@ -37,6 +37,9 @@ update flows in React Native, Swift, Kotlin, Flutter, or a web application.
 [Documentation](#documentation) · [Examples](https://github.com/bota-dev/examples) ·
 [Changelog](CHANGELOG.md)
 
+For App-owned audio editing, splitting and ordered recording merges, see the unreleased
+[recording edit save helper](docs/recording-editing.md).
+
 ## Features
 
 - **Device connectivity:** discover nearby devices, connect, reconnect by serial
@@ -310,3 +313,9 @@ The generated-JS runtime candidate exposes `devices.getFindCapabilities`,
 dedicated BLE service and a customer-backend grant fetcher; public beta.18 and
 native-only adapters do not provide this capability. See
 [the integration and delivery review](docs/parity/ble-find-device.md).
+
+## Recording-owned realtime speech preview
+
+The current direct recording activity, microphone/archive ownership, native
+bridges and consuming examples are documented in the [integration guide](docs/parity/recording-speech.md).
+This source preview is unreleased and requires backend and platform qualification.

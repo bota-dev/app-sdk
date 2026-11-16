@@ -36,13 +36,14 @@ public class SpeechCapturePump private constructor(private val sink: SpeechCaptu
     private lateinit var writer: Deferred<Unit>
 
     public companion object {
-        public suspend fun start(archive: SpeechCaptureArchive, failed: () -> Unit = {}): SpeechCapturePump =
+        public suspend fun start(archive: SpeechCaptureArchive, failed: () -> Unit = {}): SpeechCapturePump = start(archive, UUID.randomUUID().toString(), failed)
+        public suspend fun start(archive: SpeechCaptureArchive, clockId: String, failed: () -> Unit = {}): SpeechCapturePump =
             start(object : SpeechCaptureSink {
                 override suspend fun begin(id: String) { archive.beginClock(id) }
                 override suspend fun append(firstSample: Long, bytes: ByteArray) { archive.append(firstSample, bytes) }
                 override suspend fun end(samples: Long) { archive.endClock(samples) }
                 override suspend fun interrupt() { archive.interruptClock() }
-            }, UUID.randomUUID().toString(), failed)
+            }, clockId, failed)
 
         internal suspend fun start(sink: SpeechCaptureSink, clock: String, failed: () -> Unit): SpeechCapturePump {
             sink.begin(clock)

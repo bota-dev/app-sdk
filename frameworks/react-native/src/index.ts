@@ -1,4 +1,7 @@
+export type { CountryConfigurationDelivery, CountryConfigurationResult } from './countryConfiguration';
 import NativeBotaDeviceSDK from './specs/NativeBotaDeviceSDK';
+export { createRecordingEditClient } from './recordingEdits';
+export type { RecordingEditFile, RecordingEditSource, RecordingEditRequest, RecordingEditStatus, RecordingEditJournal, RecordingEditHost } from './recordingEdits';
 import NativeBotaUploadV2Backend from './specs/NativeBotaUploadV2Backend';
 import { createBotaReactNativeRuntime } from './runtime';
 import { setDefaultCompatibilityClient } from './compatibility/runtime';
@@ -153,7 +156,7 @@ export { DeviceDiagnosticsDecoder, diagnosticEventIdCommand } from './ble/device
 export { DeviceManager } from './managers/DeviceManager';
 export { OTAManager } from './managers/OTAManager';
 export { RecordingManager } from './managers/RecordingManager';
-export { UPLOAD_RECOVERY_VERSION } from './uploadRecovery';
+export { UPLOAD_RECOVERY_VERSION, RECORDING_TRANSFER_RETRY_VERSION } from './uploadRecovery';
 export { StreamingSession } from './managers/StreamingSession';
 export {
   BotaError,

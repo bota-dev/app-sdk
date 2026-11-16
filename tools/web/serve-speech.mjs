@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createSpeechHost } from './speech-host.mjs'
+import { createRecordingHost } from './recording-host.mjs'
 
 const headers = {
   'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer',
@@ -14,9 +15,13 @@ const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; ch
 
 /** An operator-only loopback server, never a deployed authentication service. */
 export async function startSpeechLab(config, options = {}) {
+  const recording = config.endUserId !== undefined
+  const page = recording ? 'recording.html' : 'speech.html'
+  const responseHeaders = recording ? { ...headers, 'content-security-policy':
+    headers['content-security-policy'].replace('https://*.livekit.cloud wss://*.livekit.cloud', new URL(config.apiOrigin).origin.replace(/^http/, 'ws')) } : headers
   const directory = options.directory ?? fileURLToPath(new URL('../../tests/consumers/web-vite/dist', import.meta.url))
   // Refuse to start until the actual consumer is built. This never runs Vite or installs packages.
-  await readFile(resolve(directory, 'speech.html'))
+  await readFile(resolve(directory, page))
   let handler, origin
   const server = createServer({ requestTimeout: 10_000, headersTimeout: 5_000, maxHeaderSize: 8192 }, async (request, response) => {
     const abort = new AbortController()
@@ -25,26 +30,26 @@ export async function startSpeechLab(config, options = {}) {
     try {
       if (!origin || request.headers.host !== new URL(origin).host ||
           !['127.0.0.1', '::ffff:127.0.0.1'].includes(request.socket.remoteAddress)) {
-        response.writeHead(403, headers); response.end(); return
+        response.writeHead(403, responseHeaders); response.end(); return
       }
       const url = new URL(request.url, origin)
-      if (url.pathname.startsWith('/speech-host/')) {
+      if (url.pathname.startsWith(recording ? '/recording-host/' : '/speech-host/')) {
         const value = new Request(url, { method: request.method, headers: request.headers,
           ...(['GET', 'HEAD'].includes(request.method) ? {} : { body: request, duplex: 'half' }), signal: abort.signal })
         const result = await handler(value)
-        response.writeHead(result.status, { ...headers, 'content-type': 'application/json' })
+        response.writeHead(result.status, { ...responseHeaders, 'content-type': 'application/json' })
         response.end(Buffer.from(await result.arrayBuffer())); return
       }
-      const path = url.pathname === '/' ? '/speech.html' : url.pathname
-      if (request.method !== 'GET' || url.search || (path !== '/speech.html' &&
+      const path = url.pathname === '/' ? `/${page}` : url.pathname
+      if (request.method !== 'GET' || url.search || (path !== `/${page}` &&
           !/^\/assets\/(?!speech-check-)[A-Za-z0-9_-]+\.(?:js|css|wasm)$/.test(path))) {
-        response.writeHead(404, headers); response.end(); return
+        response.writeHead(404, responseHeaders); response.end(); return
       }
       const content = await readFile(resolve(directory, `.${path}`))
       const extension = path.slice(path.lastIndexOf('.'))
-      response.writeHead(200, { ...headers, 'content-type': types[extension] }); response.end(content)
+      response.writeHead(200, { ...responseHeaders, 'content-type': types[extension] }); response.end(content)
     } catch {
-      if (!response.headersSent) response.writeHead(503, { ...headers, 'content-type': 'application/json' })
+      if (!response.headersSent) response.writeHead(503, { ...responseHeaders, 'content-type': 'application/json' })
       response.end('{"error":{"code":"unavailable"}}')
     } finally { abort.abort() }
   })
@@ -52,7 +57,7 @@ export async function startSpeechLab(config, options = {}) {
   try {
     await new Promise((resolve, reject) => { server.once('error', reject); server.listen(options.port ?? 4173, '127.0.0.1', resolve) })
     origin = `http://127.0.0.1:${server.address().port}`
-    handler = createSpeechHost({ ...config, origin }, { ...(options.fetch ? { fetch: options.fetch } : {}) })
+    handler = (recording ? createRecordingHost : createSpeechHost)({ ...config, origin }, { ...(options.fetch ? { fetch: options.fetch } : {}) })
   } catch (error) { server.closeAllConnections(); server.close(); throw error }
   return { origin, close: () => new Promise(resolve => { server.closeAllConnections(); server.close(resolve) }) }
 }
@@ -63,12 +68,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     if (!Number.isInteger(port) || port < 1024 || port > 65535) throw Error('Invalid port')
     const lab = await startSpeechLab({ apiOrigin: env.BOTA_SPEECH_API_ORIGIN, apiKey: env.BOTA_SPEECH_API_KEY,
       projectId: env.BOTA_SPEECH_PROJECT_ID, sessionId: env.BOTA_SPEECH_SESSION_ID,
+      ...(env.BOTA_SPEECH_END_USER_ID ? { endUserId: env.BOTA_SPEECH_END_USER_ID, code: env.BOTA_SPEECH_CODE } : {
       roles: Object.fromEntries(['a', 'b'].map(role => [role, {
         participantId: env[`BOTA_SPEECH_${role.toUpperCase()}_PARTICIPANT_ID`],
         memberGeneration: Number(env[`BOTA_SPEECH_${role.toUpperCase()}_MEMBER_GENERATION`]),
         code: env[`BOTA_SPEECH_${role.toUpperCase()}_CODE`],
-      }])) }, { port })
-    console.log(`Conversation lab: ${lab.origin}/speech.html`)
+      }])) }) }, { port })
+    console.log(`Speech lab: ${lab.origin}/${env.BOTA_SPEECH_END_USER_ID ? 'recording' : 'speech'}.html`)
     for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { void lab.close() })
   } catch { console.error('Conversation lab could not start. Check the built consumer and required host configuration.'); process.exitCode = 1 }
 }

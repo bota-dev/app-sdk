@@ -1,3 +1,5 @@
+export type { RegulatoryCapabilities, RegulatoryDelivery, RegulatoryReceipt } from './regulatory';
+export type { CountryConfigurationDelivery, CountryConfigurationResult } from './countryConfiguration';
 import { createBotaDeviceSDK } from './client';
 import type { BotaDeviceSDKClient } from './client';
 import { createBotaClient } from './BotaClient';
@@ -32,7 +34,7 @@ import { setCompatibilityBluetoothState } from './compatibility/bluetoothState';
 
 export { createBlePlxPort } from './jsHost/blePlx';
 export { isEmptyLegacyAndroidV2CheckpointCatalog } from './jsHost/legacyStorage';
-export { UPLOAD_RECOVERY_VERSION } from './uploadRecovery';
+export { UPLOAD_RECOVERY_VERSION, RECORDING_TRANSFER_RETRY_VERSION } from './uploadRecovery';
 export { deriveSyncStatus } from './sync/syncStatus';
 export type { SyncChannel, SyncKind, SyncStatus, SyncStatusInputs } from './sync/syncStatus';
 export { readClientPresenceObservation } from './clientPresence';
@@ -207,3 +209,5 @@ export type { NativeLocalWifiTransport, NativeLocalWifiOptions } from './jsHost/
 
 /** Mandatory local-control AEAD profile supported by this exact SDK. */
 export const LOCAL_WIFI_CONTROL_PROFILE = 2;
+export { createRecordingEditClient } from './recordingEdits';
+export type { RecordingEditFile, RecordingEditSource, RecordingEditRequest, RecordingEditStatus, RecordingEditJournal, RecordingEditHost } from './recordingEdits';

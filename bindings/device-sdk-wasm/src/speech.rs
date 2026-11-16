@@ -1,6 +1,13 @@
 use bota_device_sdk_core::speech::SpeechClient;
 use wasm_bindgen::prelude::*;
 
+/// Direct transport metadata policy. Audio remains in browser capture/playout IO.
+#[wasm_bindgen(js_name = recordingSpeech)]
+pub fn recording_speech(command_json: &str) -> Result<String, JsValue> {
+    bota_device_sdk_core::recording_speech::dispatch_json(command_json)
+        .map_err(|error| JsValue::from_str(error.code.as_str()))
+}
+
 /// Metadata-only archive policy. Browser audio and encryption stay in browser IO.
 #[wasm_bindgen(js_name = speechCapture)]
 pub fn speech_capture(command_json: &str) -> Result<String, JsValue> {

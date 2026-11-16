@@ -15,6 +15,10 @@
   },
   "sideEffects": false,
   "exports": {
+    "./speech/recording": {
+      "types": "./dist/recordingSpeech.d.ts",
+      "import": "./dist/recordingSpeech.js"
+    },
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"

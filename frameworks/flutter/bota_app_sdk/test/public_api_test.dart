@@ -168,6 +168,11 @@ const _connectedDevice = BotaConnectedDevice(
 );
 
 const _documentedBarrelExports = <String>{
+  'BotaRecordingSpeechClient',
+  'BotaRecordingSpeechSession',
+  'BotaRecordingSpeechCaption',
+  'BotaRecordingSpeechException',
+  'BotaRecordingSpeechObserver',
   'BotaSpeechClient',
   'BotaSpeechSession',
   'BotaSpeechCaption',

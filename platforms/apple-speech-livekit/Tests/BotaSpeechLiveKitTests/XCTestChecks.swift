@@ -1,5 +1,12 @@
 import XCTest
 
+final class RecordingBridgeTests: XCTestCase, @unchecked Sendable {
+    func testControls() async throws { try await RecordingBridgeChecks().testRecordingBridgeControlsAndCleanupStayNative() }
+    func testRetirement() async throws { try await RecordingBridgeChecks().testRecordingBridgeJoinsAndRetiresLateAdmission() }
+    func testCleanupFailure() async throws { try await RecordingBridgeChecks().testRecordingBridgeCleanupFailureBlocksReplacement() }
+    func testPartialCreationCleanupFailure() async throws { try await RecordingBridgeChecks().testRecordingBridgePreservesPartialCreationCleanupFailure() }
+}
+
 final class CompanionTests: XCTestCase, @unchecked Sendable {
     func testOriginalIndependence() async throws { try await CompanionChecks().testOriginalOwnerSurvivesRtcFailureAndStopsOnExplicitLeave() }
     func testReactNativeOriginalIndependence() async throws { try await CompanionChecks().testReactNativeRtcClosePreservesIndependentOriginal() }

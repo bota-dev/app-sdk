@@ -41,4 +41,5 @@ internal object SpeechBindings {
     external fun step(handle: Long, command: ByteArray, nowMs: Long): ByteArray
     external fun close(handle: Long)
     external fun capture(command: ByteArray): ByteArray
+    external fun recording(command: ByteArray): ByteArray
 }

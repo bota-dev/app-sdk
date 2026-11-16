@@ -4069,6 +4069,133 @@ struct BotaSpeechEventMessage: Hashable, CustomStringConvertible {
   }
 }
 
+/// Display metadata only. Native owners retain capture, audio, grants and sockets.
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct BotaRecordingSpeechCaptionMessage: Hashable, CustomStringConvertible {
+  var unitId: String
+  var sourceId: String
+  var sourceEpoch: Int64
+  var revision: Int64
+  var startSample: Int64
+  var endSample: Int64
+  var sourceLanguage: String
+  var targetLanguage: String? = nil
+  var text: String
+  var isFinal: Bool
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> BotaRecordingSpeechCaptionMessage? {
+    let unitId = pigeonVar_list[0] as! String
+    let sourceId = pigeonVar_list[1] as! String
+    let sourceEpoch = pigeonVar_list[2] as! Int64
+    let revision = pigeonVar_list[3] as! Int64
+    let startSample = pigeonVar_list[4] as! Int64
+    let endSample = pigeonVar_list[5] as! Int64
+    let sourceLanguage = pigeonVar_list[6] as! String
+    let targetLanguage: String? = nilOrValue(pigeonVar_list[7])
+    let text = pigeonVar_list[8] as! String
+    let isFinal = pigeonVar_list[9] as! Bool
+
+    return BotaRecordingSpeechCaptionMessage(
+      unitId: unitId,
+      sourceId: sourceId,
+      sourceEpoch: sourceEpoch,
+      revision: revision,
+      startSample: startSample,
+      endSample: endSample,
+      sourceLanguage: sourceLanguage,
+      targetLanguage: targetLanguage,
+      text: text,
+      isFinal: isFinal
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      unitId,
+      sourceId,
+      sourceEpoch,
+      revision,
+      startSample,
+      endSample,
+      sourceLanguage,
+      targetLanguage,
+      text,
+      isFinal,
+    ]
+  }
+  static func == (lhs: BotaRecordingSpeechCaptionMessage, rhs: BotaRecordingSpeechCaptionMessage) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return BotaApiPigeonInternal.deepEquals(lhs.unitId, rhs.unitId) && BotaApiPigeonInternal.deepEquals(lhs.sourceId, rhs.sourceId) && BotaApiPigeonInternal.deepEquals(lhs.sourceEpoch, rhs.sourceEpoch) && BotaApiPigeonInternal.deepEquals(lhs.revision, rhs.revision) && BotaApiPigeonInternal.deepEquals(lhs.startSample, rhs.startSample) && BotaApiPigeonInternal.deepEquals(lhs.endSample, rhs.endSample) && BotaApiPigeonInternal.deepEquals(lhs.sourceLanguage, rhs.sourceLanguage) && BotaApiPigeonInternal.deepEquals(lhs.targetLanguage, rhs.targetLanguage) && BotaApiPigeonInternal.deepEquals(lhs.text, rhs.text) && BotaApiPigeonInternal.deepEquals(lhs.isFinal, rhs.isFinal)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("BotaRecordingSpeechCaptionMessage")
+    BotaApiPigeonInternal.deepHash(value: unitId, hasher: &hasher)
+    BotaApiPigeonInternal.deepHash(value: sourceId, hasher: &hasher)
+    BotaApiPigeonInternal.deepHash(value: sourceEpoch, hasher: &hasher)
+    BotaApiPigeonInternal.deepHash(value: revision, hasher: &hasher)
+    BotaApiPigeonInternal.deepHash(value: startSample, hasher: &hasher)
+    BotaApiPigeonInternal.deepHash(value: endSample, hasher: &hasher)
+    BotaApiPigeonInternal.deepHash(value: sourceLanguage, hasher: &hasher)
+    BotaApiPigeonInternal.deepHash(value: targetLanguage, hasher: &hasher)
+    BotaApiPigeonInternal.deepHash(value: text, hasher: &hasher)
+    BotaApiPigeonInternal.deepHash(value: isFinal, hasher: &hasher)
+  }
+
+  public var description: String {
+    return "BotaRecordingSpeechCaptionMessage(unitId: \(String(describing: unitId)), sourceId: \(String(describing: sourceId)), sourceEpoch: \(String(describing: sourceEpoch)), revision: \(String(describing: revision)), startSample: \(String(describing: startSample)), endSample: \(String(describing: endSample)), sourceLanguage: \(String(describing: sourceLanguage)), targetLanguage: \(String(describing: targetLanguage)), text: \(String(describing: text)), isFinal: \(String(describing: isFinal)))"
+  }
+}
+
+/// Generated class from Pigeon that represents data sent in messages.
+struct BotaRecordingSpeechEventMessage: Hashable, CustomStringConvertible {
+  var connectionId: String
+  var caption: BotaRecordingSpeechCaptionMessage? = nil
+  var status: String? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> BotaRecordingSpeechEventMessage? {
+    let connectionId = pigeonVar_list[0] as! String
+    let caption: BotaRecordingSpeechCaptionMessage? = nilOrValue(pigeonVar_list[1])
+    let status: String? = nilOrValue(pigeonVar_list[2])
+
+    return BotaRecordingSpeechEventMessage(
+      connectionId: connectionId,
+      caption: caption,
+      status: status
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      connectionId,
+      caption,
+      status,
+    ]
+  }
+  static func == (lhs: BotaRecordingSpeechEventMessage, rhs: BotaRecordingSpeechEventMessage) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return BotaApiPigeonInternal.deepEquals(lhs.connectionId, rhs.connectionId) && BotaApiPigeonInternal.deepEquals(lhs.caption, rhs.caption) && BotaApiPigeonInternal.deepEquals(lhs.status, rhs.status)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("BotaRecordingSpeechEventMessage")
+    BotaApiPigeonInternal.deepHash(value: connectionId, hasher: &hasher)
+    BotaApiPigeonInternal.deepHash(value: caption, hasher: &hasher)
+    BotaApiPigeonInternal.deepHash(value: status, hasher: &hasher)
+  }
+
+  public var description: String {
+    return "BotaRecordingSpeechEventMessage(connectionId: \(String(describing: connectionId)), caption: \(String(describing: caption)), status: \(String(describing: status)))"
+  }
+}
+
 private class BotaApiPigeonCodecReader: FlutterStandardReader {
   override func readValue(ofType type: UInt8) -> Any? {
     switch type {
@@ -4248,6 +4375,10 @@ private class BotaApiPigeonCodecReader: FlutterStandardReader {
       return BotaSpeechOriginalMessage.fromList(self.readValue() as! [Any?])
     case 212:
       return BotaSpeechEventMessage.fromList(self.readValue() as! [Any?])
+    case 213:
+      return BotaRecordingSpeechCaptionMessage.fromList(self.readValue() as! [Any?])
+    case 214:
+      return BotaRecordingSpeechEventMessage.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
     }
@@ -4507,6 +4638,12 @@ private class BotaApiPigeonCodecWriter: FlutterStandardWriter {
       super.writeValue(value.toList())
     } else if let value = value as? BotaSpeechEventMessage {
       super.writeByte(212)
+      super.writeValue(value.toList())
+    } else if let value = value as? BotaRecordingSpeechCaptionMessage {
+      super.writeByte(213)
+      super.writeValue(value.toList())
+    } else if let value = value as? BotaRecordingSpeechEventMessage {
+      super.writeByte(214)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)
@@ -5500,6 +5637,161 @@ class BotaSpeechFlutterApi: BotaSpeechFlutterApiProtocol {
   }
   func onEvent(event eventArg: BotaSpeechEventMessage, completion: @escaping (Result<Void, PigeonError>) -> Void) {
     let channelName: String = "dev.flutter.pigeon.bota_flutter_sdk.BotaSpeechFlutterApi.onEvent\(messageChannelSuffix)"
+    let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+    channel.sendMessage([eventArg] as [Any?]) { response in
+      guard let listResponse = response as? [Any?] else {
+        completion(.failure(createConnectionError(withChannelName: channelName)))
+        return
+      }
+      if listResponse.count > 1 {
+        let code: String = listResponse[0] as! String
+        let message: String? = nilOrValue(listResponse[1])
+        let details: String? = nilOrValue(listResponse[2])
+        completion(.failure(PigeonError(code: code, message: message, details: details)))
+      } else {
+        completion(.success(()))
+      }
+    }
+  }
+}
+/// Generated protocol from Pigeon that represents a handler of messages from Flutter.
+protocol BotaRecordingSpeechHostApi {
+  func start(connectionId: String, activityId: String) async throws
+  func changeTarget(connectionId: String, language: String, requestId: String) async throws
+  func qualifyHeadphones(connectionId: String) async throws -> Bool
+  func finish(connectionId: String) async throws
+  func close(connectionId: String) async throws
+  func destroy() async throws
+}
+
+/// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
+class BotaRecordingSpeechHostApiSetup {
+  static var codec: FlutterStandardMessageCodec { BotaApiPigeonCodec.shared }
+  /// Sets up an instance of `BotaRecordingSpeechHostApi` to handle messages through the `binaryMessenger`.
+  static func setUp(binaryMessenger: FlutterBinaryMessenger, api: BotaRecordingSpeechHostApi?, messageChannelSuffix: String = "") {
+    let channelSuffix = messageChannelSuffix.count > 0 ? ".\(messageChannelSuffix)" : ""
+    let startChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bota_flutter_sdk.BotaRecordingSpeechHostApi.start\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      startChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let connectionIdArg = args[0] as! String
+        let activityIdArg = args[1] as! String
+        Task { @MainActor in
+          do {
+            try await api.start(connectionId: connectionIdArg, activityId: activityIdArg)
+            reply(wrapResult(nil))
+          } catch {
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      startChannel.setMessageHandler(nil)
+    }
+    let changeTargetChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bota_flutter_sdk.BotaRecordingSpeechHostApi.changeTarget\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      changeTargetChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let connectionIdArg = args[0] as! String
+        let languageArg = args[1] as! String
+        let requestIdArg = args[2] as! String
+        Task { @MainActor in
+          do {
+            try await api.changeTarget(connectionId: connectionIdArg, language: languageArg, requestId: requestIdArg)
+            reply(wrapResult(nil))
+          } catch {
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      changeTargetChannel.setMessageHandler(nil)
+    }
+    let qualifyHeadphonesChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bota_flutter_sdk.BotaRecordingSpeechHostApi.qualifyHeadphones\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      qualifyHeadphonesChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let connectionIdArg = args[0] as! String
+        Task { @MainActor in
+          do {
+            let result = try await api.qualifyHeadphones(connectionId: connectionIdArg)
+            reply(wrapResult(result))
+          } catch {
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      qualifyHeadphonesChannel.setMessageHandler(nil)
+    }
+    let finishChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bota_flutter_sdk.BotaRecordingSpeechHostApi.finish\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      finishChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let connectionIdArg = args[0] as! String
+        Task { @MainActor in
+          do {
+            try await api.finish(connectionId: connectionIdArg)
+            reply(wrapResult(nil))
+          } catch {
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      finishChannel.setMessageHandler(nil)
+    }
+    let closeChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bota_flutter_sdk.BotaRecordingSpeechHostApi.close\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      closeChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let connectionIdArg = args[0] as! String
+        Task { @MainActor in
+          do {
+            try await api.close(connectionId: connectionIdArg)
+            reply(wrapResult(nil))
+          } catch {
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      closeChannel.setMessageHandler(nil)
+    }
+    let destroyChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bota_flutter_sdk.BotaRecordingSpeechHostApi.destroy\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      destroyChannel.setMessageHandler { _, reply in
+        Task { @MainActor in
+          do {
+            try await api.destroy()
+            reply(wrapResult(nil))
+          } catch {
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      destroyChannel.setMessageHandler(nil)
+    }
+  }
+}
+
+/// Generated protocol from Pigeon that represents Flutter messages that can be called from Swift.
+protocol BotaRecordingSpeechFlutterApiProtocol {
+  func onEvent(event eventArg: BotaRecordingSpeechEventMessage, completion: @escaping (Result<Void, PigeonError>) -> Void)
+}
+class BotaRecordingSpeechFlutterApi: BotaRecordingSpeechFlutterApiProtocol {
+  private let binaryMessenger: FlutterBinaryMessenger
+  private let messageChannelSuffix: String
+  init(binaryMessenger: FlutterBinaryMessenger, messageChannelSuffix: String = "") {
+    self.binaryMessenger = binaryMessenger
+    self.messageChannelSuffix = messageChannelSuffix.count > 0 ? ".\(messageChannelSuffix)" : ""
+  }
+  var codec: BotaApiPigeonCodec {
+    return BotaApiPigeonCodec.shared
+  }
+  func onEvent(event eventArg: BotaRecordingSpeechEventMessage, completion: @escaping (Result<Void, PigeonError>) -> Void) {
+    let channelName: String = "dev.flutter.pigeon.bota_flutter_sdk.BotaRecordingSpeechFlutterApi.onEvent\(messageChannelSuffix)"
     let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
     channel.sendMessage([eventArg] as [Any?]) { response in
       guard let listResponse = response as? [Any?] else {

@@ -1179,3 +1179,47 @@ abstract class BotaSpeechFlutterApi {
   @asyncCallback
   void onEvent(BotaSpeechEventMessage event);
 }
+
+/// Display metadata only. Native owners retain capture, audio, grants and sockets.
+class BotaRecordingSpeechCaptionMessage {
+  BotaRecordingSpeechCaptionMessage({required this.unitId, required this.sourceId,
+    required this.sourceEpoch, required this.revision, required this.startSample,
+    required this.endSample, required this.sourceLanguage, this.targetLanguage,
+    required this.text, required this.isFinal});
+  String unitId;
+  String sourceId;
+  int sourceEpoch;
+  int revision;
+  int startSample;
+  int endSample;
+  String sourceLanguage;
+  String? targetLanguage;
+  String text;
+  bool isFinal;
+}
+class BotaRecordingSpeechEventMessage {
+  BotaRecordingSpeechEventMessage({required this.connectionId, this.caption, this.status});
+  String connectionId;
+  BotaRecordingSpeechCaptionMessage? caption;
+  String? status;
+}
+@HostApi()
+abstract class BotaRecordingSpeechHostApi {
+  @async
+  void start(String connectionId, String activityId);
+  @async
+  void changeTarget(String connectionId, String language, String requestId);
+  @async
+  bool qualifyHeadphones(String connectionId);
+  @async
+  void finish(String connectionId);
+  @async
+  void close(String connectionId);
+  @async
+  void destroy();
+}
+@FlutterApi()
+abstract class BotaRecordingSpeechFlutterApi {
+  @asyncCallback
+  void onEvent(BotaRecordingSpeechEventMessage event);
+}
