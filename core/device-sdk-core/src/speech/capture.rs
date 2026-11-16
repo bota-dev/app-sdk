@@ -2,12 +2,12 @@
 //! PCM, AEAD, atomic encrypted storage and HTTP. No audio or key enters this ABI.
 use super::{Result, invalid};
 mod stereo;
-use stereo::{Channel, Mapping};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::sync::OnceLock;
+use stereo::{Channel, Mapping};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -56,7 +56,12 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 fn manifest_aad(capture_id: &str, version: u8) -> Result<Vec<u8>> {
-    let mut bytes = match version { 1 => profile().manifest_aad_prefix.as_bytes(), 2 => stereo::profile().manifest_aad_prefix.as_bytes(), _ => return Err(invalid()) }.to_vec();
+    let mut bytes = match version {
+        1 => profile().manifest_aad_prefix.as_bytes(),
+        2 => stereo::profile().manifest_aad_prefix.as_bytes(),
+        _ => return Err(invalid()),
+    }
+    .to_vec();
     bytes.extend(uuid(capture_id)?);
     Ok(bytes)
 }
@@ -89,7 +94,7 @@ impl State {
         uuid(&self.capture_id)?;
         digest(&self.chain_sha256)?;
         let limits = profile();
-        if ![1,2].contains(&self.protocol_version)
+        if ![1, 2].contains(&self.protocol_version)
             || (self.protocol_version == 2) != self.channels.is_some()
             || self.protocol_version == 1 && self.source_tails.is_some()
             || !self.recording_id.starts_with("rec_")
@@ -107,7 +112,9 @@ impl State {
         {
             return Err(invalid());
         }
-        if let Some(channels) = &self.channels { stereo::channels(channels)?; }
+        if let Some(channels) = &self.channels {
+            stereo::channels(channels)?;
+        }
         let mut samples = 0_u64;
         for (index, clock) in self.clocks.iter().enumerate() {
             uuid(&clock.id)?;
@@ -124,7 +131,11 @@ impl State {
             || samples < self.archive_samples
             || self.next_sequence == 0
                 && (self.archive_samples != 0
-                    || self.chain_sha256 != hex(&Sha256::digest(manifest_aad(&self.capture_id, self.protocol_version)?)))
+                    || self.chain_sha256
+                        != hex(&Sha256::digest(manifest_aad(
+                            &self.capture_id,
+                            self.protocol_version,
+                        )?)))
             || self.active_clock && self.clocks.last().is_some_and(|clock| clock.end_known)
         {
             return Err(invalid());
@@ -167,15 +178,28 @@ fn header_aad(capture_id: &str, header: &Header) -> Result<Vec<u8>> {
     {
         return Err(invalid());
     }
-    if (header.protocol_version == Some(2)) != header.channels.is_some() || header.protocol_version.is_some_and(|v| v != 2) { return Err(invalid()); }
-    let mut bytes = if header.channels.is_some() { stereo::profile().chunk_aad_prefix.as_bytes() } else { limits.chunk_aad_prefix.as_bytes() }.to_vec();
+    if (header.protocol_version == Some(2)) != header.channels.is_some()
+        || header.protocol_version.is_some_and(|v| v != 2)
+    {
+        return Err(invalid());
+    }
+    let mut bytes = if header.channels.is_some() {
+        stereo::profile().chunk_aad_prefix.as_bytes()
+    } else {
+        limits.chunk_aad_prefix.as_bytes()
+    }
+    .to_vec();
     bytes.extend(uuid(capture_id)?);
     bytes.extend(uuid(&header.clock_id)?);
     bytes.extend(header.sequence.to_be_bytes());
     bytes.extend(header.first_sample.to_be_bytes());
     bytes.extend((header.samples as u32).to_be_bytes());
     bytes.extend(header.archive_sample.to_be_bytes());
-    if let Some(channels) = &header.channels { for source in channels { bytes.extend(source.aad(header.samples)?); } }
+    if let Some(channels) = &header.channels {
+        for source in channels {
+            bytes.extend(source.aad(header.samples)?);
+        }
+    }
     Ok(bytes)
 }
 #[derive(Deserialize)]
@@ -247,7 +271,9 @@ pub fn dispatch_json(input: &str) -> Result<String> {
         Request::Create {
             capture_id,
             recording_id,
-            retention, profile_version, channels,
+            retention,
+            profile_version,
+            channels,
         } => {
             if retention != "original_audio_and_text" {
                 return Err(invalid());
@@ -255,7 +281,9 @@ pub fn dispatch_json(input: &str) -> Result<String> {
             let version = profile_version.unwrap_or(1);
             let chain_sha256 = hex(&Sha256::digest(manifest_aad(&capture_id, version)?));
             let state = State {
-                protocol_version: version, channels, source_tails: None,
+                protocol_version: version,
+                channels,
+                source_tails: None,
                 capture_id,
                 recording_id,
                 archive_samples: 0,
@@ -296,17 +324,25 @@ pub fn dispatch_json(input: &str) -> Result<String> {
         Request::Plan {
             state,
             first_sample,
-            samples, channels,
+            samples,
+            channels,
         } => {
             state.validate()?;
             let clock = state.active()?;
             if first_sample < clock.samples {
                 return Err(invalid());
             }
-            if (state.protocol_version == 2) != channels.is_some() { return Err(invalid()); }
-            if let (Some(previous), Some(current)) = (&state.source_tails, &channels) { for index in 0..2 { current[index].follows(&previous[index])?; } }
+            if (state.protocol_version == 2) != channels.is_some() {
+                return Err(invalid());
+            }
+            if let (Some(previous), Some(current)) = (&state.source_tails, &channels) {
+                for index in 0..2 {
+                    current[index].follows(&previous[index])?;
+                }
+            }
             let header = Header {
-                protocol_version: (state.protocol_version == 2).then_some(2), channels,
+                protocol_version: (state.protocol_version == 2).then_some(2),
+                channels,
                 sequence: state.next_sequence,
                 clock_id: clock.id.clone(),
                 first_sample,
@@ -339,7 +375,11 @@ pub fn dispatch_json(input: &str) -> Result<String> {
             {
                 return Err(invalid());
             }
-            if let (Some(previous), Some(current)) = (&state.source_tails, &header.channels) { for index in 0..2 { current[index].follows(&previous[index])?; } }
+            if let (Some(previous), Some(current)) = (&state.source_tails, &header.channels) {
+                for index in 0..2 {
+                    current[index].follows(&previous[index])?;
+                }
+            }
             state.source_tails = header.channels;
             let mut hash = Sha256::new();
             hash.update(digest(&state.chain_sha256)?);
@@ -379,12 +419,27 @@ pub fn dispatch_json(input: &str) -> Result<String> {
             state.finished = true;
             let mut manifest = json!({"protocolVersion":state.protocol_version,"captureId":state.capture_id,"totalChunks":state.next_sequence,
                 "archiveSamples":state.archive_samples,"chainSha256":state.chain_sha256,"clocks":state.clocks});
-            if let Some(channels) = &state.channels { manifest["channels"] = json!(channels); }
+            if let Some(channels) = &state.channels {
+                manifest["channels"] = json!(channels);
+            }
             json!({"manifest":manifest,"aad":STANDARD.encode(manifest_aad(&state.capture_id,state.protocol_version)?),"state":state})
         }
-        Request::Aad { capture_id, kind, profile_version } => {
+        Request::Aad {
+            capture_id,
+            kind,
+            profile_version,
+        } => {
             let mut bytes = match kind.as_str() {
-                "manifest" => { let version = profile_version.unwrap_or(1); if version == 2 { stereo::profile().manifest_aad_prefix.as_bytes().to_vec() } else if version == 1 { profile().manifest_aad_prefix.as_bytes().to_vec() } else { return Err(invalid()); } },
+                "manifest" => {
+                    let version = profile_version.unwrap_or(1);
+                    if version == 2 {
+                        stereo::profile().manifest_aad_prefix.as_bytes().to_vec()
+                    } else if version == 1 {
+                        profile().manifest_aad_prefix.as_bytes().to_vec()
+                    } else {
+                        return Err(invalid());
+                    }
+                }
                 "journal" => profile().journal_aad_prefix.as_bytes().to_vec(),
                 _ => return Err(invalid()),
             };
@@ -400,7 +455,12 @@ pub fn dispatch_json(input: &str) -> Result<String> {
             digest(&manifest_sha256)?;
             let record = receipt.as_object().ok_or_else(invalid)?;
             if !state.finished
-                || record.get("profile").and_then(Value::as_str) != Some(if state.protocol_version == 2 { "speech_capture_pcm_v2" } else { "speech_capture_pcm_v1" })
+                || record.get("profile").and_then(Value::as_str)
+                    != Some(if state.protocol_version == 2 {
+                        "speech_capture_pcm_v2"
+                    } else {
+                        "speech_capture_pcm_v1"
+                    })
                 || record.get("capture_id").and_then(Value::as_str) != Some(&state.capture_id)
                 || record.get("recording_id").and_then(Value::as_str) != Some(&state.recording_id)
                 || record.get("state").and_then(Value::as_str) != Some("published")

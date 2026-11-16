@@ -79,10 +79,10 @@ public final class RecordingSpeechAudioPlayback: RecordingSpeechPlayback, @unche
     }
     public func clear() async throws { lock.withLock { if !closed { clearLocked() } } }
     public func drain() async throws {
-        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        let deadline = ProcessInfo.processInfo.systemUptime + 2
         while lock.withLock({ !closed && samples > 0 }) {
-            guard ContinuousClock.now < deadline else { throw SpeechCaptureFailure.unavailable }
-            try await Task.sleep(for: .milliseconds(10))
+            guard ProcessInfo.processInfo.systemUptime < deadline else { throw SpeechCaptureFailure.unavailable }
+            try await Task.sleep(nanoseconds: 10_000_000)
         }
     }
     public func close() {

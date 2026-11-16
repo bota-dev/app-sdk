@@ -103,7 +103,7 @@ public final class RecordingSpeechSession: @unchecked Sendable {
             } catch { self?.interrupt() }
         }
         deadline = Task { [weak self] in
-            do { try await Task.sleep(for: .seconds(10)); if self?.lock.withLock({ self?.state["ready"] as? Bool != true }) == true { self?.interrupt() } }
+            do { try await Task.sleep(nanoseconds: 10_000_000_000); if self?.lock.withLock({ self?.state["ready"] as? Bool != true }) == true { self?.interrupt() } }
             catch { /* A successful handshake retires this deadline. */ }
         }
     }
@@ -166,14 +166,14 @@ public final class RecordingSpeechSession: @unchecked Sendable {
             let result = try step(["op": "target", "language": language, "requestId": requestId]), call = SpeechCall<Void>()
             targetCall = call; return (try Self.json(result["control"] as! [String: Any]), call)
         }
-        let timeout = Task { [weak self] in do { try await Task.sleep(for: .seconds(15)); self?.interrupt() } catch {} }
+        let timeout = Task { [weak self] in do { try await Task.sleep(nanoseconds: 15_000_000_000); self?.interrupt() } catch {} }
         defer { timeout.cancel() }
         do { try await playback.clear(); try lock.withLock { try enqueue(.control(control)) }; try await call.wait() }
         catch { interrupt(); throw SpeechCaptureFailure.unavailable }
     }
     public func finish() async throws {
         try lock.withLock { try enqueue(.control(Self.json(step(["op": "finish"])["control"] as! [String: Any]))) }
-        let timeout = Task { [weak self] in do { try await Task.sleep(for: .seconds(60)); self?.interrupt() } catch {} }
+        let timeout = Task { [weak self] in do { try await Task.sleep(nanoseconds: 60_000_000_000); self?.interrupt() } catch {} }
         defer { timeout.cancel() }
         do { try await finishCall.wait() } catch { interrupt(); throw error }
     }

@@ -49,8 +49,11 @@ pub unsafe extern "C" fn bota_device_sdk_v1_recording_speech(
     // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     unsafe {
         result(out_json, out_error, || {
-            let json = bota_device_sdk_core::recording_speech::dispatch_json(text(command, 32768)?)?;
-            Ok(BotaDeviceSdkSpeechOutputV1 { json: json.into_bytes() })
+            let json =
+                bota_device_sdk_core::recording_speech::dispatch_json(text(command, 32768)?)?;
+            Ok(BotaDeviceSdkSpeechOutputV1 {
+                json: json.into_bytes(),
+            })
         })
     }
 }

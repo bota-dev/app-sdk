@@ -1182,10 +1182,18 @@ abstract class BotaSpeechFlutterApi {
 
 /// Display metadata only. Native owners retain capture, audio, grants and sockets.
 class BotaRecordingSpeechCaptionMessage {
-  BotaRecordingSpeechCaptionMessage({required this.unitId, required this.sourceId,
-    required this.sourceEpoch, required this.revision, required this.startSample,
-    required this.endSample, required this.sourceLanguage, this.targetLanguage,
-    required this.text, required this.isFinal});
+  BotaRecordingSpeechCaptionMessage({
+    required this.unitId,
+    required this.sourceId,
+    required this.sourceEpoch,
+    required this.revision,
+    required this.startSample,
+    required this.endSample,
+    required this.sourceLanguage,
+    this.targetLanguage,
+    required this.text,
+    required this.isFinal,
+  });
   String unitId;
   String sourceId;
   int sourceEpoch;
@@ -1197,12 +1205,18 @@ class BotaRecordingSpeechCaptionMessage {
   String text;
   bool isFinal;
 }
+
 class BotaRecordingSpeechEventMessage {
-  BotaRecordingSpeechEventMessage({required this.connectionId, this.caption, this.status});
+  BotaRecordingSpeechEventMessage({
+    required this.connectionId,
+    this.caption,
+    this.status,
+  });
   String connectionId;
   BotaRecordingSpeechCaptionMessage? caption;
   String? status;
 }
+
 @HostApi()
 abstract class BotaRecordingSpeechHostApi {
   @async
@@ -1218,6 +1232,7 @@ abstract class BotaRecordingSpeechHostApi {
   @async
   void destroy();
 }
+
 @FlutterApi()
 abstract class BotaRecordingSpeechFlutterApi {
   @asyncCallback

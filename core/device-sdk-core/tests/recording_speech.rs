@@ -19,7 +19,8 @@ fn opened() -> Value {
 #[test]
 fn direct_grants_and_frames_have_no_room_or_membership() {
     let state = opened();
-    let frame = call(json!({"op":"frame","state":state,"sourceIndex":0,"firstSample":0,"samples":480}));
+    let frame =
+        call(json!({"op":"frame","state":state,"sourceIndex":0,"firstSample":0,"samples":480}));
     assert_eq!(frame["state"]["progress"][0]["sample"], 480);
     assert_eq!(frame["header"].as_array().unwrap().len(), 32);
     assert!(!frame.to_string().contains("room"));
@@ -32,16 +33,28 @@ fn target_changes_hold_live_ingest_and_playback_until_exact_commit_and_clear() {
     let change = call(json!({"op":"target","state":state,"requestId":"switch-1","language":"en"}));
     assert_eq!(change["control"]["change"]["boundaries"][0]["sample"], 0);
     assert!(dispatch_json(&json!({"op":"frame","state":change["state"],"sourceIndex":0,"firstSample":0,"samples":480}).to_string()).is_err());
-    let committed = call(json!({"op":"target_committed","state":change["state"],"requestId":"switch-1","revision":2,"language":"en"}));
+    let committed = call(
+        json!({"op":"target_committed","state":change["state"],"requestId":"switch-1","revision":2,"language":"en"}),
+    );
     assert_eq!(committed["state"]["playbackHeld"], true);
     let cleared = call(json!({"op":"playback_cleared","state":committed["state"],"revision":2}));
-    assert_eq!(cleared["control"], json!({"type":"playback_ack","revision":2}));
+    assert_eq!(
+        cleared["control"],
+        json!({"type":"playback_ack","revision":2})
+    );
     assert_eq!(cleared["state"]["playbackHeld"], false);
 }
 #[test]
 fn unknown_mixed_speakers_cannot_claim_proven_self_identity() {
-    let mut state = opened(); state["sources"][0]["speaker"] = json!("self");
-    assert!(dispatch_json(&json!({"op":"frame","state":state,"sourceIndex":0,"firstSample":0,"samples":480}).to_string()).is_err());
+    let mut state = opened();
+    state["sources"][0]["speaker"] = json!("self");
+    assert!(
+        dispatch_json(
+            &json!({"op":"frame","state":state,"sourceIndex":0,"firstSample":0,"samples":480})
+                .to_string()
+        )
+        .is_err()
+    );
 }
 #[test]
 fn reconnect_never_relabels_current_capture_as_old_audio() {
@@ -54,7 +67,10 @@ fn reconnect_never_relabels_current_capture_as_old_audio() {
     let mut resumed = command;
     resumed["configuration"]["resume"] = json!([{"sourceId":"mixed","sample":48000}]);
     let created = call(resumed);
-    assert_eq!(created["control"]["resume"], json!([{"sourceId":"mixed","sample":48000}]));
+    assert_eq!(
+        created["control"]["resume"],
+        json!([{"sourceId":"mixed","sample":48000}])
+    );
     let mut ready = json!({"op":"ready","state":created["state"],"nowMs":1001,
         "event":{"type":"ready","version":1,"activityId":"11111111-1111-4111-8111-111111111111","generation":2,
             "target":{"revision":2,"language":"zh"},"sources":[{"id":"mixed","epoch":2,"role":"mixed","speaker":"unknown","language":"en","startSample":0}],
@@ -66,12 +82,20 @@ fn reconnect_never_relabels_current_capture_as_old_audio() {
 #[test]
 fn native_microphone_requires_the_admitted_mixed_capture_clock() {
     let clock = "20000000-0000-4000-8000-000000000001";
-    let mut state = opened(); state["sources"][0]["captureClockId"] = json!(clock);
+    let mut state = opened();
+    state["sources"][0]["captureClockId"] = json!(clock);
     let bound = call(json!({"op":"bind_microphone","state":state,"clockId":clock}));
     assert_eq!(bound["state"], state);
     assert!(dispatch_json(&json!({"op":"bind_microphone","state":state,"clockId":"20000000-0000-4000-8000-000000000002"}).to_string()).is_err());
     state["sources"][0]["role"] = json!("remote");
-    assert!(dispatch_json(&json!({"op":"bind_microphone","state":state,"clockId":clock}).to_string()).is_err());
-    state["sources"][0]["role"] = json!("mixed"); state["progress"][0]["sample"] = json!(480);
-    assert!(dispatch_json(&json!({"op":"bind_microphone","state":state,"clockId":clock}).to_string()).is_err());
+    assert!(
+        dispatch_json(&json!({"op":"bind_microphone","state":state,"clockId":clock}).to_string())
+            .is_err()
+    );
+    state["sources"][0]["role"] = json!("mixed");
+    state["progress"][0]["sample"] = json!(480);
+    assert!(
+        dispatch_json(&json!({"op":"bind_microphone","state":state,"clockId":clock}).to_string())
+            .is_err()
+    );
 }

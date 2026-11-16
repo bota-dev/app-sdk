@@ -1,8 +1,8 @@
 # Recording-owned realtime speech (source preview)
 
 The current protocol is one end-user/device activity, one target language and
-one qualified downlink. It uses a direct authenticated WebSocket, independent
-optional encrypted original capture, and no room or participant roster. This
+one qualified downlink. It uses an authenticated WebSocket for continuous upload
+and downlink, optional independent encrypted original capture, and no room or participant roster. This
 source preview is default-off and is not a published SDK feature.
 
 ## Integrate the direct owner
@@ -12,6 +12,16 @@ only for `original_audio_and_text`, creates the activity with the same physical
 capture clock, and issues its single-use grant. Keep project credentials on that
 backend. The microphone source is `mixed`/`unknown`, starts at sample zero, and
 uses PCM16 mono at 48 kHz. Output is memory-only PCM16 mono at 24 kHz.
+
+The backend first stores ordered encrypted input objects and commits their upload
+receipts, then continuously reads and verifies them into ASR. The existing `BRS1`
+frames and source/target clocks are unchanged. Translation, TTS and playback can
+start while capture is still running; no complete file or stop event is required.
+All retention modes use temporary encrypted uploaded input, with a key confined
+to the active connection and asynchronous object cleanup. This does not create
+a permanent original recording in text/live-only mode. Storage failure interrupts
+live processing rather than bypassing storage. The optional original capture's
+publication receipt remains separate from the temporary input's stored receipt.
 
 | Family | Direct controls | Capture/archive owner |
 | --- | --- | --- |
