@@ -54,6 +54,11 @@ model. To serve the already-built Web consumer, supply these server-only setting
 
 Run `node --env-file=/absolute/private/lab.env tools/web/serve-speech.mjs`. This
 binds only `127.0.0.1`; use the resulting host/code in the native companions.
+For a selected USB Android device, forward the same port with
+`adb -s SERIAL reverse tcp:4173 tcp:4173`. macOS and an iOS Simulator on that host
+can use its loopback directly. A physical iOS device requires an approved local
+transport or the production authenticated host integration; this lab does not
+listen on the LAN or expose project credentials to bypass that limitation.
 The lab forwards controls and archive packets, and never returns its project key.
 It does not replace a production login/authorization service. Failed or uncertain
 activity creation cannot authorize later grant/end calls for that ID.
