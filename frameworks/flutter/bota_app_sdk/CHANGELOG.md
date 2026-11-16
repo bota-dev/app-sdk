@@ -1,3 +1,9 @@
+## 2.0.0-beta.24 (candidate)
+
+- Synchronize package and native dependency identities with the current SDK main candidate for Demo Android development delivery.
+- The new mandatory BLE admission is implemented in the generated React Native host. This version bump does not claim an equivalent new Flutter pairing API or physical device acceptance.
+- Canonical inventories, protected publication and public consumer checks remain required.
+
 ## 2.0.0-beta.23 (unreleased)
 
 - Prepare the synchronized SDK release containing connected Pin/Note model normalization and discovered WiFi service capabilities for Android/iOS React Native consumers.

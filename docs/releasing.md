@@ -1,3 +1,7 @@
+# Candidate synchronized beta: 2.0.0-beta.24
+
+Prepare the current main BLE security implementation for the requested Demo Android development binary. Beta.23 is already published and immutable. Generate new canonical inputs and qualify the exact beta.24 source before protected publication; then adopt the public archive in Demo and rebuild its native host. See [preflight and acceptance boundaries](../release/evidence/2.0.0-beta.24-preflight.md).
+
 # Candidate synchronized beta: 2.0.0-beta.23
 
 Prepare merged model/WiFi fixes together with current-main BYO changes at `c5a25cc40cb9f87b03c7ffe0647fa860d0dea924` for the requested Demo dev APK. Regenerate canonical JavaScript and native archive checksums for the combined source. Exact final main CI/inventory and protected release approval remain required. Existing versions are immutable. See [preflight](../release/evidence/2.0.0-beta.23-preflight.md).

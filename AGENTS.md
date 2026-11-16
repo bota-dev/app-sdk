@@ -1,5 +1,7 @@
 # AGENTS.md
 
+Beta.24 prepares current main BLE security for Demo Android development delivery. Beta.23 is already published and must remain immutable. Regenerate canonical JS, Apple metadata and the complete Flutter inventory; retain independent latest-head approval, exact main CI/inventory and protected publication before Demo registry adoption. See [preflight](release/evidence/2.0.0-beta.24-preflight.md). This synchronized version does not extend the generated-RN security implementation to unmodified Flutter/native facades or claim physical acceptance.
+
 Local WiFi follows the [protocol contract](https://github.com/bota-dev/internal-docs/blob/feat/local-wifi-sync/device/App-Local-WiFi-Protocol-Contract.md) and [SDK integration guide](docs/parity/local-wifi.md).
 
 Beta.23 preparation includes merged model/WiFi PR #58 and current-main BYO PR #56, and targets a standalone Demo dev APK using the published SDK. Regenerate the shared JavaScript and Apple checksums after main integration; do not select either stale generated side of the merge. Retain synchronized versions, independent integration review, exact main CI/inventory and protected publication. See [preflight](release/evidence/2.0.0-beta.23-preflight.md).
