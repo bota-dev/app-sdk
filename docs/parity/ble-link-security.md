@@ -65,6 +65,11 @@ Use `createSecureBlePlxPort(manager, { platform, bonding })` with the generated
 `/runtime`. Android supplies the optional native `BotaBleSecurity` TurboModule
 from the SDK's `native-io` package; it contains only OS pairing calls, not another
 Bota workflow engine. Do not autolink both `native-io` and the full native package.
+The JavaScript-only runtime package retains structural pairing-port types without
+React Native imports. Both native distributions must pass their consumer builds
+and strict permission lint. Each declares its Bluetooth permissions rather than
+relying on transitive AAR manifests; check the OS permission immediately before bonding
+operations and handle revocation during the request.
 iOS passes no Android bridge. The generic `createBlePlxPort` and independent
 Android/Apple SDK facades do not automatically opt into this new RN admission.
 
