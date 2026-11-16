@@ -1688,3 +1688,26 @@ test('factory reset recovery refuses a journal from another binding generation w
   assert.equal(writesBeyondTimeSync(f).length, 0);
   await f.adapter.destroy();
 });
+
+test('connection adoption waits for security before identity metadata, time sync and readiness', async () => {
+  const f = fixture(); let release, entered;
+  const waiting = new Promise(resolve => { entered = resolve; });
+  const gate = new Promise(resolve => { release = resolve; });
+  f.ports.ble.ensureSecure = async () => { entered(); await gate; };
+  await f.adapter.configure({});
+  const pending = f.adapter.connectSelected({ id: 'secure-device', rssi: -45, discoveredAtMs: 0 });
+  await waiting;
+  assert(f.calls.filter(c => c[0] === 'read').every(c => c[1].characteristicUuid === f.metadata.CHAR_SERIAL_NUMBER));
+  assert(!f.calls.some(c => c[0] === 'write'));
+  release(); await pending;
+  assert(f.calls.some(c => c[0] === 'write'), 'normal initialization resumes after admission');
+  await f.adapter.destroy(); f.core.dispose();
+});
+test('failed security admission disconnects without a time sync or business write', async () => {
+  const f = fixture(); f.ports.ble.ensureSecure = async () => { throw new Error('Pairing refused'); };
+  await f.adapter.configure({});
+  await assert.rejects(f.adapter.connectSelected({ id: 'secure-device', rssi: -45, discoveredAtMs: 0 }), /Pairing refused/);
+  assert(!f.calls.some(c => c[0] === 'write'));
+  assert(f.calls.some(c => c[0] === 'disconnect' && c[1] === 'secure-device'));
+  await f.adapter.destroy(); f.core.dispose();
+});

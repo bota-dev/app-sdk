@@ -1,5 +1,10 @@
 # React Native generated JavaScript runtime and OTA boundary
 
+The [BLE link security profile](ble-link-security.md) adds mandatory security
+admission for first-party RN Apps, including Android OS bonding. It requires
+matching firmware, a new SDK release and native App rebuilds; existing package
+pins do not provide this capability.
+
 The unpublished [managed completion handoff](managed-completion-retirement.md)
 preserves confirmed journal completion across normal transport retirement.
 Cancellation and scoped durable cleanup remain separate gates.
