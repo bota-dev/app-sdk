@@ -5,6 +5,7 @@ import re
 import subprocess
 import sys
 import time
+import uuid
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from threading import Event, Thread
@@ -36,7 +37,7 @@ def wait_for(predicate, scroll=False):
         if scroll:
             run('shell', 'input', 'swipe', str(width // 2), str(height * 3 // 4), str(width // 2), str(height // 3), '400')
         time.sleep(1)
-    raise RuntimeError('The bundled conversation App did not reach the expected screen')
+    raise RuntimeError('The bundled recording App did not reach the expected screen')
 
 def matching(tree, attribute, value, class_name=None):
     return next((node for node in tree.iter('node') if node.get(attribute) == value and
@@ -52,20 +53,23 @@ def control(value, class_name=None):
         if node is not None:
             return node
         run('shell', 'input', 'swipe', str(width // 2), str(height * 3 // 4), str(width // 2), str(height // 3), '400')
-    raise RuntimeError('Required conversation control is not visible')
+    raise RuntimeError('Required recording control is not visible')
 
 def tap(node):
     if node is None:
-        raise RuntimeError('Required conversation control is missing')
+        raise RuntimeError('Required recording control is missing')
     x1, y1, x2, y2 = map(int, re.findall(r'\d+', node.attrib['bounds']))
     run('shell', 'input', 'tap', str((x1 + x2) // 2), str((y1 + y2) // 2))
 
 run('install', '-r', str(Path(apk).resolve()), timeout=120)
+# Admission is rejected before a microphone owner is created. Grant the
+# disposable emulator's permission so the native HTTP boundary is exercised.
+run('shell', 'pm', 'grant', package, 'android.permission.RECORD_AUDIO')
 package_uid = re.search(r'\buid:(\d+)', run('shell', 'cmd', 'package', 'list', 'packages', '-U', package).decode()).group(1)
 width, height = map(int, re.findall(r'(\d+)x(\d+)', run('shell', 'wm', 'size').decode())[-1])
 # A neutral UI error alone could come from JS validation without native HTTP.
 # Observe the exact synthetic request at a disposable loopback fixture as well.
-received_join = Event()
+received_start = Event()
 class UnavailableHost(BaseHTTPRequestHandler):
     def log_message(self, *_args):
         pass
@@ -78,11 +82,17 @@ class UnavailableHost(BaseHTTPRequestHandler):
             payload = json.loads(body)
         except (ValueError, UnicodeDecodeError):
             payload = None
-        if (self.path == '/speech-host/join' and
+        ids = {}
+        if isinstance(payload, dict):
+            try:
+                ids = {key: str(uuid.UUID(payload[key])) for key in ['activityId', 'clockId', 'captureId']}
+            except (KeyError, ValueError, TypeError, AttributeError):
+                pass
+        if (self.path == '/recording-host/start' and
             self.headers.get('Origin') == 'http://127.0.0.1:4173' and
-            self.headers.get('X-Speech-Role') == 'a' and self.headers.get('X-Speech-Code') == 'x' * 32 and
-            payload == {'captureProfile': 'speech_capture_pcm_v1'}):
-            received_join.set()
+            self.headers.get('X-Recording-Code') == 'x' * 32 and len(set(ids.values())) == 3 and
+            payload == {**ids, 'sourceLanguage': 'multi', 'targetLanguage': 'zh', 'retention': 'original_audio_and_text'}):
+            received_start.set()
         payload = b'{"error":{"code":"unavailable"}}'
         self.send_response(503)
         self.send_header('Content-Type', 'application/json')
@@ -98,19 +108,19 @@ try:
     run('logcat', '-c')
     run('logcat', '-b', 'crash', '-c')
     (output / 'launch.txt').write_bytes(run('shell', 'am', 'start', '-W', '-n', package + '/dev.bota.speech.companion.MainActivity'))
-    wait_for(lambda value: labelled(value, 'Listen in your language.') is not None)
-    (output / 'conversation.png').write_bytes(run('exec-out', 'screencap', '-p'))
-    tap(control('Role access code', 'android.widget.EditText'))
+    wait_for(lambda value: labelled(value, 'Recording translation') is not None)
+    (output / 'recording.png').write_bytes(run('exec-out', 'screencap', '-p'))
+    tap(control('Operator access code', 'android.widget.EditText'))
     run('shell', 'input', 'text', 'x' * 32)
     run('shell', 'input', 'keyevent', 'BACK')
-    tap(control('Join conversation'))
-    if not received_join.wait(timeout=15):
-        raise RuntimeError('The conversation App did not send the native loopback join request')
-    # The error is below the listening controls on smaller screens.
-    wait_for(lambda value: any('Could not join.' in node.get('text', '') + node.get('content-desc', '') for node in value.iter('node')), scroll=True)
+    tap(control('Start microphone'))
+    if not received_start.wait(timeout=15):
+        raise RuntimeError('The recording App did not send the native loopback start request')
+    # The error is below the recording controls on smaller screens.
+    wait_for(lambda value: labelled(value, 'The operation could not complete. Original audio remains independent.') is not None, scroll=True)
     (output / 'unavailable-host.png').write_bytes(run('exec-out', 'screencap', '-p'))
     run('shell', 'input', 'keyevent', 'HOME')
-    print('Bundled RN App rendered, sent the native loopback join request, handled HTTP 503 and accepted background navigation. No media was started.')
+    print('Bundled RN recording App rendered, sent the native loopback start request, handled HTTP 503 and accepted background navigation. No media was started.')
 except BaseException:
     # This emulator contains only synthetic fixture data and never opens media.
     # Preserve startup evidence before force-stop destroys the failed process.
@@ -125,7 +135,7 @@ except BaseException:
             pass
     raise
 finally:
-    (output / 'host-observation.json').write_text(json.dumps({'originalProfileJoinReceived': received_join.is_set()}) + '\n')
+    (output / 'host-observation.json').write_text(json.dumps({'recordingStartReceived': received_start.is_set()}) + '\n')
     try:
         run('shell', 'am', 'force-stop', package)
         run('reverse', '--remove', 'tcp:4173')
