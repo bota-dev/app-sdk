@@ -58,7 +58,7 @@ private final class RecordingRoute: @unchecked Sendable {
             owner = acquired; notice = "Microphone active. Live captions are provisional."
             polling = Task { @MainActor [weak self] in
                 while !Task.isCancelled {
-                    do { try await Task.sleep(for: .seconds(2)) } catch { return }
+                    do { try await Task.sleep(nanoseconds: 2_000_000_000) } catch { return }
                     guard let self, self.revision == captured, let owner = self.owner else { return }
                     self.finalText = owner.originalView.status + "\n" + owner.originalView.passages.joined(separator: "\n\n")
                 }

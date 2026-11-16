@@ -4,6 +4,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
+import android.widget.TextView
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -18,6 +19,27 @@ import android.net.Uri
 @RunWith(RobolectricTestRunner::class)
 @Config(application = CompanionApplication::class, sdk = [26])
 class CompanionActivityTest {
+    @Test fun recordingLauncherIgnoresIntentAuthority() {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://untrusted.example/record?code=injected"))
+            .putExtra("host", "https://untrusted.example").putExtra("code", "injected")
+            .putExtra("autoJoin", true).putExtra("input", true)
+        val controller = Robolectric.buildActivity(RecordingActivity::class.java, intent).create().start().resume().visible()
+        val activity = controller.get()
+        shadowOf(Looper.getMainLooper()).idle()
+        fun children(view: View): List<View> = listOf(view) + if (view is ViewGroup)
+            (0 until view.childCount).flatMap { children(view.getChildAt(it)) } else emptyList()
+        val views = children(activity.findViewById(android.R.id.content))
+        val code = views.filterIsInstance<EditText>().single { it.hint == "Operator access code" }
+        assertEquals("", code.text.toString()); assertFalse(code.isSaveEnabled)
+        assertEquals(activity.getString(R.string.default_host), views.filterIsInstance<EditText>().single { it.hint == "Local host" }.text.toString())
+        assertTrue(views.filterIsInstance<TextView>().any { it.text == "Ready" })
+        assertTrue(views.filterIsInstance<Button>().single { it.text == "Start microphone" }.isEnabled)
+        code.setText("synthetic-access-code")
+        controller.pause().stop(); shadowOf(Looper.getMainLooper()).idle()
+        assertEquals("", code.text.toString())
+        controller.destroy()
+    }
+
     @Test fun exportedLauncherIgnoresIntentAuthority() {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://untrusted.example/join?code=injected"))
             .putExtra("host", "https://untrusted.example").putExtra("code", "injected")

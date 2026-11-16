@@ -8,13 +8,14 @@
     "BYO customer ABI 0x0530: packet-kind constant only; encode uses PacketFields.required_bytes_bounded to check typed field length <= 32768 before the existing owned copy. No new unsafe borrow or suppression is introduced; existing reviewed unsafe boundaries are unchanged.",
     "Local WiFi compatibility: command_from_packet adds only local_wifi: false to the existing encrypted-v2 request. The C ABI remains BLE-only; allowed fields, PacketFields validation and every reviewed unsafe boundary are unchanged.",
     "Secure WiFi v2 review (2026-11-03): protocol.rs changes only the owned encode regression to require UnsupportedOperation/Provision for legacy WiFi credentials. Packet ownership, the encode call, input validation and all annotated unsafe boundaries are unchanged. All 85 existing dispositions remain applicable.",
-    "Speech integration review (2026-11-04): lib.rs only adds the speech module and public exports; all existing annotated ownership and unsafe boundaries are unchanged. test-emulator-lane.test.mjs adds fixed-argv speech admission cases against its temporary fixture; the existing annotated shell-free spawn helper is unchanged. All 85 existing dispositions remain applicable."
+    "Speech integration review (2026-11-04): lib.rs only adds the speech module and public exports; all existing annotated ownership and unsafe boundaries are unchanged. test-emulator-lane.test.mjs adds fixed-argv speech admission cases against its temporary fixture; the existing annotated shell-free spawn helper is unchanged. All 85 existing dispositions remain applicable.",
+    "Recording-owner compatibility review (2026-11-16): lib.rs changes only Rustfmt re-export layout/order; the entire body from command capability exports onward, including every annotated unsafe boundary, is unchanged. The launcher exception follows RecordingActivity, which ignores Intent URI/extras, requires explicit Start and microphone permission, keeps the operator code out of saved state and clears it on departure. recordingLauncherIgnoresIntentAuthority exercises the current public launcher; no rule or scan scope is removed."
   ],
   "original_source_revision": "dc51e35dd5f968ad2b2847d0a08742757cf9fdbb",
   "reviewed_files": {
     "bindings/device-sdk-ffi/src/command.rs": "65765651344563798de0b4fa023f85baaea6a063820da8c4a41b9ee3cb16b458",
     "bindings/device-sdk-ffi/src/event.rs": "ef75367e23d5c50e3688a76b6e02b6b669a808eb194e47a7691aed56e14183e1",
-    "bindings/device-sdk-ffi/src/lib.rs": "e712e4432519b25e2c9529aa45c8104df3376fa0719f5cc0896ea6672423d4be",
+    "bindings/device-sdk-ffi/src/lib.rs": "03483156ac6c5d8a4f8403a950d94ae615c5edbd907cb40bb6212100d698a9d1",
     "bindings/device-sdk-ffi/src/output.rs": "937ec7839d7d3cee8627b7f2b4ddaf79d99e4598184a9645eadbef35ad8f5f46",
     "bindings/device-sdk-ffi/src/packet.rs": "cad11458b11c6ddefe8205b43e75a6df8ec1d0a58598086677440272af3cf69d",
     "bindings/device-sdk-ffi/src/protocol.rs": "efbad6653b3fc1d0ff64491d3f3ae71e130a8326b6907c6a89006fb3f05938fa",
@@ -28,7 +29,7 @@
     "tools/flutter/verify-pigeon.mjs": "7075ea28256ea6f3307a220b8d29117bad4721dfa4e7b74863aea8c84784f2e0",
     "tools/release/wait-cocoapods.mjs": "96d05f66038c98d44a6d3f046216d00b8d14a1172430e570db251319e0bc5a8d",
     "tools/xtask/src/main.rs": "a47014fe411b655db72de809f5f1dc16d1658f840cccce72e8ff6fbe86585fcc",
-    "platforms/android/speech-companion/src/main/AndroidManifest.xml": "dd37c23463c80f066962a76cbd5240b7b132166d03d9c809ba5cd5b9191394be"
+    "platforms/android/speech-companion/src/main/AndroidManifest.xml": "42f1463e75abd2204153c60f072c2a5f3b0c664e2453f71752e1794fca97aec3"
   },
   "findings": [
     {
@@ -632,7 +633,7 @@
       "path": "platforms/android/speech-companion/src/main/AndroidManifest.xml",
       "original_line": 12,
       "scope": "reviewed public launcher boundary",
-      "rationale": "Android requires the launcher Activity to be exported. CompanionActivity does not consume Intent extras or URI authority; initial state is silent and disconnected, with explicit user join and microphone permission/action gates. The Robolectric exportedLauncherIgnoresIntentAuthority regression verifies injected host, code, autoJoin and input extras cannot start or configure a session."
+      "rationale": "Android requires the launcher Activity to be exported. RecordingActivity does not consume Intent extras or URI authority; it starts in Ready state with no admission or microphone capture. Explicit operator code, Start and microphone permission remain required; operator code is not saved and is cleared on departure. The Robolectric recordingLauncherIgnoresIntentAuthority regression covers injected host, code, autoJoin and input extras on the actual launcher."
     }
   ]
 }

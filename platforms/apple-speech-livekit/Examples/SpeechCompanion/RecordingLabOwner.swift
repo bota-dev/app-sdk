@@ -113,7 +113,7 @@ final class RecordingLabOwner: RecordingSpeechConnection {
         originalView.capturing = true
         polling = Task { [weak self] in
             while !Task.isCancelled {
-                do { try await Task.sleep(for: .seconds(2)) } catch { return }
+                do { try await Task.sleep(nanoseconds: 2_000_000_000) } catch { return }
                 guard let self, !self.closed else { return }; await self.poll()
             }
         }
