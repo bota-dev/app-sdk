@@ -87,8 +87,28 @@ from scan/connect deadlines. Cancellation requests native/GATT cancellation and
 joins submitted IO before releasing the operation owner. Cleanup can outlast the
 deadline; a non-settling OS operation must not be replaced by concurrent work.
 Rejection, missing native code, missing/malformed probe, insufficient security,
-timeout and disconnect all fail closed. The failed adoption disconnects. A new
+timeout and disconnect all fail closed. A missing AUTH service or LINK_SECURITY
+characteristic reports `ble_security_firmware_required` with firmware-upgrade
+guidance; transport/read failures remain security failures, not proof of old firmware. The failed adoption disconnects. A new
 connection always needs a new proof, including when its peripheral ID is reused.
+
+## Discovery and required security
+
+There is one required-security policy, with no legacy binding mode, firmware
+allowlist or plaintext fallback. Scanning uses the existing discovery path and
+does not require pairing or the LINK_SECURITY characteristic. A scan result is
+only a candidate; it does not establish encryption or readiness for binding.
+With the matching SDK installed, a missing Android pairing bridge also leaves
+initialization and scanning available and refuses connection before OS access.
+A missing SDK factory remains an App/SDK release integration error; the Apps do
+not wrap an old SDK in a compatibility adapter.
+
+Firmware without a valid protected probe must be upgraded before binding or
+reconnecting, even for an already-bound device. Business prepare/install/confirm
+runs only after security admission. Normal App BLE OTA also uses secure
+connection adoption: discovery does not authorize an OTA bypass. Qualify an
+independent upgrade path and upgrade unsupported firmware before rolling out the
+required-security App, so devices are not stranded behind this gate.
 
 ## Release and device acceptance
 
@@ -106,7 +126,8 @@ One cross-repository acceptance checklist:
 - [ ] User rejects/cancels or waits past the deadline: no token install, Wi-Fi credential write or cloud binding confirmation; retry works.
 - [ ] Existing bonds, phone/device reboot, ordinary reconnect and post-OTA reconnect: fresh encrypted proof, unchanged business binding generation, no unnecessary re-pair prompt.
 - [ ] One-sided bond deletion, device reset, bond database full and permission revocation: explicit failure/recovery, no automatic wipe/unpair or plaintext downgrade.
-- [ ] Old firmware, missing probe, false encrypted flag, short key, bad version/length and stale callbacks: connection is refused before business IO.
+- [ ] Scanning remains available before pairing and with a missing Android bridge. Old firmware remains discoverable; a missing security endpoint requires firmware upgrade and prevents binding/reconnect before business IO. False encrypted flag, short key, bad version/length and stale callbacks never admit a connection.
+- [ ] The supported firmware upgrade route works before App rollout; normal App BLE OTA cannot bypass security admission.
 - [ ] Unencrypted external GATT client cannot read/write/subscribe to sensitive endpoints; firmware also blocks notifications before encryption, independent of App gates.
 - [ ] Air capture plus firmware connection-state logs prove encryption and a 16-byte key before the first sensitive ATT exchange, including first pairing. Verify LE Secure Connections for protection when the first pairing itself is captured; Legacy Just Works cannot satisfy that claim. The probe does not attest pairing mode. Just Works does not claim MITM protection.
 - [ ] Original prepare → opaque envelope → durable PAIRED → confirm success/failure/retry behavior remains intact on the exact released App/SDK/firmware builds.

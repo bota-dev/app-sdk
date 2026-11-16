@@ -1,6 +1,6 @@
 import { createBlePlxPort } from './blePlx';
 import type { BlePlxManager } from './blePlx';
-import type { JsBlePort, JsHostContext, JsHostSubscription } from './contracts';
+import type { JsBlePort, JsGattValue, JsHostContext, JsHostSubscription } from './contracts';
 import { createGeneratedJsCore } from './core';
 
 /** OS bonding only. Neither method reads or returns Bluetooth keys. */
@@ -120,8 +120,18 @@ export function createSecureBlePlxPort(manager: BlePlxManager, options: BleLinkS
         const core = createGeneratedJsCore();
         try {
           const metadata = core.codec('protocolMetadata', {}) as Record<string, string>;
-          const value = await base.read({ peripheralId: id, serviceUuid: metadata.SERVICE_BOTA_AUTH!,
-            characteristicUuid: metadata.CHAR_LINK_SECURITY! }, scoped);
+          let value: JsGattValue;
+          try {
+            value = await base.read({ peripheralId: id, serviceUuid: metadata.SERVICE_BOTA_AUTH!,
+              characteristicUuid: metadata.CHAR_LINK_SECURITY! }, scoped);
+          } catch (error) {
+            const code = (error as { code?: string } | null)?.code;
+            if (code === 'characteristic_not_found' || code === 'service_not_found') {
+              throw failure('ble_security_firmware_required',
+                'This device lacks Bluetooth security support. Update its firmware before connecting.');
+            }
+            throw error;
+          }
           if (!(value instanceof Uint8Array) || core.codec('validateBleLinkSecurity', { bytes: Array.from(value) }) !== true) {
             throw required();
           }
@@ -136,6 +146,7 @@ export function createSecureBlePlxPort(manager: BlePlxManager, options: BleLinkS
         link.ready = false;
         if (reason) throw reason;
         const code = (error as { code?: string } | null)?.code;
+        if (code === 'ble_security_firmware_required') throw error;
         if (code && ['ble_pairing_rejected', 'ble_pairing_failed', 'ble_pairing_busy',
           'ble_permission_required', 'ble_security_timeout', 'ble_security_cleanup_failed', 'cancelled'].includes(code)) {
           throw failure(code, 'Bluetooth pairing did not complete.');

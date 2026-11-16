@@ -58,8 +58,20 @@ test('iOS reads the protected characteristic without calling an Android bridge',
   await f.port.ensureSecure('device', ctx);
   assert(!f.calls.some(c => Array.isArray(c) && c[0] === 'bond'));
 });
-test('missing protected characteristic fails closed', async () => {
-  const f = fixture(), ctx = context(); f.setRead(async () => { throw { errorCode: 404 }; });
+for (const errorCode of [302, 404]) {
+  test(`missing security endpoint (${errorCode}) requires firmware upgrade without a downgrade`, async () => {
+    const f = fixture(), ctx = context(); f.setRead(async () => { throw { errorCode }; });
+    await f.port.connect('device', ctx);
+    await assert.rejects(f.port.ensureSecure('device', ctx), {
+      code: 'ble_security_firmware_required',
+      message: 'This device lacks Bluetooth security support. Update its firmware before connecting.',
+    });
+    await assert.rejects(f.port.write(f.address, Uint8Array.of(5), true, ctx));
+    assert(!f.calls.includes('write'));
+  });
+}
+test('a transport read failure is not misreported as unsupported firmware', async () => {
+  const f = fixture(), ctx = context(); f.setRead(async () => { throw { errorCode: 401 }; });
   await f.port.connect('device', ctx);
   await assert.rejects(f.port.ensureSecure('device', ctx), { code: 'ble_security_failed' });
   await assert.rejects(f.port.write(f.address, Uint8Array.of(5), true, ctx));
@@ -119,8 +131,16 @@ test('only the standard public serial endpoint is readable before security admis
   await assert.rejects(f.port.read({ ...f.address, characteristicUuid: '2a25' }, ctx));
   await assert.rejects(f.port.read(f.address, ctx));
 });
-test('missing Android native bridge refuses connection before OS access', async () => {
-  const f = fixture(); const port = createSecureBlePlxPort(f.manager, { platform: 'android' });
+test('missing Android native bridge permits discovery but refuses connection before OS access', async () => {
+  const f = fixture(), candidates = [];
+  f.manager.startDeviceScan = (_services, _options, callback) => {
+    f.calls.push('scan'); callback(null, { id: 'legacy', localName: 'BOTA_DEV' });
+  };
+  f.manager.stopDeviceScan = () => { f.calls.push('stop-scan'); };
+  const port = createSecureBlePlxPort(f.manager, { platform: 'android' });
+  const scan = await port.scan(false, value => candidates.push(value), context());
+  assert.equal(candidates[0].peripheral_id, 'legacy');
+  await scan.remove();
   await assert.rejects(port.connect('device', context()), { code: 'ble_security_unavailable' });
-  assert.deepEqual(f.calls, []);
+  assert.deepEqual(f.calls, ['scan', 'stop-scan']);
 });
