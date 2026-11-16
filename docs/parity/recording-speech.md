@@ -5,6 +5,29 @@ one qualified downlink. It uses an authenticated WebSocket for continuous upload
 and downlink, optional independent encrypted original capture, and no room or participant roster. This
 source preview is default-off and is not a published SDK feature.
 
+## Server admission and stage controls
+
+The backend requires its `RECORDING_SPEECH_ENABLED` master switch and an exact
+project ID in `RECORDING_SPEECH_PROJECT_IDS`; an empty whitelist admits nobody.
+Its separate `RECORDING_SPEECH_ASR_ENABLED`, `RECORDING_SPEECH_TTS_ENABLED` and
+`RECORDING_SPEECH_DOWNLINK_ENABLED` flags also default to `false`.
+
+- ASR off permits capture and encrypted upload, with no realtime ASR, translation
+  or TTS. New upload-only activities have null provider bindings and no final MT.
+- TTS off permits enabled source/translated captions without synthesized audio.
+- Downlink off blocks generated-audio delivery even after headphone confirmation.
+  Captions continue when ASR is enabled; synthesis without an output consumer is
+  skipped. Effective TTS therefore requires ASR, TTS and downlink all enabled.
+
+These are server process settings applied by deployment, not client permissions,
+Portal controls or hot session toggles. Client route/target messages cannot
+override them. The DEV deployment JSON uses `asrEnabled`, `ttsEnabled` and
+`downlinkEnabled`, defaulting to `false`, alongside the master `enabled` and
+`projectIds`. Only selected provider dependencies require credentials: upload-only
+needs no realtime providers; captions-only needs Deepgram and DeepL; effective
+speech additionally needs ElevenLabs. The current preview refuses HIPAA/GDPR
+projects and BYO provider routes.
+
 ## Integrate the direct owner
 
 The authenticated application backend resolves the end user, prepares a capture
@@ -14,7 +37,7 @@ backend. The microphone source is `mixed`/`unknown`, starts at sample zero, and
 uses PCM16 mono at 48 kHz. Output is memory-only PCM16 mono at 24 kHz.
 
 The backend first stores ordered encrypted input objects and commits their upload
-receipts, then continuously reads and verifies them into ASR. The existing `BRS1`
+receipts, then continuously reads and verifies them into enabled ASR. The existing `BRS1`
 frames and source/target clocks are unchanged. Translation, TTS and playback can
 start while capture is still running; no complete file or stop event is required.
 All retention modes use temporary encrypted uploaded input, with a key confined
@@ -49,6 +72,12 @@ Page final text with its `result_sha256`; invalidate the old display on a change
 source version. Final translation follows historical target intervals and never
 produces TTS. A retained original can complete after live failure. Text-only and
 live-only activities have no retained audio or original-file final transcript.
+Retained-original batch ASR remains separate from the realtime ASR switch.
+Existing activities with a pinned translation route can finish final MT after
+live ASR is disabled only while the original DeepL credential/revision/plan and
+master/project admission remain available. An operator retaining this path keeps
+`deeplCredentialRevision` and `deeplPlan` together with `DEEPL_API_KEY`; new
+upload-only activities do not acquire a translation binding implicitly.
 
 ## Maintained microphone consumers
 
