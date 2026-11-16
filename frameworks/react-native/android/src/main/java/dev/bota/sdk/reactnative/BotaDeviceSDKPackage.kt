@@ -1,5 +1,7 @@
 package dev.bota.sdk.reactnative
 
+import dev.bota.sdk.reactnative.security.BotaBleSecurityModule
+
 import dev.bota.sdk.reactnative.localwifi.BotaLocalWifiTransportModule
 import dev.bota.sdk.reactnative.upload.BotaUploadV2BackendModule
 import com.facebook.react.BaseReactPackage
@@ -19,6 +21,8 @@ public class BotaDeviceSDKPackage : BaseReactPackage() {
             BotaUploadV2BackendModule(reactContext)
         } else if (name == BotaLocalWifiTransportModule.NAME) {
             BotaLocalWifiTransportModule(reactContext)
+        } else if (name == BotaBleSecurityModule.NAME) {
+            BotaBleSecurityModule(reactContext)
         } else {
             null
         }
@@ -26,6 +30,12 @@ public class BotaDeviceSDKPackage : BaseReactPackage() {
     override fun getReactModuleInfoProvider(): ReactModuleInfoProvider =
         ReactModuleInfoProvider {
             mapOf(
+                BotaBleSecurityModule.NAME to ReactModuleInfo(
+                    name = BotaBleSecurityModule.NAME,
+                    className = BotaBleSecurityModule::class.java.name,
+                    canOverrideExistingModule = false, needsEagerInit = false,
+                    isCxxModule = false, isTurboModule = true,
+                ),
                 BotaLocalWifiTransportModule.NAME to ReactModuleInfo(
                     name = BotaLocalWifiTransportModule.NAME,
                     className = BotaLocalWifiTransportModule::class.java.name,

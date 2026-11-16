@@ -33,6 +33,8 @@ import { createJsBluetoothState } from './jsHost/bluetoothState';
 import { setCompatibilityBluetoothState } from './compatibility/bluetoothState';
 
 export { createBlePlxPort } from './jsHost/blePlx';
+export { createSecureBlePlxPort } from './jsHost/bleSecurity';
+export type { BleBondingBridge, BleLinkSecurityOptions } from './jsHost/bleSecurity';
 export { isEmptyLegacyAndroidV2CheckpointCatalog } from './jsHost/legacyStorage';
 export { UPLOAD_RECOVERY_VERSION, RECORDING_TRANSFER_RETRY_VERSION } from './uploadRecovery';
 export { deriveSyncStatus } from './sync/syncStatus';

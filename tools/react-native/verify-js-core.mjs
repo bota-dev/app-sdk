@@ -37,6 +37,9 @@ runBoundModelConformance(codec, (response, label) => {
 (actual, expected, message) => assert.deepEqual(actual, expected, message));
 call({ version: 1, action: 'status' });
 codec('protocolMetadata', {});
+assert.equal(codec('validateBleLinkSecurity', { bytes: [1, 1, 16, 0] }).result, true);
+assert.equal(codec('validateBleLinkSecurity', { bytes: [1, 0, 16, 0] }).ok, false);
+assert.equal(codec('validateBleLinkSecurity', { bytes: [1, 1, 7, 0] }).ok, false);
 // Exercise the public dispatch, not just the Rust decoder or a stubbed host.
 const wifiStatus = codec('decodeWiFiStatusEvent', { bytes: [2, 80, 4, 66, 111, 116, 97] });
 assert.equal(wifiStatus.ok, true);

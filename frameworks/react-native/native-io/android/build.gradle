@@ -26,6 +26,7 @@ android {
   sourceSets.main.java.srcDirs += [
     "../generated/android",
   ]
+  sourceSets.test.java.srcDirs += ["../../android/src/test/java/dev/bota/sdk/reactnative/security"]
   compileOptions {
     sourceCompatibility JavaVersion.VERSION_17
     targetCompatibility JavaVersion.VERSION_17
@@ -41,4 +42,5 @@ android {
 dependencies {
   implementation "com.facebook.react:react-android"
   implementation "com.squareup.okhttp3:okhttp:4.12.0"
+  testImplementation "junit:junit:4.13.2"
 }

@@ -18,6 +18,59 @@ storage, diagnostics, factory reset, BLE firmware upload, recording markers and
 nearby find. It describes current SDK source contracts; it is not a manufacturing
 specification or proof that every firmware build or SDK package enables them.
 
+## BLE link security
+
+The generated RN App connection profile requires OS pairing/bonding and current
+link encryption before initialization or sensitive GATT. This source contract
+requires firmware implementation and joint acceptance before release; it does
+not establish support in existing device images. Business binding and HPKE
+credential envelopes keep their existing ordering and formats.
+
+`SERVICE_BOTA_AUTH` (`B07A0005-0000-1000-8000-00805F9B34FB`) adds read-only
+`CHAR_LINK_SECURITY` (`B07A0005-0005-1000-8000-00805F9B34FB`). Its exact 4-byte v1
+value is `01 01 10 00`: version 1, flags bit 0 = current link encrypted (all other
+bits zero), current encryption key size 16 bytes, reserved zero. Allocations,
+layout and constants are owned by [the manifest](protocol/manifest/device-protocol.yaml).
+The Rust validator rejects every other length, version, flag, key size or
+reserved value. The probe contains no secrets and changes no business state.
+
+Firmware must:
+
+1. Enable SMP pairing and bonding, accept a central-initiated pairing request,
+   negotiate a 16-byte key and persist the protocol stack's bond database across
+   restart. Peripheral-initiated Security Request remains optional; App behavior
+   does not depend on it. LTK handling stays in the phone/firmware Bluetooth stack.
+2. Mark LINK_SECURITY as requiring an encrypted read with a 16-byte key in the
+   ATT/GATT security permissions. Return the stack's appropriate insufficient
+   authentication/encryption/key-size ATT error until satisfied, so iOS can
+   trigger security. A plain-readable constant success value is forbidden.
+3. Build the value from the actual request's connection handle and the stack's
+   encryption-change/key-size state. Reset that state on disconnect and key
+   failure; never infer it from a stored bond, business PAIRED or another link.
+4. Independently enforce equivalent protection for sensitive authentication,
+   credential, Wi-Fi, control, recording, streaming, log and OTA reads/writes,
+   notification subscriptions/CCCD and outgoing notifications. App checks are not
+   a substitute for server permissions. Public discovery and `180A/2A25` serial
+   may remain accessible before admission.
+5. Preserve existing ownership/grant/HPKE checks. Reset and one-sided bond loss
+   need a documented, explicit recovery path; the App does not silently erase
+   bonds or reset a device. Report stack capabilities and the actual pairing
+   mode before release. Just Works does not supply MITM protection, and a
+   16-byte key alone does not prove LE Secure Connections Only. To qualify
+   protection against capture of first pairing, verify LE Secure Connections;
+   Legacy Just Works cannot meet that passive-eavesdropping claim. This probe
+   does not report pairing mode, so firmware configuration and capture evidence
+   are separate release gates. See the
+   [Bluetooth security properties](https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core_v6.3/out/en/host/security-manager-specification.html).
+
+Android waits for system bonding then reads the probe; iOS triggers security by
+reading the protected probe. Every connection, including reconnect and post-OTA,
+needs a fresh read. The App deadline is 60 seconds by default; cancellation joins
+submitted work, and failure disconnects without a plaintext fallback. Scanning
+and public identity verification occur before this gate. Time sync, provisioning
+context, prepare → HPKE install → durable PAIRED → cloud confirm occur after it.
+See [sequence diagrams and joint acceptance](docs/parity/ble-link-security.md).
+
 ## Contents
 
 - [Protocol authority and notation](#protocol-authority-and-notation)
@@ -105,7 +158,7 @@ Characteristic shorthand `xxxx/yyyy` expands to
 | CONTROL | `0002` | Device status `0001`, recording control `0002`, recording status `0003`, time sync `0004`, device command `0005` |
 | PROVISIONING | `0003` | Pairing state `0001`, plaintext Token `0002` (compatibility mode), API endpoint `0003`, WiFi config `0004`, result `0005`, settings `0006` |
 | STORAGE | `0004` | Storage info `0001`, legacy list `0002`, legacy transfer `0003`, legacy control `0004`, legacy status `0005`; v2 allocation `0006` through `000C` below |
-| AUTH | `0005` | Device public key `0001`, nonce `0002`, historical backend public key `0003`, device certificate `0004` |
+| AUTH | `0005` | Device public key `0001`, nonce `0002`, historical backend public key `0003`, device certificate `0004`, link security `0005` |
 | WIFI_CONFIG | `0006` | Grant `0001`, credential `0002`, status `0003`, scan `0004` |
 | DIAGNOSTICS | `0007` | Control `0001`, data `0002` |
 | IDENTITY | `0008` | Manufacturing serial alias `0001` for Web Bluetooth, which blocks standard `2A25`; native clients retain standard identity reads |

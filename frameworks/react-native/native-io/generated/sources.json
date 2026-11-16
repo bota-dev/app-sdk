@@ -1,5 +1,20 @@
 [
   {
+    "source": "frameworks/react-native/android/src/main/java/dev/bota/sdk/reactnative/security/BleBonding.kt",
+    "destination": "android/BleBonding.kt",
+    "sha256": "656f602cb77809f082b3c70ad9a11347fd4c6230261e9145218cf5ce908f5496"
+  },
+  {
+    "source": "frameworks/react-native/android/src/main/java/dev/bota/sdk/reactnative/security/BotaBleSecurityModule.kt",
+    "destination": "android/BotaBleSecurityModule.kt",
+    "sha256": "d7fd916aa87021785035cb0490f21c23d688bbe9141e96e9ac3346dc64e60741"
+  },
+  {
+    "source": "frameworks/react-native/src/specs/NativeBotaBleSecurity.ts",
+    "destination": "specs/NativeBotaBleSecurity.ts",
+    "sha256": "42dfb5534ad455eba655437009fa350e90d5dab84acaac5e95c66c2bdfd352f8"
+  },
+  {
     "source": "platforms/apple/Sources/BotaAppSDK/LocalWiFi/LocalWiFiHTTP.swift",
     "destination": "apple/LocalWiFiHTTP.swift",
     "sha256": "6eed76aa70a8beb376dbb4802b12130345a07ff235605a0d27d613db894c4337"

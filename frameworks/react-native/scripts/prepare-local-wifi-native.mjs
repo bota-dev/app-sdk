@@ -6,6 +6,9 @@ import { fileURLToPath } from 'node:url';
 const pkg = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const repository = resolve(pkg, '../..');
 const assets = [
+  ['frameworks/react-native/android/src/main/java/dev/bota/sdk/reactnative/security/BleBonding.kt', 'android/BleBonding.kt'],
+  ['frameworks/react-native/android/src/main/java/dev/bota/sdk/reactnative/security/BotaBleSecurityModule.kt', 'android/BotaBleSecurityModule.kt'],
+  ['frameworks/react-native/src/specs/NativeBotaBleSecurity.ts', 'specs/NativeBotaBleSecurity.ts'],
   ['platforms/apple/Sources/BotaAppSDK/LocalWiFi/LocalWiFiHTTP.swift', 'apple/LocalWiFiHTTP.swift'],
   ['platforms/apple/Sources/BotaAppSDK/LocalWiFi/LocalWiFiHotspot.swift', 'apple/LocalWiFiHotspot.swift'],
   ['platforms/android/sdk/src/main/kotlin/dev/bota/sdk/localwifi/LocalWiFiHTTP.kt', 'android/LocalWiFiHTTP.kt'],
