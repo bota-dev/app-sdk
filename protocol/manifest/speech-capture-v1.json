@@ -1,0 +1,17 @@
+{
+  "profile": "speech_capture_pcm_v1",
+  "version": 1,
+  "sampleRate": 48000,
+  "channels": 1,
+  "format": "pcm_s16le",
+  "cipher": "AES-256-GCM",
+  "nonceBytes": 12,
+  "tagBytes": 16,
+  "maximumChunkSamples": 48000,
+  "maximumCaptureSamples": 345600000,
+  "maximumChunks": 14400,
+  "maximumClocks": 256,
+  "chunkAadPrefix": "bota.speech.capture.chunk.v1\u0000",
+  "manifestAadPrefix": "bota.speech.capture.manifest.v1\u0000",
+  "journalAadPrefix": "bota.speech.capture.journal.v1\u0000"
+}

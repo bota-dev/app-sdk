@@ -1,0 +1,37 @@
+{
+  "nowMs": 1793491200000,
+  "configuration": {
+    "context": {
+      "projectId": "prj_synthetic",
+      "sessionId": "11111111-1111-4111-8111-111111111111",
+      "participantId": "22222222-2222-4222-8222-222222222222",
+      "memberGeneration": 2,
+      "retention": "live_only",
+      "canPublish": true,
+      "canSubscribe": true
+    },
+    "subscription": {
+      "revision": 1,
+      "targetLanguage": "zh",
+      "mode": "translated",
+      "sourceParticipantIds": [
+        "33333333-3333-4333-8333-333333333333",
+        "22222222-2222-4222-8222-222222222222"
+      ]
+    }
+  },
+  "grant": {
+    "protocol_version": 1,
+    "provider": "livekit",
+    "url": "wss://synthetic.livekit.cloud",
+    "room": "speech_2d14ac02a013bf742ce52e2726f3102441d637275d89390b71de2830bb229878",
+    "identity": "member_22222222-2222-4222-8222-222222222222_2",
+    "token": "synthetic-scoped-token",
+    "expires_at": "2026-11-01T00:01:00.000Z",
+    "session_id": "11111111-1111-4111-8111-111111111111",
+    "participant_id": "22222222-2222-4222-8222-222222222222",
+    "member_generation": 2,
+    "worker_generation": 3,
+    "processor_identity": "worker_55555555-5555-4555-8555-555555555555_3"
+  }
+}

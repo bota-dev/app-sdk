@@ -471,9 +471,24 @@ schema contains only the WiFi IO module. Profile-2 control and App source are
 implemented; public release adoption, iOS target compilation and external
 firmware acceptance remain pending. See [installation and limitations](../../docs/parity/local-wifi.md#standalone-native-packaging).
 
+### Retired room-based speech preview
+
+The unpublished `/speech`, `/speech/native-media` and `/speech/livekit` entries
+have been removed. Use `/speech/recording` and the native recording owner described
+below. The generated JavaScript device runtime no longer duplicates native speech
+session, capture or recording policy. Grants, PCM and archive keys remain native.
+The internal recording companion no longer links LiveKit or its old room bridge.
+See the [usage audit and qualification](../../docs/parity/legacy-speech-cleanup.md).
+
 ## Saving edited audio
 
 The App owns editing and finished files. `createRecordingEditClient` from the
 root or `/runtime` entry coordinates saving, uploads and recovery through an
 authenticated host. See the [recording editing contract](../../docs/recording-editing.md).
 This helper requires the matching qualified package before consumer enablement.
+
+## Recording-owned realtime speech preview
+
+The current direct recording activity, microphone/archive ownership, native
+bridges and consuming examples are documented in the [integration guide](../../docs/parity/recording-speech.md).
+This source preview is unreleased and requires backend and platform qualification.

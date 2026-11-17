@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bota recording translation</title><link rel="stylesheet" href="/src/speech.css"></head>
+<body><main><h1>Recording translation</h1><p>One microphone, live captions and one translation language. Original audio is optional.</p>
+<label>Operator access code <input id="code" type="password" autocomplete="off"></label>
+<label>Keep <select id="retention"><option value="original_audio_and_text">Original audio and text</option><option value="text_only">Text only</option><option value="live_only">Nothing after the live activity</option></select></label>
+<label>Translate to <select id="target"><option value="zh">Chinese</option><option value="en">English</option><option value="ja">Japanese</option><option value="ko">Korean</option><option value="es">Spanish</option><option value="fr">French</option><option value="de">German</option></select></label>
+<label><input type="checkbox" id="headphones"> I have verified this device is playing through headphones</label>
+<p>Speaker playback is unavailable. Reconfirm headphones after any route change.</p>
+<div><button id="start">Start microphone</button><button id="change" disabled>Apply language</button><button id="route" disabled>Confirm headphones</button><button id="finish" disabled>Stop capture</button><button id="close" disabled>Close</button></div>
+<p id="status" role="status">Ready</p><h2>Live captions (provisional)</h2><pre id="captions"></pre><h2>Final original and translation</h2><pre id="final"></pre>
+</main><script type="module" src="/src/recordingMain.ts"></script></body></html>

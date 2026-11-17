@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "profile": "speech_capture_pcm_v2",
+  "sampleRate": 48000,
+  "channels": 2,
+  "channelRoles": ["local", "remote"],
+  "format": "pcm_s16le_interleaved",
+  "chunkAadPrefix": "bota.recording.capture.chunk.v2\u0000",
+  "manifestAadPrefix": "bota.recording.capture.manifest.v2\u0000",
+  "maximumMappingDriftPpm": 2000,
+  "maximumChannelGapsPerChunk": 16,
+  "sourceMapping": {
+    "sourceClockIdBytes": 16,
+    "numberBytes": 30,
+    "byteOrder": "big_endian",
+    "fields": ["sourceEpoch:u32", "firstSample:u64", "samples:u32", "sampleRate:u32", "revision:u32", "discontinuity:u8", "gapCount:u8", "reserved:u32"],
+    "gapFields": ["offset:u32", "samples:u32"]
+  },
+  "status": "default_off_source_implementation_unqualified"
+}

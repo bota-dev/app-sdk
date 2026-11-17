@@ -78,6 +78,11 @@ separate gates; the published packages below do not yet establish Watch support.
 Windows and a dedicated Electron SDK are planned. Flutter Web and desktop are
 not supported. Consult each platform guide for its capability limits.
 
+The unreleased Phase 3 speech module targets all five supported families above,
+including Flutter. Shared policy bindings are distinct from complete media and
+App integration; see the [native policy boundary](ARCHITECTURE.md)
+and the [Web source preview](frameworks/web/README.md#optional-speech-sessions-unreleased-source-preview).
+
 ## Installation
 
 **Published SDK version: `2.0.0-beta.19` (beta).** All five packages and public
@@ -308,3 +313,9 @@ The generated-JS runtime candidate exposes `devices.getFindCapabilities`,
 dedicated BLE service and a customer-backend grant fetcher; public beta.18 and
 native-only adapters do not provide this capability. See
 [the integration and delivery review](docs/parity/ble-find-device.md).
+
+## Recording-owned realtime speech preview
+
+The current direct recording activity, microphone/archive ownership, native
+bridges and consuming examples are documented in the [integration guide](docs/parity/recording-speech.md).
+This source preview is unreleased and requires backend and platform qualification.

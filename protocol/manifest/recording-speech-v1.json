@@ -1,0 +1,18 @@
+{
+  "protocolVersion": 1,
+  "subprotocol": "bota.recording-speech.v1",
+  "path": "/v1/recording-speech/ws",
+  "inputMagic": "BRS1",
+  "inputHeaderBytes": 32,
+  "inputSampleRate": 48000,
+  "maximumFrameSamples": 4800,
+  "outputMagic": "BRT1",
+  "outputFixedHeaderBytes": 16,
+  "outputSampleRate": 24000,
+  "maximumSources": 2,
+  "maximumControlBytes": 32768,
+  "maximumPendingAudioBytes": 192000,
+  "maximumTargetRevision": 257,
+  "maximumGrantLifetimeMs": 30000,
+  "status": "gated-prototype"
+}

@@ -52,7 +52,8 @@ extensions.configure<LibraryExtension> {
         abortOnError = true
         checkReleaseBuilds = true
         warningsAsErrors = true
-        disable += "NewerVersionAvailable"
+        // Flutter owns the plugin classpath; qualified toolchain upgrades are separate.
+        disable += setOf("NewerVersionAvailable", "AndroidGradlePluginVersion")
     }
 }
 

@@ -1,0 +1,84 @@
+{
+  "description": "Synthetic stereo interoperability vector; public test key, never use for actual capture.",
+  "profile": "speech_capture_pcm_v2",
+  "captureId": "10000000-0000-4000-8000-000000000009",
+  "recordingId": "rec_capture_stereo_vector",
+  "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+  "chunks": [
+    {
+      "packet": {
+        "header": {
+          "protocolVersion": 2,
+          "sequence": 0,
+          "clockId": "20000000-0000-4000-8000-000000000009",
+          "firstSample": 0,
+          "samples": 4,
+          "archiveSample": 0,
+          "channels": [
+            {
+              "sourceClockId": "20000000-0000-4000-8000-000000000009",
+              "sourceEpoch": 1,
+              "firstSample": 0,
+              "samples": 4,
+              "sampleRate": 48000,
+              "revision": 1,
+              "discontinuity": false,
+              "gaps": []
+            },
+            {
+              "sourceClockId": "30000000-0000-4000-8000-000000000009",
+              "sourceEpoch": 1,
+              "firstSample": 0,
+              "samples": 4,
+              "sampleRate": 48000,
+              "revision": 1,
+              "discontinuity": false,
+              "gaps": [
+                {
+                  "offset": 1,
+                  "samples": 2
+                }
+              ]
+            }
+          ]
+        },
+        "nonce": "AAECAwQFBgcICQoL",
+        "ciphertext": "RgLTG8flwhuOQZeLtelwbZ023Bave+5G4tY4J1F8C7Y="
+      },
+      "pcmHex": "01000500020000000300000004000800",
+      "aad": "Ym90YS5yZWNvcmRpbmcuY2FwdHVyZS5jaHVuay52MgAQAAAAAABAAIAAAAAAAAAJIAAAAAAAQACAAAAAAAAACQAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAACAAAAAAAEAAgAAAAAAAAAkAAAABAAAAAAAAAAAAAAAEAAC7gAAAAAEAAAAAAAAwAAAAAABAAIAAAAAAAAAJAAAAAQAAAAAAAAAAAAAABAAAu4AAAAABAAEAAAAAAAAAAQAAAAI=",
+      "sha256": "30e7a947d8b9f6158f65958603dd82ed29bf773fc31271c48269cc1bcb7828d2"
+    }
+  ],
+  "manifest": {
+    "value": {
+      "protocolVersion": 2,
+      "captureId": "10000000-0000-4000-8000-000000000009",
+      "totalChunks": 1,
+      "archiveSamples": 4,
+      "chainSha256": "8dfed38ebc3de58c7ee0bdd8946367231566c38d818e4d40edd8b0303bb70938",
+      "clocks": [
+        {
+          "id": "20000000-0000-4000-8000-000000000009",
+          "samples": 4,
+          "endKnown": true
+        }
+      ],
+      "channels": [
+        {
+          "sourceId": "local",
+          "role": "local"
+        },
+        {
+          "sourceId": "remote",
+          "role": "remote"
+        }
+      ]
+    },
+    "aad": "Ym90YS5yZWNvcmRpbmcuY2FwdHVyZS5tYW5pZmVzdC52MgAQAAAAAABAAIAAAAAAAAAJ",
+    "packet": {
+      "nonce": "DA0ODxAREhMUFRYX",
+      "ciphertext": "49wZqhACkzBYRh6w4/hPiDsh19zaX1jL69aPkoHppNgW1VsV0fUWUS/DI2LenCr3uGaL4YTMJIN+0kpsit16iCsacPvBi/591wzYDyFgSeBPRqc0c+wxGrRMvah2zVP+5sKzmFFTKYZTuQeHivZFmQ98FF3HShtWX8L8/gWYgB0HgokeRCTpBCm2IMQq6TVA57crPKbi+H4Llz2qbsmuYFoAY9HqWQn52O22UvzRjupcSYKrG4gJ9nEZAdfhvIdH09gxj0RPeUyTJ2zhAXpsd6d+u2E4fNx8HMKQ8vDag0Qy/WYIH0z5KiFAt+3C3boEya2jDQlJWuF+29ebtDeNV9h8OBq0jiFv6idtodHjHxdaYaFGWzTjJPHXkUcytKHNqT+pjWu4sj2Y50UwpDlbfAt6xQYRQce0Zj+Y6jDse3VqnYH6aT2CSAVMyUuC2IRBbbMs/O2J7xa5RhbTJBsa9WM/NU2L/Aho8hVuoVoSqpP1l80/2eaFUw=="
+    }
+  }
+}

@@ -1,4 +1,5 @@
 import BotaDeviceSDKC
+import Foundation
 
 func require(_ condition: @autoclosure () -> Bool, _ message: String) {
     if !condition() {
@@ -41,6 +42,27 @@ func pollKind(_ engine: OpaquePointer) -> UInt32 {
 }
 
 require(bota_device_sdk_v1_abi_version() == BOTA_DEVICE_SDK_ABI_VERSION, "ABI mismatch")
+
+do {
+    let fixture = try JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[1]))) as! [String: Any]
+    let now: UInt64 = 1_793_491_200_000
+    let speech = try NativeSpeechPolicy(
+        configurationJSON: JSONSerialization.data(withJSONObject: fixture["configuration"]!),
+        grantJSON: JSONSerialization.data(withJSONObject: fixture["grant"]!), nowMs: now
+    )
+    defer { speech.close() }
+    let result = try speech.step(commandJSON: Data("{\"type\":\"connected\"}".utf8), nowMs: now)
+    let update = try JSONSerialization.jsonObject(with: result) as! [String: Any]
+    require(update["connected"] as? Bool == true, "speech did not connect")
+    require(!String(decoding: result, as: UTF8.self).contains("synthetic-scoped-token"), "speech leaked grant")
+    speech.close()
+    speech.close()
+    do {
+        _ = try speech.step(commandJSON: Data("{\"type\":\"tick\"}".utf8), nowMs: now)
+        fatalError("closed speech owner accepted another step")
+    } catch let error as CoreError { require(error.code == 14, "wrong closed speech error") }
+}
+
 guard let engine = bota_device_sdk_v1_engine_new() else {
     fatalError("engine allocation failed")
 }

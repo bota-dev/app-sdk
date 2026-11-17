@@ -2,14 +2,22 @@
 
 set -euo pipefail
 
+unit_only=false
+reuse_xcframework=false
+for option in "$@"; do
+  case "$option" in
+    --unit-only) unit_only=true ;;
+    --reuse-xcframework) reuse_xcframework=true ;;
+    *) echo "Unknown Apple adapter test option: $option" >&2; exit 1 ;;
+  esac
+done
+if $reuse_xcframework && ! $unit_only; then
+  echo "--reuse-xcframework requires --unit-only and a freshly built local artifact" >&2
+  exit 1
+fi
+
 workspace_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 plugin_root="$workspace_root/frameworks/flutter/bota_app_sdk"
-required_cocoapods_version="1.16.2"
-homebrew_pod=""
-if [[ -x /opt/homebrew/opt/ruby/bin/ruby ]]; then
-  export PATH="/opt/homebrew/opt/ruby/bin:$PATH"
-  homebrew_pod="$(/opt/homebrew/opt/ruby/bin/ruby -e 'print Gem.bindir')/pod"
-fi
 test_tmp_root="$(cd "${BOTA_TEST_TMPDIR:-/tmp}" && pwd -P)"
 consumer_root="$(mktemp -d "$test_tmp_root/bota-flutter-apple-tests.XXXXXX")"
 cleanup() {
@@ -17,25 +25,11 @@ cleanup() {
 }
 trap cleanup EXIT
 
-pod_binary=""
-for candidate in \
-  "${POD_BINARY:-}" \
-  "$homebrew_pod" \
-  "$(command -v pod || true)"
-do
-  if [[ -n "$candidate" && -x "$candidate" ]] \
-    && [[ "$($candidate --version 2>/dev/null)" == "$required_cocoapods_version" ]]; then
-    pod_binary="$candidate"
-    break
-  fi
-done
-if [[ -z "$pod_binary" ]]; then
-  echo "CocoaPods $required_cocoapods_version is required" >&2
-  exit 1
+if $reuse_xcframework; then
+  test -f "$workspace_root/platforms/apple/Artifacts/BotaDeviceSDKCore.xcframework/Info.plist"
+else
+  "$workspace_root/tools/apple/build-xcframework.sh"
 fi
-export PATH="$(dirname "$pod_binary"):$PATH"
-
-"$workspace_root/tools/apple/build-xcframework.sh"
 
 mkdir -p \
   "$consumer_root/Sources/BotaFlutterSdk" \
@@ -150,6 +144,35 @@ EOF
 swift test \
   --package-path "$consumer_root" \
   --scratch-path "$workspace_root/target/flutter-apple-swiftpm"
+
+if $unit_only; then
+  exit 0
+fi
+
+# SwiftPM unit checks above use no CocoaPods or Ruby runtime.
+required_cocoapods_version="1.16.2"
+homebrew_pod=""
+if [[ -x /opt/homebrew/opt/ruby/bin/ruby ]]; then
+  export PATH="/opt/homebrew/opt/ruby/bin:$PATH"
+  homebrew_pod="$(/opt/homebrew/opt/ruby/bin/ruby -e 'print Gem.bindir')/pod"
+fi
+pod_binary=""
+for candidate in \
+  "${POD_BINARY:-}" \
+  "$homebrew_pod" \
+  "$(command -v pod || true)"
+do
+  if [[ -n "$candidate" && -x "$candidate" ]] \
+    && [[ "$($candidate --version 2>/dev/null)" == "$required_cocoapods_version" ]]; then
+    pod_binary="$candidate"
+    break
+  fi
+done
+if [[ -z "$pod_binary" ]]; then
+  echo "CocoaPods $required_cocoapods_version is required" >&2
+  exit 1
+fi
+export PATH="$(dirname "$pod_binary"):$PATH"
 
 create_flutter_consumer() {
   local destination="$1"

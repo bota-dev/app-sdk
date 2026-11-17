@@ -6,6 +6,18 @@ Flutter retains its native facade and installed adapter contracts. Canonical
 artifacts, exact main CI, protected publication and public consumer checks
 remain required. Device acceptance and application delivery remain separate.
 
+## Unpublished speech source preview
+
+`BotaSpeechClient` provides independent input/listening, subscription changes,
+captions, recovery and source finish through native `SpeechSession` owners on
+iOS/Android. A native App factory must supply scoped authorization, HTTP callbacks
+and media integration before `start`; no audio or credentials cross Pigeon/Dart.
+Repeated `BotaSpeechClient()` calls share the same engine-isolate owner. Use
+`close` between sessions; await terminal `destroy` when retiring that owner.
+This API is absent from published
+packages and still needs actual Flutter/media/device qualification. See the
+[source integration contract](https://github.com/bota-dev/app-sdk/blob/feat/realtime-speech-phase3/docs/parity/flutter-speech-session.md).
+
 ## Package Name Migration
 
 The 2.x distribution is `bota_app_sdk`, with `BotaAppSDK` on Apple and
@@ -337,3 +349,15 @@ additionally preserves the exact archive, sorted file inventory, normalized
 archive digest, dependency lock and license evidence, dry-run result, consumer
 result, and v2 release manifest under `target/flutter-release/`; it performs no
 publication.
+
+## Recording-owned realtime speech preview
+
+The current direct recording activity, microphone/archive ownership, native
+bridges and consuming examples are documented in the [integration guide](../../../docs/parity/recording-speech.md).
+This source preview is unreleased and requires backend and platform qualification.
+
+The explicit public recording surface consists of `BotaRecordingSpeechClient`,
+`BotaRecordingSpeechSession`, `BotaRecordingSpeechObserver`,
+`BotaRecordingSpeechCaption` and `BotaRecordingSpeechException`. Install the
+native recording factory before starting a session; Dart receives controls and
+bounded text/status, never microphone samples, grants or archive keys.

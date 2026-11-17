@@ -21,5 +21,6 @@ cp "$repo_root/target/byo-host/$host_target/debug/libbota_device_sdk_ffi.$extens
   -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/$platform" \
   -I"$repo_root/bindings/device-sdk-ffi/include" \
   "$repo_root/platforms/android/sdk/src/main/cpp/bota_android_jni.cpp" \
+  "$repo_root/platforms/android/sdk/src/main/cpp/bota_speech_jni.cpp" \
   -L"$output" -lbota_device_sdk_ffi "${linker[@]}" \
   -o "$output/libbota_android_jni.$extension"

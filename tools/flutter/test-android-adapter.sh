@@ -2,6 +2,14 @@
 
 set -euo pipefail
 
+reuse_native=false
+if [[ "${1:-}" == "--reuse-native" && "$#" == 1 ]]; then
+  reuse_native=true
+elif [[ "$#" != 0 ]]; then
+  echo "Usage: test-android-adapter.sh [--reuse-native]" >&2
+  exit 1
+fi
+
 workspace_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 plugin_android="$workspace_root/frameworks/flutter/bota_app_sdk/android"
 android_root="$workspace_root/platforms/android"
@@ -31,7 +39,11 @@ flutter_home="${BOTA_FLUTTER_HOME:-$workspace_root/target/flutter-sdk/$flutter_v
   exit 1
 }
 
-"$android_root/gradlew" -p "$android_root" :sdk:publishMavenPublicationToLocalRepository
+if $reuse_native; then
+  test -f "$local_repository/dev/bota/bota-app-sdk/$sdk_version/bota-app-sdk-$sdk_version.aar"
+else
+  "$android_root/gradlew" -p "$android_root" :sdk:publishMavenPublicationToLocalRepository
+fi
 
 cat >"$consumer_root/settings.gradle.kts" <<EOF
 pluginManagement {
@@ -70,7 +82,7 @@ if "$android_root/gradlew" -p "$consumer_root" :bota_app_sdk:tasks --quiet \
   echo "mismatched botaAndroidSdkVersion unexpectedly succeeded" >&2
   exit 1
 fi
-if ! rg -F -q "botaAndroidSdkVersion must match sdk-version.toml ($sdk_version)" "$mismatch_log"; then
+if ! grep -F -q "botaAndroidSdkVersion must match sdk-version.toml ($sdk_version)" "$mismatch_log"; then
   cat "$mismatch_log" >&2
   exit 1
 fi

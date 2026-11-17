@@ -46,6 +46,7 @@ jobs:
             package-lock.json
             frameworks/react-native/package-lock.json
             tests/consumers/web-vite/package-lock.json
+            tests/consumers/react-native-speech/package-lock.json
 
       - name: Set up JDK 17
         uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
@@ -96,6 +97,12 @@ jobs:
       - name: Check React Native dependency licenses
         working-directory: frameworks/react-native
         run: npm run license-check
+
+      - name: Check internal React Native speech companion licenses
+        working-directory: tests/consumers/react-native-speech
+        run: |
+          npm ci --ignore-scripts
+          node ../../../scripts/check-licenses.mjs
 
       - name: Install JavaScript runtime dependencies
         working-directory: frameworks/react-native-runtime

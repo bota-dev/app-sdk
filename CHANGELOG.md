@@ -19,6 +19,62 @@ tracked separately.
 
 ## Unreleased
 
+- Use the native recording owner in the internal React Native App. Remove the
+  unpublished room/session JS entries, their generated-core RPC handlers and
+  old LiveKit consumer dependencies. Retain caption/target/stop/close controls,
+  native capture/archive ownership and default-off server admission. Builds and
+  security scans remain separate from real provider/device qualification.
+
+- Add an internal Flutter conversation companion using native-prepared grants
+  and Apple/Android LiveKit factories, with paired captions and independent
+  input/listening. Engine replacement joins cleanup and rejects late permission
+  replies. Credentials and audio stay outside Dart; real RTC, original archival,
+  physical qualification and public release remain separate.
+
+- Add an optional Android conversation companion with native Rust/JNI session
+  ownership, a bounded loopback HTTP host, A/B roles, paired captions and
+  independent input/listening. Its internal debug APK keeps consent and cleanup
+  in the App. Production host adoption, physical audio and redistribution
+  qualification remain separate.
+
+- Add a native Apple conversation companion source with A/B roles, paired
+  captions, independent microphone/listening, explicit permission, source
+  finish and joined cleanup. Its loopback host keeps project/provider keys
+  outside the App. Xcode builds iOS/macOS consumer Apps; physical/provider
+  acceptance, original-audio archival and public distribution remain pending.
+
+- Add a Flutter speech control source preview backed by per-engine native
+  sessions, with typed captions/state, independent capture/listening, language
+  changes, source finish and recovery. Bounded delivery and engine teardown
+  retain native cleanup; audio and credentials stay outside Pigeon/Dart.
+  Repeated public-client construction shares the engine-isolate owner and
+  cannot replace active callbacks or reopen a destroyed client.
+  Actual package/App/media qualification and publication remain pending.
+
+- Add an optional Apple LiveKit microphone media package with independent input
+  and listening, bounded native playback, source-finish holds and joined cleanup.
+  Host checks run the shipping Rust/Swift policy with the actual adapter and
+  controlled RTC/device ports. Packaging, external input and physical audio
+  acceptance remain separate from this unpublished source preview.
+
+- Add an optional Android LiveKit microphone media module with independently
+  controlled capture/listening, authorized PCM playback, bounded buffering,
+  source-finish publication holds and joined resource cleanup. The module is a
+  source candidate; external host capture, App/device acceptance and publication
+  remain pending.
+
+- Add Apple and Android speech control facades backed by the shared Rust C ABI/JNI policy,
+  with independent input/listening, language changes, caption recovery, source
+  finish and bounded cancellation/cleanup. This source preview requires a
+  qualified native media adapter; full RTC, App and Flutter media adoption remain
+  pending. See the [Apple](docs/parity/apple-speech-session.md) and
+  [Android](docs/parity/android-speech-session.md) integration contracts.
+
+- Add optional authorized external audio input to Web speech
+  adapters, with `setInput` / `finishInput` aliases. Web preserves host mute through
+  an owned Web Audio branch; native hosts supply an independent media bridge and
+  may coordinate audio ownership through a lease. Host integration, real RTC and
+  physical audio coexistence remain unqualified.
 - Document the new firmware-only ordinary encrypted WS contract, including
   ciphertext replay, byte-zero full HTTP fallback and signed receipt cleanup.
   This reference update adds no SDK runtime API or released package capability.

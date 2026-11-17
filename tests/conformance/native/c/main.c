@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 static BotaDeviceSdkSliceV1 empty_slice(void) {
     BotaDeviceSdkSliceV1 slice = {0};
@@ -75,6 +76,31 @@ static uint32_t poll_kind(BotaDeviceSdkEngineV1 *engine) {
 }
 
 int main(void) {
+    /* The additive speech ABI shares no engine owner. Invalid input returns one
+       structured error, never a credential or a partially allocated handle. */
+    BotaDeviceSdkSpeechV1 *speech = NULL;
+    BotaDeviceSdkErrorV1 *speech_error = NULL;
+    const char invalid_configuration[] = "{}";
+    const char private_token[] = "PRIVATE_TOKEN_CANARY";
+    BotaDeviceSdkSliceV1 configuration = {(const uint8_t *)invalid_configuration, strlen(invalid_configuration)};
+    BotaDeviceSdkSliceV1 grant = {(const uint8_t *)private_token, strlen(private_token)};
+    assert(bota_device_sdk_v1_speech_new(configuration, grant, 0, &speech, &speech_error) == BOTA_DEVICE_SDK_V1_OPERATION_FAILED);
+    assert(speech == NULL && speech_error != NULL);
+    BotaDeviceSdkErrorViewV1 speech_error_view = {0};
+    assert(bota_device_sdk_v1_error_view(speech_error, &speech_error_view) == BOTA_DEVICE_SDK_V1_OK);
+    assert(speech_error_view.code == BOTA_DEVICE_SDK_V1_ERROR_INVALID_INPUT);
+    assert(speech_error_view.detail.len == 0);
+    bota_device_sdk_v1_error_free(speech_error);
+    bota_device_sdk_v1_speech_free(speech);
+    BotaDeviceSdkSpeechOutputV1 *speech_output = NULL;
+    speech_error = NULL;
+    assert(bota_device_sdk_v1_speech_step(NULL, empty_slice(), 0, &speech_output, &speech_error) == BOTA_DEVICE_SDK_V1_OPERATION_FAILED);
+    assert(speech_output == NULL && speech_error != NULL);
+    bota_device_sdk_v1_error_free(speech_error);
+    BotaDeviceSdkSliceV1 speech_view = {0};
+    assert(bota_device_sdk_v1_speech_output_view(NULL, &speech_view) == BOTA_DEVICE_SDK_V1_INVALID_ARGUMENT);
+    bota_device_sdk_v1_speech_output_free(speech_output);
+
     assert(bota_device_sdk_v1_abi_version() == BOTA_DEVICE_SDK_ABI_VERSION);
     BotaDeviceSdkEngineV1 *engine = bota_device_sdk_v1_engine_new();
     assert(engine != NULL);

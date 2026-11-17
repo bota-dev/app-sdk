@@ -122,6 +122,7 @@ val buildRustNative by tasks.registering(Exec::class) {
             include("sdk-version.toml")
             include("core/device-sdk-core/Cargo.toml")
             include("core/device-sdk-core/src/**")
+            include("protocol/manifest/speech-capture-v1.json")
             include("bindings/device-sdk-ffi/Cargo.toml")
             include("bindings/device-sdk-ffi/include/bota_device_sdk.h")
             include("bindings/device-sdk-ffi/src/**")
@@ -150,6 +151,15 @@ val verifyWorkflowFixtures by tasks.registering(Exec::class) {
     inputs.file(file("src/androidTest/assets/WorkflowFixtures/workflows.json"))
 }
 
+val verifySpeechFixtures by tasks.registering(Exec::class) {
+    group = "verification"
+    description = "Verifies that native speech fixtures match the shared Rust policy fixture."
+    val repositoryRoot = rootProject.projectDir.parentFile.parentFile
+    commandLine("node", repositoryRoot.resolve("tools/speech/sync-host.mjs"))
+    inputs.dir(repositoryRoot.resolve("protocol/speech-session"))
+    inputs.dir(file("src/androidTest/assets/SpeechFixtures"))
+}
+
 tasks.configureEach {
     if (name.startsWith("configureCMake") || name.endsWith("JniLibFolders")) {
         dependsOn(buildRustNative)
@@ -157,6 +167,7 @@ tasks.configureEach {
     if (name == "preDebugAndroidTestBuild") {
         dependsOn(verifyProtocolFixtures)
         dependsOn(verifyWorkflowFixtures)
+        dependsOn(verifySpeechFixtures)
     }
 }
 
@@ -221,6 +232,9 @@ val buildHostJni by tasks.registering(Exec::class) {
 
 tasks.withType<Test>().configureEach {
     dependsOn(buildHostJni)
+    // Robolectric sandboxes and ordinary JVM tests use distinct classloaders.
+    // A JNI library cannot attach to both within the same JVM process.
+    forkEvery = 1
     inputs.dir(hostJniDirectory)
     systemProperty("java.library.path", hostJniDirectory.get().asFile.absolutePath)
     systemProperty("bota.test.sdkVersion", project.version.toString())

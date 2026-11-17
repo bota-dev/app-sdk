@@ -27,6 +27,7 @@ let package = Package(
                 .copy("Resources/EncryptedUploadV2Vectors"),
                 .copy("Resources/ProtocolFixtures"),
                 .copy("Resources/WorkflowFixtures"),
+                .copy("Resources/SpeechFixtures"),
             ]
         ),
         .testTarget(

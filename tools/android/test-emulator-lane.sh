@@ -11,12 +11,16 @@ api=""
 repository="$ROOT/target/android-m2"
 release_directory="$ROOT/target/android-release"
 public_only=false
+speech_companion_apk=""
+speech_only=false
 while (($#)); do
   case "$1" in
     --api) api="${2:?--api requires a value}"; shift 2 ;;
     --repository) repository="${2:?--repository requires a value}"; shift 2 ;;
     --release-directory) release_directory="${2:?--release-directory requires a value}"; shift 2 ;;
     --public-only) public_only=true; shift ;;
+    --speech-companion-apk) speech_companion_apk="${2:?--speech-companion-apk requires a path}"; shift 2 ;;
+    --speech-only) speech_only=true; shift ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -35,6 +39,10 @@ case "$api" in
     exit 2
     ;;
 esac
+if [[ "$speech_only" == true ]] && [[ "$api" != 35 || "$public_only" == true || ! -f "$speech_companion_apk" ]]; then
+  echo "--speech-only requires API 35 and an existing --speech-companion-apk, without --public-only" >&2
+  exit 2
+fi
 export ANDROID_AVD_HOME="$ROOT/target/android-avd-$api"
 for tool in "$ADB" "$EMULATOR" "$AVDMANAGER"; do test -x "$tool"; done
 
@@ -94,6 +102,20 @@ test "$("$ADB" shell getprop sys.boot_completed | tr -d '\r')" = "1"
 "$ADB" shell settings put global transition_animation_scale 0
 "$ADB" shell settings put global animator_duration_scale 0
 
+run_speech_smoke() {
+  local smoke_environment="$ROOT/target/speech-smoke-python"
+  python3 -m venv "$smoke_environment"
+  "$smoke_environment/bin/python" -m pip install --disable-pip-version-check --require-hashes --no-deps \
+    -r "$ROOT/tools/speech/smoke-requirements.txt"
+  "$smoke_environment/bin/python" "$ROOT/tools/speech/smoke-react-native-companion.py" \
+    "$ADB" "$speech_companion_apk" "$ROOT/target/react-native-speech-smoke"
+}
+
+if [[ "$speech_only" == true ]]; then
+  run_speech_smoke
+  exit 0
+fi
+
 for package in dev.bota.sdk.test dev.bota.example dev.bota.example.test dev.bota.legacy dev.bota.legacy.test; do
   "$ADB" uninstall "$package" >/dev/null 2>&1 || true
 done
@@ -109,7 +131,7 @@ repository_aar="$repository/dev/bota/bota-app-sdk/$version/bota-app-sdk-$version
 release_digest="$(shasum -a 256 "$release_aar" | awk '{print $1}')"
 test "$release_digest" = "$(shasum -a 256 "$repository_aar" | awk '{print $1}')"
 
-instrumentation_classes="dev.bota.sdk.internal.bluetooth.BluetoothPermissionTest,dev.bota.sdk.internal.jni.NativeCoreBridgeTest,dev.bota.sdk.internal.core.ProtocolCodecTest,dev.bota.sdk.internal.core.WorkflowConformanceTest,dev.bota.sdk.internal.host.AtomicFilePersistenceHostTest,dev.bota.sdk.internal.host.AndroidFileHostTest,dev.bota.sdk.internal.host.KeystoreHostTest"
+instrumentation_classes="dev.bota.sdk.internal.bluetooth.BluetoothPermissionTest,dev.bota.sdk.internal.jni.NativeCoreBridgeTest,dev.bota.sdk.internal.jni.NativeSpeechPolicyTest,dev.bota.sdk.internal.core.ProtocolCodecTest,dev.bota.sdk.internal.core.WorkflowConformanceTest,dev.bota.sdk.internal.host.AtomicFilePersistenceHostTest,dev.bota.sdk.internal.host.AndroidFileHostTest,dev.bota.sdk.internal.host.KeystoreHostTest"
 "$ROOT/tools/android/test-package.sh" --api "$api" --skip-build \
   --instrumentation-class "$instrumentation_classes"
 "$ROOT/tools/android/test-legacy-consumer.sh" --api "$api" --mode source \
@@ -117,6 +139,11 @@ instrumentation_classes="dev.bota.sdk.internal.bluetooth.BluetoothPermissionTest
 "$ROOT/tools/android/test-legacy-consumer.sh" --api "$api" --mode binary \
   --repository "$repository"
 "$ROOT/tools/android/test-consumer.sh" --api "$api" --repository "$repository"
+
+if [[ -n "$speech_companion_apk" ]]; then
+  test "$api" = 35
+  run_speech_smoke
+fi
 
 test "$release_digest" = "$(shasum -a 256 "$release_aar" | awk '{print $1}')"
 test "$release_digest" = "$(shasum -a 256 "$repository_aar" | awk '{print $1}')"

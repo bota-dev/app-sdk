@@ -643,6 +643,7 @@ public final class dev/bota/sdk/BotaDeviceClient {
 	public static final field shared Ldev/bota/sdk/BotaDeviceClient;
 	public final fun configure (Ldev/bota/sdk/BotaConfiguration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun destroy (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun getClientPresence ()Ldev/bota/sdk/ClientPresence;
 	public final fun getControls ()Ldev/bota/sdk/DeviceControlManager;
 	public final fun getDevices ()Ldev/bota/sdk/DeviceManager;
 	public final fun getFactoryReset ()Ldev/bota/sdk/FactoryResetManager;
@@ -968,6 +969,71 @@ public final class dev/bota/sdk/BuildConfig {
 	public fun <init> ()V
 }
 
+public final class dev/bota/sdk/ByoRecording {
+	public synthetic fun <init> (Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2-pVg5ArA ()I
+	public final fun copy-Qn1smSk (Ljava/lang/String;I)Ldev/bota/sdk/ByoRecording;
+	public static synthetic fun copy-Qn1smSk$default (Ldev/bota/sdk/ByoRecording;Ljava/lang/String;IILjava/lang/Object;)Ldev/bota/sdk/ByoRecording;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getGeneration-pVg5ArA ()I
+	public final fun getUuid ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/ByoStorageException : java/lang/Exception {
+	public final fun getCode ()Ljava/lang/String;
+	public final fun getHttpStatus ()Ljava/lang/Integer;
+	public final fun getRetryable ()Z
+}
+
+public final class dev/bota/sdk/ByoStorageOptions {
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/io/File;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component10 ()Lkotlin/jvm/functions/Function1;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7-pVg5ArA ()I
+	public final fun component8 ()Ljava/io/File;
+	public final fun component9 ()Lkotlin/jvm/functions/Function1;
+	public final fun copy-7ifBTzc (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/io/File;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;)Ldev/bota/sdk/ByoStorageOptions;
+	public static synthetic fun copy-7ifBTzc$default (Ldev/bota/sdk/ByoStorageOptions;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/io/File;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Ldev/bota/sdk/ByoStorageOptions;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAccessToken ()Lkotlin/jvm/functions/Function1;
+	public final fun getBaseUrl ()Ljava/lang/String;
+	public final fun getBindingGeneration-pVg5ArA ()I
+	public final fun getDeviceId ()Ljava/lang/String;
+	public final fun getEnvironment ()Ljava/lang/String;
+	public final fun getOrganizationId ()Ljava/lang/String;
+	public final fun getProjectId ()Ljava/lang/String;
+	public final fun getScopeKey ()Ljava/lang/String;
+	public final fun getStateDirectory ()Ljava/io/File;
+	public final fun getValidateScope ()Lkotlin/jvm/functions/Function1;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/ByoUploadResult {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Ldev/bota/sdk/ByoUploadResult;
+	public static synthetic fun copy$default (Ldev/bota/sdk/ByoUploadResult;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ldev/bota/sdk/ByoUploadResult;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRecordingId ()Ljava/lang/String;
+	public final fun getUploadSessionId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/ClientPresence {
+	public final fun nextReport (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
 public final class dev/bota/sdk/DeviceApiEnvironment : java/lang/Enum {
 	public static final field Development Ldev/bota/sdk/DeviceApiEnvironment;
 	public static final field Gamma Ldev/bota/sdk/DeviceApiEnvironment;
@@ -1012,6 +1078,9 @@ public final class dev/bota/sdk/DeviceControlManager {
 }
 
 public final class dev/bota/sdk/DeviceLogManager {
+	public fun <init> ()V
+	public final fun acknowledgeDiagnosticEvents (Ldev/bota/sdk/model/ConnectedDevice;Ljava/util/List;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun readDiagnosticEvents (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun stop (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun streamLogs (Ldev/bota/sdk/model/ConnectedDevice;)Lkotlinx/coroutines/flow/Flow;
 }
@@ -1070,7 +1139,11 @@ public final class dev/bota/sdk/EncryptedUploadV2CapabilitySnapshot {
 }
 
 public final class dev/bota/sdk/EncryptedUploadV2Checkpoint {
-	public synthetic fun <init> (Ljava/util/UUID;IIJ[BLkotlin/UInt;JLjava/lang/String;SSLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ljava/util/UUID;IIJ[BLkotlin/UInt;JLjava/lang/String;SSLkotlin/ULong;[BLkotlin/UInt;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ljava/util/UUID;IIJ[BLkotlin/UInt;JLjava/lang/String;SSLkotlin/ULong;[BLkotlin/UInt;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getCheckpointIntervalBlocks-0hXNFcg ()Lkotlin/UInt;
+	public final fun getCiphertextLength-6VbMDqA ()Lkotlin/ULong;
+	public final fun getCiphertextSha256 ()[B
 	public final fun getDataPayloadBytes-Mh2AYeg ()S
 	public final fun getHighestContiguousSequence-0hXNFcg ()Lkotlin/UInt;
 	public final fun getNextCiphertextOffset-s-VKNKU ()J
@@ -1083,13 +1156,21 @@ public final class dev/bota/sdk/EncryptedUploadV2Checkpoint {
 	public final fun getWindowPackets-Mh2AYeg ()S
 }
 
+public final class dev/bota/sdk/EncryptedUploadV2ContextExchange {
+	public fun <init> ([BLkotlin/jvm/functions/Function2;)V
+	public final fun getChallenge ()[B
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class dev/bota/sdk/EncryptedUploadV2Material {
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/UUID;ILdev/bota/sdk/EncryptedUploadV2SecurityPolicy;[BLkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/UUID;ILdev/bota/sdk/EncryptedUploadV2SecurityPolicy;[BLkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/UUID;ILdev/bota/sdk/EncryptedUploadV2SecurityPolicy;[BLkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function3;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/UUID;ILdev/bota/sdk/EncryptedUploadV2SecurityPolicy;[BLkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun cancelPreparation (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun getMaterialId ()Ljava/lang/String;
 	public final fun getOwnerRevision-pVg5ArA ()I
 	public final fun getPolicy ()Ldev/bota/sdk/EncryptedUploadV2SecurityPolicy;
 	public final fun getRecordingId ()Ljava/lang/String;
+	public final fun getUploadContext ()Lkotlin/jvm/functions/Function2;
 	public final fun getUploadSessionId ()Ljava/util/UUID;
 	public fun toString ()Ljava/lang/String;
 }
@@ -1099,17 +1180,25 @@ public abstract interface class dev/bota/sdk/EncryptedUploadV2ProfileProvider {
 }
 
 public final class dev/bota/sdk/EncryptedUploadV2ProviderContext {
-	public fun <init> (Ldev/bota/sdk/EncryptedUploadV2Recording;Ldev/bota/sdk/EncryptedUploadV2CapabilitySnapshot;Ldev/bota/sdk/EncryptedUploadV2Checkpoint;)V
+	public fun <init> (Ldev/bota/sdk/EncryptedUploadV2Recording;Ldev/bota/sdk/EncryptedUploadV2CapabilitySnapshot;Ldev/bota/sdk/EncryptedUploadV2Checkpoint;Lkotlin/jvm/functions/Function1;)V
+	public synthetic fun <init> (Ldev/bota/sdk/EncryptedUploadV2Recording;Ldev/bota/sdk/EncryptedUploadV2CapabilitySnapshot;Ldev/bota/sdk/EncryptedUploadV2Checkpoint;Lkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getCapability ()Ldev/bota/sdk/EncryptedUploadV2CapabilitySnapshot;
 	public final fun getCheckpoint ()Ldev/bota/sdk/EncryptedUploadV2Checkpoint;
+	public final fun getReadAuthNonce ()Lkotlin/jvm/functions/Function1;
 	public final fun getRecording ()Ldev/bota/sdk/EncryptedUploadV2Recording;
 }
 
 public final class dev/bota/sdk/EncryptedUploadV2Recording {
-	public synthetic fun <init> (Ljava/lang/String;IJ[BLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ljava/lang/String;IJ[BJJJBZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ljava/lang/String;IJ[BJJJBZLkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getCiphertextLength-s-VKNKU ()J
 	public final fun getCiphertextSha256 ()[B
+	public final fun getDurationMs-s-VKNKU ()J
 	public final fun getGeneration-pVg5ArA ()I
+	public final fun getMarkersRequired ()Z
+	public final fun getPlaintextLength-s-VKNKU ()J
+	public final fun getStartedAtMs-s-VKNKU ()J
+	public final fun getStorageFormat-w2LRezQ ()B
 	public final fun getUuid ()Ljava/lang/String;
 }
 
@@ -1164,6 +1253,31 @@ public final class dev/bota/sdk/OTAManager {
 	public final fun updateFirmware (Ldev/bota/sdk/model/ConnectedDevice;Ldev/bota/sdk/FirmwareImage;)Lkotlinx/coroutines/flow/Flow;
 }
 
+public abstract interface class dev/bota/sdk/PendingRecording {
+}
+
+public final class dev/bota/sdk/PendingRecording$EncryptedV2 : dev/bota/sdk/PendingRecording {
+	public fun <init> (Ldev/bota/sdk/EncryptedUploadV2Recording;)V
+	public final fun component1 ()Ldev/bota/sdk/EncryptedUploadV2Recording;
+	public final fun copy (Ldev/bota/sdk/EncryptedUploadV2Recording;)Ldev/bota/sdk/PendingRecording$EncryptedV2;
+	public static synthetic fun copy$default (Ldev/bota/sdk/PendingRecording$EncryptedV2;Ldev/bota/sdk/EncryptedUploadV2Recording;ILjava/lang/Object;)Ldev/bota/sdk/PendingRecording$EncryptedV2;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRecording ()Ldev/bota/sdk/EncryptedUploadV2Recording;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/PendingRecording$Legacy : dev/bota/sdk/PendingRecording {
+	public fun <init> (Ldev/bota/sdk/model/DeviceRecording;)V
+	public final fun component1 ()Ldev/bota/sdk/model/DeviceRecording;
+	public final fun copy (Ldev/bota/sdk/model/DeviceRecording;)Ldev/bota/sdk/PendingRecording$Legacy;
+	public static synthetic fun copy$default (Ldev/bota/sdk/PendingRecording$Legacy;Ldev/bota/sdk/model/DeviceRecording;ILjava/lang/Object;)Ldev/bota/sdk/PendingRecording$Legacy;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRecording ()Ldev/bota/sdk/model/DeviceRecording;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class dev/bota/sdk/ProvisioningManager {
 	public static final field DeprovisionCommand B
 	public static final field DeprovisionTimeoutMilliseconds J
@@ -1176,12 +1290,19 @@ public final class dev/bota/sdk/ProvisioningManager {
 
 public final class dev/bota/sdk/RecordingManager {
 	public final fun cancelCurrentOperation (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun cancelEncryptedRecordingV2 (Ljava/util/UUID;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun confirmRecording (Ldev/bota/sdk/model/ConnectedDevice;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun listByoRecordings (Ldev/bota/sdk/model/ConnectedDevice;Ldev/bota/sdk/ByoStorageOptions;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun listEncryptedUploadV2Recordings (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun listPendingRecordings (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun listRecordings (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun observeUploadOwnership (Ldev/bota/sdk/model/ConnectedDevice;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lkotlinx/coroutines/flow/Flow;
+	public final fun streamByoRecording (Ldev/bota/sdk/model/ConnectedDevice;Ldev/bota/sdk/ByoRecording;Ldev/bota/sdk/ByoStorageOptions;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun streamRecording-c9L97WU (Ldev/bota/sdk/model/ConnectedDevice;Ljava/lang/String;Ljava/lang/String;IJLdev/bota/sdk/model/StreamingChunkDestinationProvider;Ldev/bota/sdk/model/StreamingFinalizeHandler;)Lkotlinx/coroutines/flow/Flow;
 	public static synthetic fun streamRecording-c9L97WU$default (Ldev/bota/sdk/RecordingManager;Ldev/bota/sdk/model/ConnectedDevice;Ljava/lang/String;Ljava/lang/String;IJLdev/bota/sdk/model/StreamingChunkDestinationProvider;Ldev/bota/sdk/model/StreamingFinalizeHandler;ILjava/lang/Object;)Lkotlinx/coroutines/flow/Flow;
+	public final fun syncByoRecording (Ldev/bota/sdk/model/ConnectedDevice;Ldev/bota/sdk/ByoRecording;Ldev/bota/sdk/ByoStorageOptions;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun syncEncryptedRecordingV2 (Ldev/bota/sdk/model/ConnectedDevice;Ldev/bota/sdk/EncryptedUploadV2Recording;Ldev/bota/sdk/EncryptedUploadV2ProfileProvider;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun syncEncryptedRecordingV2 (Ldev/bota/sdk/model/ConnectedDevice;Ldev/bota/sdk/EncryptedUploadV2Recording;Ljava/util/UUID;Ldev/bota/sdk/EncryptedUploadV2ProfileProvider;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun syncRecording (Ldev/bota/sdk/model/ConnectedDevice;Ldev/bota/sdk/model/DeviceRecording;Ljava/lang/String;Z)Lkotlinx/coroutines/flow/Flow;
 	public static synthetic fun syncRecording$default (Ldev/bota/sdk/RecordingManager;Ldev/bota/sdk/model/ConnectedDevice;Ldev/bota/sdk/model/DeviceRecording;Ljava/lang/String;ZILjava/lang/Object;)Lkotlinx/coroutines/flow/Flow;
 	public final fun transferMetadata (Ljava/lang/String;)Ldev/bota/sdk/RecordingTransferMetadata;
@@ -1222,6 +1343,27 @@ public final class dev/bota/sdk/RecordingTransferMetadata {
 	public final fun getContentSha256Hex ()Ljava/lang/String;
 	public fun hashCode ()I
 	public final fun isE2EEncrypted ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/SDKClientContext {
+	public fun <init> (ILjava/lang/String;JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()I
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()J
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun copy (ILjava/lang/String;JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ldev/bota/sdk/SDKClientContext;
+	public static synthetic fun copy$default (Ldev/bota/sdk/SDKClientContext;ILjava/lang/String;JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ldev/bota/sdk/SDKClientContext;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getPlatform ()Ljava/lang/String;
+	public final fun getSchemaVersion ()I
+	public final fun getSdkPackage ()Ljava/lang/String;
+	public final fun getSdkVersion ()Ljava/lang/String;
+	public final fun getSequence ()J
+	public final fun getSessionId ()Ljava/lang/String;
+	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
 
@@ -1488,6 +1630,133 @@ public final class dev/bota/sdk/model/DeviceConnectionSettings$PowerManagement {
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getCellularIdleTimeoutSeconds ()I
 	public final fun getWifiIdleTimeoutSeconds ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/DeviceDiagnosticBreadcrumb {
+	public fun <init> (ILjava/lang/String;I)V
+	public final fun component1 ()I
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()I
+	public final fun copy (ILjava/lang/String;I)Ldev/bota/sdk/model/DeviceDiagnosticBreadcrumb;
+	public static synthetic fun copy$default (Ldev/bota/sdk/model/DeviceDiagnosticBreadcrumb;ILjava/lang/String;IILjava/lang/Object;)Ldev/bota/sdk/model/DeviceDiagnosticBreadcrumb;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getArg0 ()I
+	public final fun getCode ()Ljava/lang/String;
+	public final fun getDeltaMs ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/DeviceDiagnosticEvent {
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ldev/bota/sdk/model/DeviceDiagnosticReport;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ldev/bota/sdk/model/DeviceDiagnosticReport;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4-pVg5ArA ()I
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()Ljava/lang/String;
+	public final fun component8 ()Ljava/lang/String;
+	public final fun component9 ()Ldev/bota/sdk/model/DeviceDiagnosticReport;
+	public final fun copy-UyqIC_g (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ldev/bota/sdk/model/DeviceDiagnosticReport;)Ldev/bota/sdk/model/DeviceDiagnosticEvent;
+	public static synthetic fun copy-UyqIC_g$default (Ldev/bota/sdk/model/DeviceDiagnosticEvent;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ldev/bota/sdk/model/DeviceDiagnosticReport;ILjava/lang/Object;)Ldev/bota/sdk/model/DeviceDiagnosticEvent;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEventId ()Ljava/lang/String;
+	public final fun getEventType ()Ljava/lang/String;
+	public final fun getFirmwareBuildId ()Ljava/lang/String;
+	public final fun getReasonCode ()Ljava/lang/String;
+	public final fun getReport ()Ldev/bota/sdk/model/DeviceDiagnosticReport;
+	public final fun getSignature ()Ljava/lang/String;
+	public final fun getStateBeforeEvent ()Ljava/lang/String;
+	public final fun getSubsystem ()Ljava/lang/String;
+	public final fun getUptimeMs-pVg5ArA ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/DeviceDiagnosticExecution {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)Ldev/bota/sdk/model/DeviceDiagnosticExecution;
+	public static synthetic fun copy$default (Ldev/bota/sdk/model/DeviceDiagnosticExecution;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Ldev/bota/sdk/model/DeviceDiagnosticExecution;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getPcTrace ()Ljava/util/List;
+	public final fun getReti ()Ljava/lang/String;
+	public final fun getRets ()Ljava/lang/String;
+	public final fun getTask ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/DeviceDiagnosticFault {
+	public fun <init> (ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()I
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun copy (ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ldev/bota/sdk/model/DeviceDiagnosticFault;
+	public static synthetic fun copy$default (Ldev/bota/sdk/model/DeviceDiagnosticFault;ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ldev/bota/sdk/model/DeviceDiagnosticFault;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAudioEmu ()Ljava/lang/String;
+	public final fun getCoreEmu ()Ljava/lang/String;
+	public final fun getCpuEmu ()Ljava/lang/String;
+	public final fun getCpuId ()I
+	public final fun getHsbEmu ()Ljava/lang/String;
+	public final fun getWirelessEmu ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/DeviceDiagnosticReport {
+	public fun <init> (Ldev/bota/sdk/model/DeviceDiagnosticFault;Ldev/bota/sdk/model/DeviceDiagnosticExecution;Ldev/bota/sdk/model/DeviceDiagnosticRuntime;Ljava/util/List;)V
+	public synthetic fun <init> (Ldev/bota/sdk/model/DeviceDiagnosticFault;Ldev/bota/sdk/model/DeviceDiagnosticExecution;Ldev/bota/sdk/model/DeviceDiagnosticRuntime;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ldev/bota/sdk/model/DeviceDiagnosticFault;
+	public final fun component2 ()Ldev/bota/sdk/model/DeviceDiagnosticExecution;
+	public final fun component3 ()Ldev/bota/sdk/model/DeviceDiagnosticRuntime;
+	public final fun component4 ()Ljava/util/List;
+	public final fun copy (Ldev/bota/sdk/model/DeviceDiagnosticFault;Ldev/bota/sdk/model/DeviceDiagnosticExecution;Ldev/bota/sdk/model/DeviceDiagnosticRuntime;Ljava/util/List;)Ldev/bota/sdk/model/DeviceDiagnosticReport;
+	public static synthetic fun copy$default (Ldev/bota/sdk/model/DeviceDiagnosticReport;Ldev/bota/sdk/model/DeviceDiagnosticFault;Ldev/bota/sdk/model/DeviceDiagnosticExecution;Ldev/bota/sdk/model/DeviceDiagnosticRuntime;Ljava/util/List;ILjava/lang/Object;)Ldev/bota/sdk/model/DeviceDiagnosticReport;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBreadcrumbs ()Ljava/util/List;
+	public final fun getExecution ()Ldev/bota/sdk/model/DeviceDiagnosticExecution;
+	public final fun getFault ()Ldev/bota/sdk/model/DeviceDiagnosticFault;
+	public final fun getRuntime ()Ldev/bota/sdk/model/DeviceDiagnosticRuntime;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/DeviceDiagnosticRuntime {
+	public synthetic fun <init> (Lkotlin/UInt;Lkotlin/UInt;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Lkotlin/UInt;Lkotlin/UInt;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1-0hXNFcg ()Lkotlin/UInt;
+	public final fun component2-0hXNFcg ()Lkotlin/UInt;
+	public final fun copy-1A3ddvw (Lkotlin/UInt;Lkotlin/UInt;)Ldev/bota/sdk/model/DeviceDiagnosticRuntime;
+	public static synthetic fun copy-1A3ddvw$default (Ldev/bota/sdk/model/DeviceDiagnosticRuntime;Lkotlin/UInt;Lkotlin/UInt;ILjava/lang/Object;)Ldev/bota/sdk/model/DeviceDiagnosticRuntime;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getHeapFreeBytes-0hXNFcg ()Lkotlin/UInt;
+	public final fun getTaskStackRemainingBytes-0hXNFcg ()Lkotlin/UInt;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/DeviceDiagnosticsBatch {
+	public fun <init> (ILjava/util/List;)V
+	public final fun component1 ()I
+	public final fun component2 ()Ljava/util/List;
+	public final fun copy (ILjava/util/List;)Ldev/bota/sdk/model/DeviceDiagnosticsBatch;
+	public static synthetic fun copy$default (Ldev/bota/sdk/model/DeviceDiagnosticsBatch;ILjava/util/List;ILjava/lang/Object;)Ldev/bota/sdk/model/DeviceDiagnosticsBatch;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEvents ()Ljava/util/List;
+	public final fun getSchemaVersion ()I
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
@@ -2314,6 +2583,570 @@ public final class dev/bota/sdk/model/WireValue$Unknown : dev/bota/sdk/model/Wir
 	public final fun getRawValue-s-VKNKU ()J
 	public synthetic fun getUnknownRawValue-6VbMDqA ()Lkotlin/ULong;
 	public fun getUnknownRawValue-s-VKNKU ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/speech/SpeechCaption {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;ZILjava/lang/String;Ljava/lang/String;JLjava/lang/String;ILjava/lang/String;JJDDLjava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component10 ()Ljava/lang/String;
+	public final fun component11 ()J
+	public final fun component12 ()J
+	public final fun component13 ()D
+	public final fun component14 ()D
+	public final fun component15 ()Ljava/lang/String;
+	public final fun component16 ()Ljava/lang/String;
+	public final fun component17 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Z
+	public final fun component4 ()I
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()J
+	public final fun component8 ()Ljava/lang/String;
+	public final fun component9 ()I
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;ZILjava/lang/String;Ljava/lang/String;JLjava/lang/String;ILjava/lang/String;JJDDLjava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ldev/bota/sdk/speech/SpeechCaption;
+	public static synthetic fun copy$default (Ldev/bota/sdk/speech/SpeechCaption;Ljava/lang/String;Ljava/lang/String;ZILjava/lang/String;Ljava/lang/String;JLjava/lang/String;ILjava/lang/String;JJDDLjava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ldev/bota/sdk/speech/SpeechCaption;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEndMs ()D
+	public final fun getKey ()Ljava/lang/String;
+	public final fun getOrigin ()Ljava/lang/String;
+	public final fun getSequence ()Ljava/lang/String;
+	public final fun getSourceEpoch ()J
+	public final fun getSourceFirstSeq ()J
+	public final fun getSourceId ()Ljava/lang/String;
+	public final fun getSourceLanguage ()Ljava/lang/String;
+	public final fun getSourceLastSeq ()J
+	public final fun getSourceMemberGeneration ()I
+	public final fun getSourceParticipantId ()Ljava/lang/String;
+	public final fun getStartMs ()D
+	public final fun getSubscriptionRevision ()I
+	public final fun getTargetLanguage ()Ljava/lang/String;
+	public final fun getText ()Ljava/lang/String;
+	public final fun getUnitId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun isFinal ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/speech/SpeechCaptionRecovery {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;ZLdev/bota/sdk/speech/SpeechCaptionRequest;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Z
+	public final fun component4 ()Ldev/bota/sdk/speech/SpeechCaptionRequest;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;ZLdev/bota/sdk/speech/SpeechCaptionRequest;)Ldev/bota/sdk/speech/SpeechCaptionRecovery;
+	public static synthetic fun copy$default (Ldev/bota/sdk/speech/SpeechCaptionRecovery;Ljava/lang/String;Ljava/lang/String;ZLdev/bota/sdk/speech/SpeechCaptionRequest;ILjava/lang/Object;)Ldev/bota/sdk/speech/SpeechCaptionRecovery;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCursor ()Ljava/lang/String;
+	public final fun getHasMore ()Z
+	public final fun getRequest ()Ldev/bota/sdk/speech/SpeechCaptionRequest;
+	public final fun getStatus ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/speech/SpeechCaptionRequest {
+	public fun <init> (ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;IIILjava/lang/String;)V
+	public final fun component1 ()I
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()I
+	public final fun component6 ()I
+	public final fun component7 ()I
+	public final fun component8 ()Ljava/lang/String;
+	public final fun copy (ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;IIILjava/lang/String;)Ldev/bota/sdk/speech/SpeechCaptionRequest;
+	public static synthetic fun copy$default (Ldev/bota/sdk/speech/SpeechCaptionRequest;ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;IIILjava/lang/String;ILjava/lang/Object;)Ldev/bota/sdk/speech/SpeechCaptionRequest;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCursor ()Ljava/lang/String;
+	public final fun getLimit ()I
+	public final fun getMemberGeneration ()I
+	public final fun getParticipantId ()Ljava/lang/String;
+	public final fun getProjectId ()Ljava/lang/String;
+	public final fun getRequestId ()I
+	public final fun getSessionId ()Ljava/lang/String;
+	public final fun getSubscriptionRevision ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/speech/SpeechCaptureArchive {
+	public static final field Companion Ldev/bota/sdk/speech/SpeechCaptureArchive$Companion;
+	public synthetic fun <init> (Ldev/bota/sdk/speech/SpeechCaptureStorage;Ldev/bota/sdk/speech/SpeechCaptureKeys;Ljavax/crypto/SecretKey;Lorg/json/JSONObject;Ljava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun append (J[BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun beginClock (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun close (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun endClock (JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun finish (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun flush (Ldev/bota/sdk/speech/SpeechCaptureHost;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun interruptClock (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun snapshot (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class dev/bota/sdk/speech/SpeechCaptureArchive$Companion {
+	public final fun create (Landroid/content/Context;Ljava/lang/String;[BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun list (Landroid/content/Context;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun recover (Landroid/content/Context;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class dev/bota/sdk/speech/SpeechCaptureClock {
+	public fun <init> (Ljava/lang/String;JZ)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()J
+	public final fun component3 ()Z
+	public final fun copy (Ljava/lang/String;JZ)Ldev/bota/sdk/speech/SpeechCaptureClock;
+	public static synthetic fun copy$default (Ldev/bota/sdk/speech/SpeechCaptureClock;Ljava/lang/String;JZILjava/lang/Object;)Ldev/bota/sdk/speech/SpeechCaptureClock;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEndKnown ()Z
+	public final fun getId ()Ljava/lang/String;
+	public final fun getSamples ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/speech/SpeechCaptureEnd : java/lang/Enum {
+	public static final field AUTHORIZATION_EXPIRED Ldev/bota/sdk/speech/SpeechCaptureEnd;
+	public static final field INTERRUPTED Ldev/bota/sdk/speech/SpeechCaptureEnd;
+	public static final field STOPPED Ldev/bota/sdk/speech/SpeechCaptureEnd;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/bota/sdk/speech/SpeechCaptureEnd;
+	public static fun values ()[Ldev/bota/sdk/speech/SpeechCaptureEnd;
+}
+
+public final class dev/bota/sdk/speech/SpeechCaptureError : java/lang/Enum {
+	public static final field BUSY Ldev/bota/sdk/speech/SpeechCaptureError;
+	public static final field CLOSED Ldev/bota/sdk/speech/SpeechCaptureError;
+	public static final field INVALID_INPUT Ldev/bota/sdk/speech/SpeechCaptureError;
+	public static final field UNAUTHORIZED Ldev/bota/sdk/speech/SpeechCaptureError;
+	public static final field UNAVAILABLE Ldev/bota/sdk/speech/SpeechCaptureError;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/bota/sdk/speech/SpeechCaptureError;
+	public static fun values ()[Ldev/bota/sdk/speech/SpeechCaptureError;
+}
+
+public final class dev/bota/sdk/speech/SpeechCaptureException : java/lang/Exception {
+	public fun <init> (Ldev/bota/sdk/speech/SpeechCaptureError;)V
+	public final fun getError ()Ldev/bota/sdk/speech/SpeechCaptureError;
+}
+
+public abstract interface class dev/bota/sdk/speech/SpeechCaptureHost {
+	public abstract fun complete (Ljava/lang/String;[BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun status (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun upload (Ljava/lang/String;[BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class dev/bota/sdk/speech/SpeechCapturePolicy {
+	public static final field INSTANCE Ldev/bota/sdk/speech/SpeechCapturePolicy;
+	public final fun evaluate ([B)[B
+}
+
+public final class dev/bota/sdk/speech/SpeechCapturePump {
+	public static final field Companion Ldev/bota/sdk/speech/SpeechCapturePump$Companion;
+	public synthetic fun <init> (Ldev/bota/sdk/speech/SpeechCaptureSink;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun offer ([B)Z
+	public final fun stop (ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class dev/bota/sdk/speech/SpeechCapturePump$Companion {
+	public final fun start (Ldev/bota/sdk/speech/SpeechCaptureArchive;Lkotlin/jvm/functions/Function0;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun start$default (Ldev/bota/sdk/speech/SpeechCapturePump$Companion;Ldev/bota/sdk/speech/SpeechCaptureArchive;Lkotlin/jvm/functions/Function0;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+}
+
+public final class dev/bota/sdk/speech/SpeechCaptureSnapshot {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;JIZZLjava/util/List;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()J
+	public final fun component4 ()I
+	public final fun component5 ()Z
+	public final fun component6 ()Z
+	public final fun component7 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;JIZZLjava/util/List;)Ldev/bota/sdk/speech/SpeechCaptureSnapshot;
+	public static synthetic fun copy$default (Ldev/bota/sdk/speech/SpeechCaptureSnapshot;Ljava/lang/String;Ljava/lang/String;JIZZLjava/util/List;ILjava/lang/Object;)Ldev/bota/sdk/speech/SpeechCaptureSnapshot;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getActiveClock ()Z
+	public final fun getArchiveSamples ()J
+	public final fun getCaptureId ()Ljava/lang/String;
+	public final fun getClocks ()Ljava/util/List;
+	public final fun getFinished ()Z
+	public final fun getNextSequence ()I
+	public final fun getRecordingId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/speech/SpeechConfiguration {
+	public fun <init> (Ldev/bota/sdk/speech/SpeechContext;Ldev/bota/sdk/speech/SpeechSubscription;)V
+	public final fun component1 ()Ldev/bota/sdk/speech/SpeechContext;
+	public final fun component2 ()Ldev/bota/sdk/speech/SpeechSubscription;
+	public final fun copy (Ldev/bota/sdk/speech/SpeechContext;Ldev/bota/sdk/speech/SpeechSubscription;)Ldev/bota/sdk/speech/SpeechConfiguration;
+	public static synthetic fun copy$default (Ldev/bota/sdk/speech/SpeechConfiguration;Ldev/bota/sdk/speech/SpeechContext;Ldev/bota/sdk/speech/SpeechSubscription;ILjava/lang/Object;)Ldev/bota/sdk/speech/SpeechConfiguration;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getContext ()Ldev/bota/sdk/speech/SpeechContext;
+	public final fun getSubscription ()Ldev/bota/sdk/speech/SpeechSubscription;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/speech/SpeechContext {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILdev/bota/sdk/speech/SpeechRetention;ZZ)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()I
+	public final fun component5 ()Ldev/bota/sdk/speech/SpeechRetention;
+	public final fun component6 ()Z
+	public final fun component7 ()Z
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILdev/bota/sdk/speech/SpeechRetention;ZZ)Ldev/bota/sdk/speech/SpeechContext;
+	public static synthetic fun copy$default (Ldev/bota/sdk/speech/SpeechContext;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILdev/bota/sdk/speech/SpeechRetention;ZZILjava/lang/Object;)Ldev/bota/sdk/speech/SpeechContext;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCanPublish ()Z
+	public final fun getCanSubscribe ()Z
+	public final fun getMemberGeneration ()I
+	public final fun getParticipantId ()Ljava/lang/String;
+	public final fun getProjectId ()Ljava/lang/String;
+	public final fun getRetention ()Ldev/bota/sdk/speech/SpeechRetention;
+	public final fun getSessionId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/speech/SpeechErrorCode : java/lang/Enum {
+	public static final field AUTHORIZATION_UNAVAILABLE Ldev/bota/sdk/speech/SpeechErrorCode;
+	public static final field CAPTION_RECOVERY_STALE Ldev/bota/sdk/speech/SpeechErrorCode;
+	public static final field CAPTION_RECOVERY_UNAVAILABLE Ldev/bota/sdk/speech/SpeechErrorCode;
+	public static final field CLEANUP_FAILED Ldev/bota/sdk/speech/SpeechErrorCode;
+	public static final field CLOSED Ldev/bota/sdk/speech/SpeechErrorCode;
+	public static final field INVALID_INPUT Ldev/bota/sdk/speech/SpeechErrorCode;
+	public static final field MEDIA_FAILED Ldev/bota/sdk/speech/SpeechErrorCode;
+	public static final field MEDIA_TIMEOUT Ldev/bota/sdk/speech/SpeechErrorCode;
+	public static final field PLAYBACK_BLOCKED Ldev/bota/sdk/speech/SpeechErrorCode;
+	public static final field SOURCE_FINISH_PENDING Ldev/bota/sdk/speech/SpeechErrorCode;
+	public static final field SOURCE_FINISH_STALE Ldev/bota/sdk/speech/SpeechErrorCode;
+	public static final field SOURCE_FINISH_UNAVAILABLE Ldev/bota/sdk/speech/SpeechErrorCode;
+	public static final field SUBSCRIPTION_UNAVAILABLE Ldev/bota/sdk/speech/SpeechErrorCode;
+	public static final field SUPERSEDED Ldev/bota/sdk/speech/SpeechErrorCode;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/bota/sdk/speech/SpeechErrorCode;
+	public static fun values ()[Ldev/bota/sdk/speech/SpeechErrorCode;
+}
+
+public final class dev/bota/sdk/speech/SpeechFinishBoundary {
+	public fun <init> (Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()I
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;)Ldev/bota/sdk/speech/SpeechFinishBoundary;
+	public static synthetic fun copy$default (Ldev/bota/sdk/speech/SpeechFinishBoundary;Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ldev/bota/sdk/speech/SpeechFinishBoundary;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getSamples ()Ljava/lang/String;
+	public final fun getSequence ()Ljava/lang/String;
+	public final fun getState ()Ljava/lang/String;
+	public final fun getWorkerGeneration ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/speech/SpeechFinishRequest {
+	public fun <init> (ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;IILjava/lang/String;Ljava/lang/String;Ljava/lang/Long;)V
+	public final fun component1 ()I
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()I
+	public final fun component6 ()I
+	public final fun component7 ()Ljava/lang/String;
+	public final fun component8 ()Ljava/lang/String;
+	public final fun component9 ()Ljava/lang/Long;
+	public final fun copy (ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;IILjava/lang/String;Ljava/lang/String;Ljava/lang/Long;)Ldev/bota/sdk/speech/SpeechFinishRequest;
+	public static synthetic fun copy$default (Ldev/bota/sdk/speech/SpeechFinishRequest;ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;IILjava/lang/String;Ljava/lang/String;Ljava/lang/Long;ILjava/lang/Object;)Ldev/bota/sdk/speech/SpeechFinishRequest;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMemberGeneration ()I
+	public final fun getParticipantId ()Ljava/lang/String;
+	public final fun getProjectId ()Ljava/lang/String;
+	public final fun getRequestId ()I
+	public final fun getSessionId ()Ljava/lang/String;
+	public final fun getSourceEpoch ()Ljava/lang/Long;
+	public final fun getSourceId ()Ljava/lang/String;
+	public final fun getTrackSid ()Ljava/lang/String;
+	public final fun getWorkerGeneration ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/speech/SpeechFinishedSource {
+	public fun <init> (Ljava/lang/String;JLjava/lang/String;ILjava/lang/String;Ljava/lang/String;Ldev/bota/sdk/speech/SpeechFinishBoundary;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()J
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()I
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()Ldev/bota/sdk/speech/SpeechFinishBoundary;
+	public final fun copy (Ljava/lang/String;JLjava/lang/String;ILjava/lang/String;Ljava/lang/String;Ldev/bota/sdk/speech/SpeechFinishBoundary;)Ldev/bota/sdk/speech/SpeechFinishedSource;
+	public static synthetic fun copy$default (Ldev/bota/sdk/speech/SpeechFinishedSource;Ljava/lang/String;JLjava/lang/String;ILjava/lang/String;Ljava/lang/String;Ldev/bota/sdk/speech/SpeechFinishBoundary;ILjava/lang/Object;)Ldev/bota/sdk/speech/SpeechFinishedSource;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEpoch ()J
+	public final fun getFinish ()Ldev/bota/sdk/speech/SpeechFinishBoundary;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getMemberGeneration ()I
+	public final fun getParticipantId ()Ljava/lang/String;
+	public final fun getState ()Ljava/lang/String;
+	public final fun getTrackSid ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/speech/SpeechGrant {
+	public fun <init> (ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IILjava/lang/String;)V
+	public final fun getExpiresAt ()Ljava/lang/String;
+	public final fun getIdentity ()Ljava/lang/String;
+	public final fun getMemberGeneration ()I
+	public final fun getParticipantId ()Ljava/lang/String;
+	public final fun getProcessorIdentity ()Ljava/lang/String;
+	public final fun getProtocolVersion ()I
+	public final fun getProvider ()Ljava/lang/String;
+	public final fun getRoom ()Ljava/lang/String;
+	public final fun getSessionId ()Ljava/lang/String;
+	public final fun getToken ()Ljava/lang/String;
+	public final fun getUrl ()Ljava/lang/String;
+	public final fun getWorkerGeneration ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/bota/sdk/speech/SpeechHostCallbacks {
+	public abstract fun changeSubscription (Ldev/bota/sdk/speech/SpeechSelection;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun finishSource (Ldev/bota/sdk/speech/SpeechFinishRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun getSupportsCaptionRecovery ()Z
+	public abstract fun getSupportsSourceFinish ()Z
+	public abstract fun readCaptions (Ldev/bota/sdk/speech/SpeechCaptionRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun renewGrant (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class dev/bota/sdk/speech/SpeechHostCallbacks$DefaultImpls {
+	public static fun finishSource (Ldev/bota/sdk/speech/SpeechHostCallbacks;Ldev/bota/sdk/speech/SpeechFinishRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun getSupportsCaptionRecovery (Ldev/bota/sdk/speech/SpeechHostCallbacks;)Z
+	public static fun getSupportsSourceFinish (Ldev/bota/sdk/speech/SpeechHostCallbacks;)Z
+	public static fun readCaptions (Ldev/bota/sdk/speech/SpeechHostCallbacks;Ldev/bota/sdk/speech/SpeechCaptionRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class dev/bota/sdk/speech/SpeechHostException : java/lang/IllegalStateException {
+	public fun <init> (Ldev/bota/sdk/speech/SpeechHostFailure;)V
+	public final fun getReason ()Ldev/bota/sdk/speech/SpeechHostFailure;
+}
+
+public final class dev/bota/sdk/speech/SpeechHostFailure : java/lang/Enum {
+	public static final field STALE_SOURCE Ldev/bota/sdk/speech/SpeechHostFailure;
+	public static final field STALE_SUBSCRIPTION Ldev/bota/sdk/speech/SpeechHostFailure;
+	public static final field UNAUTHORIZED Ldev/bota/sdk/speech/SpeechHostFailure;
+	public static final field UNAVAILABLE Ldev/bota/sdk/speech/SpeechHostFailure;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/bota/sdk/speech/SpeechHostFailure;
+	public static fun values ()[Ldev/bota/sdk/speech/SpeechHostFailure;
+}
+
+public final class dev/bota/sdk/speech/SpeechListeningMode : java/lang/Enum {
+	public static final field CAPTIONS_ONLY Ldev/bota/sdk/speech/SpeechListeningMode;
+	public static final field ORIGINAL Ldev/bota/sdk/speech/SpeechListeningMode;
+	public static final field TRANSLATED Ldev/bota/sdk/speech/SpeechListeningMode;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/bota/sdk/speech/SpeechListeningMode;
+	public static fun values ()[Ldev/bota/sdk/speech/SpeechListeningMode;
+}
+
+public abstract interface class dev/bota/sdk/speech/SpeechMediaCallbacks {
+	public abstract fun disconnected ()V
+	public abstract fun failed ()V
+	public abstract fun playbackBlocked ()V
+	public abstract fun text (Ljava/lang/String;Ljava/lang/String;)V
+	public abstract fun trackRemoved (Ljava/lang/String;)V
+}
+
+public abstract interface class dev/bota/sdk/speech/SpeechMediaPort {
+	public abstract fun clearPlayback (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun close (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun connect (Ldev/bota/sdk/speech/SpeechGrant;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun getSupportsSourceFinish ()Z
+	public abstract fun holdInput ()V
+	public abstract fun inputPublication ()Ljava/lang/String;
+	public abstract fun muteInput ()V
+	public abstract fun resumeAudio (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun setInput (ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun setPlayback (Ljava/util/List;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun silencePlayback ()V
+}
+
+public final class dev/bota/sdk/speech/SpeechMediaPort$DefaultImpls {
+	public static fun getSupportsSourceFinish (Ldev/bota/sdk/speech/SpeechMediaPort;)Z
+	public static fun holdInput (Ldev/bota/sdk/speech/SpeechMediaPort;)V
+	public static fun inputPublication (Ldev/bota/sdk/speech/SpeechMediaPort;)Ljava/lang/String;
+	public static fun resumeAudio (Ldev/bota/sdk/speech/SpeechMediaPort;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class dev/bota/sdk/speech/SpeechMicrophoneCapture {
+	public static final field Companion Ldev/bota/sdk/speech/SpeechMicrophoneCapture$Companion;
+	public synthetic fun <init> (Ldev/bota/sdk/speech/SpeechMicrophoneSource;Ldev/bota/sdk/speech/SpeechCapturePump;JLkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun interruptAndStop (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun renew (Ljava/time/Instant;)V
+	public final fun stop (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class dev/bota/sdk/speech/SpeechMicrophoneCapture$Companion {
+	public final fun start (Landroid/content/Context;Ldev/bota/sdk/speech/SpeechCaptureArchive;Ljava/time/Instant;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun start$default (Ldev/bota/sdk/speech/SpeechMicrophoneCapture$Companion;Landroid/content/Context;Ldev/bota/sdk/speech/SpeechCaptureArchive;Ljava/time/Instant;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+}
+
+public abstract interface class dev/bota/sdk/speech/SpeechObserver {
+	public abstract fun caption (Ldev/bota/sdk/speech/SpeechCaption;)V
+	public abstract fun error (Ldev/bota/sdk/speech/SpeechSessionException;)V
+	public abstract fun event (Ljava/lang/String;)V
+	public abstract fun stateChanged (Ldev/bota/sdk/speech/SpeechState;)V
+}
+
+public final class dev/bota/sdk/speech/SpeechObserver$DefaultImpls {
+	public static fun caption (Ldev/bota/sdk/speech/SpeechObserver;Ldev/bota/sdk/speech/SpeechCaption;)V
+	public static fun error (Ldev/bota/sdk/speech/SpeechObserver;Ldev/bota/sdk/speech/SpeechSessionException;)V
+	public static fun event (Ldev/bota/sdk/speech/SpeechObserver;Ljava/lang/String;)V
+	public static fun stateChanged (Ldev/bota/sdk/speech/SpeechObserver;Ldev/bota/sdk/speech/SpeechState;)V
+}
+
+public final class dev/bota/sdk/speech/SpeechRetention : java/lang/Enum {
+	public static final field LIVE_ONLY Ldev/bota/sdk/speech/SpeechRetention;
+	public static final field ORIGINAL_AUDIO_AND_TEXT Ldev/bota/sdk/speech/SpeechRetention;
+	public static final field TEXT_ONLY Ldev/bota/sdk/speech/SpeechRetention;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/bota/sdk/speech/SpeechRetention;
+	public static fun values ()[Ldev/bota/sdk/speech/SpeechRetention;
+}
+
+public final class dev/bota/sdk/speech/SpeechSelection {
+	public fun <init> (Ljava/lang/String;Ldev/bota/sdk/speech/SpeechListeningMode;Ljava/util/List;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ldev/bota/sdk/speech/SpeechListeningMode;
+	public final fun component3 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ldev/bota/sdk/speech/SpeechListeningMode;Ljava/util/List;)Ldev/bota/sdk/speech/SpeechSelection;
+	public static synthetic fun copy$default (Ldev/bota/sdk/speech/SpeechSelection;Ljava/lang/String;Ldev/bota/sdk/speech/SpeechListeningMode;Ljava/util/List;ILjava/lang/Object;)Ldev/bota/sdk/speech/SpeechSelection;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMode ()Ldev/bota/sdk/speech/SpeechListeningMode;
+	public final fun getSourceParticipantIds ()Ljava/util/List;
+	public final fun getTargetLanguage ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/speech/SpeechSession {
+	public static final field Companion Ldev/bota/sdk/speech/SpeechSession$Companion;
+	public synthetic fun <init> (Ldev/bota/sdk/internal/jni/NativeSpeechPolicy;Ldev/bota/sdk/speech/SpeechGrant;Lkotlin/jvm/functions/Function1;Ldev/bota/sdk/speech/SpeechHostCallbacks;Ldev/bota/sdk/speech/SpeechObserver;Ldev/bota/sdk/speech/SpeechClock;Lkotlinx/coroutines/CoroutineDispatcher;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun changeSubscription (Ldev/bota/sdk/speech/SpeechSelection;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun close (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun finishInput (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun finishMicrophone (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun getReady ()Lkotlinx/coroutines/Deferred;
+	public final fun getState ()Lkotlinx/coroutines/flow/StateFlow;
+	public final fun recoverCaptions (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun resumeAudio (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun setInput (ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun setListening (ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun setMicrophone (ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class dev/bota/sdk/speech/SpeechSession$Companion {
+	public final fun create (Ldev/bota/sdk/speech/SpeechConfiguration;Ldev/bota/sdk/speech/SpeechGrant;Lkotlin/jvm/functions/Function1;Ldev/bota/sdk/speech/SpeechHostCallbacks;Ldev/bota/sdk/speech/SpeechObserver;)Ldev/bota/sdk/speech/SpeechSession;
+	public static synthetic fun create$default (Ldev/bota/sdk/speech/SpeechSession$Companion;Ldev/bota/sdk/speech/SpeechConfiguration;Ldev/bota/sdk/speech/SpeechGrant;Lkotlin/jvm/functions/Function1;Ldev/bota/sdk/speech/SpeechHostCallbacks;Ldev/bota/sdk/speech/SpeechObserver;ILjava/lang/Object;)Ldev/bota/sdk/speech/SpeechSession;
+}
+
+public final class dev/bota/sdk/speech/SpeechSessionException : java/lang/IllegalStateException {
+	public fun <init> (Ldev/bota/sdk/speech/SpeechErrorCode;)V
+	public final fun getCode ()Ldev/bota/sdk/speech/SpeechErrorCode;
+}
+
+public final class dev/bota/sdk/speech/SpeechSourceFinish {
+	public fun <init> (Ljava/lang/String;ZLjava/lang/String;Ldev/bota/sdk/speech/SpeechFinishedSource;Ldev/bota/sdk/speech/SpeechFinishRequest;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Z
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ldev/bota/sdk/speech/SpeechFinishedSource;
+	public final fun component5 ()Ldev/bota/sdk/speech/SpeechFinishRequest;
+	public final fun copy (Ljava/lang/String;ZLjava/lang/String;Ldev/bota/sdk/speech/SpeechFinishedSource;Ldev/bota/sdk/speech/SpeechFinishRequest;)Ldev/bota/sdk/speech/SpeechSourceFinish;
+	public static synthetic fun copy$default (Ldev/bota/sdk/speech/SpeechSourceFinish;Ljava/lang/String;ZLjava/lang/String;Ldev/bota/sdk/speech/SpeechFinishedSource;Ldev/bota/sdk/speech/SpeechFinishRequest;ILjava/lang/Object;)Ldev/bota/sdk/speech/SpeechSourceFinish;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getHoldPublication ()Z
+	public final fun getRequest ()Ldev/bota/sdk/speech/SpeechFinishRequest;
+	public final fun getSource ()Ldev/bota/sdk/speech/SpeechFinishedSource;
+	public final fun getStatus ()Ljava/lang/String;
+	public final fun getTrackSid ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/speech/SpeechState {
+	public fun <init> (ZZZZIIIZJZLjava/util/List;Ldev/bota/sdk/speech/SpeechCaptionRecovery;Ldev/bota/sdk/speech/SpeechSourceFinish;)V
+	public final fun component1 ()Z
+	public final fun component10 ()Z
+	public final fun component11 ()Ljava/util/List;
+	public final fun component12 ()Ldev/bota/sdk/speech/SpeechCaptionRecovery;
+	public final fun component13 ()Ldev/bota/sdk/speech/SpeechSourceFinish;
+	public final fun component2 ()Z
+	public final fun component3 ()Z
+	public final fun component4 ()Z
+	public final fun component5 ()I
+	public final fun component6 ()I
+	public final fun component7 ()I
+	public final fun component8 ()Z
+	public final fun component9 ()J
+	public final fun copy (ZZZZIIIZJZLjava/util/List;Ldev/bota/sdk/speech/SpeechCaptionRecovery;Ldev/bota/sdk/speech/SpeechSourceFinish;)Ldev/bota/sdk/speech/SpeechState;
+	public static synthetic fun copy$default (Ldev/bota/sdk/speech/SpeechState;ZZZZIIIZJZLjava/util/List;Ldev/bota/sdk/speech/SpeechCaptionRecovery;Ldev/bota/sdk/speech/SpeechSourceFinish;ILjava/lang/Object;)Ldev/bota/sdk/speech/SpeechState;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCanCapture ()Z
+	public final fun getCanPlay ()Z
+	public final fun getChangeId ()I
+	public final fun getClearGeneration ()I
+	public final fun getClearPlayback ()Z
+	public final fun getConnected ()Z
+	public final fun getDisconnect ()Z
+	public final fun getExpiresAtMs ()J
+	public final fun getGap ()Z
+	public final fun getRecovery ()Ldev/bota/sdk/speech/SpeechCaptionRecovery;
+	public final fun getSourceFinish ()Ldev/bota/sdk/speech/SpeechSourceFinish;
+	public final fun getSubscriptionRevision ()I
+	public final fun getTracks ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/speech/SpeechSubscription {
+	public fun <init> (ILdev/bota/sdk/speech/SpeechSelection;)V
+	public final fun component1 ()I
+	public final fun component2 ()Ldev/bota/sdk/speech/SpeechSelection;
+	public final fun copy (ILdev/bota/sdk/speech/SpeechSelection;)Ldev/bota/sdk/speech/SpeechSubscription;
+	public static synthetic fun copy$default (Ldev/bota/sdk/speech/SpeechSubscription;ILdev/bota/sdk/speech/SpeechSelection;ILjava/lang/Object;)Ldev/bota/sdk/speech/SpeechSubscription;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRevision ()I
+	public final fun getSelection ()Ldev/bota/sdk/speech/SpeechSelection;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/speech/SpeechTrack {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()J
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ldev/bota/sdk/speech/SpeechTrack;
+	public static synthetic fun copy$default (Ldev/bota/sdk/speech/SpeechTrack;Ljava/lang/String;Ljava/lang/String;JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ldev/bota/sdk/speech/SpeechTrack;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMediaTrackSid ()Ljava/lang/String;
+	public final fun getOrigin ()Ljava/lang/String;
+	public final fun getOutputId ()Ljava/lang/String;
+	public final fun getSourceEpoch ()J
+	public final fun getSourceId ()Ljava/lang/String;
+	public final fun getSourceParticipantId ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }

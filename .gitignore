@@ -45,6 +45,8 @@
 /.build/
 /platforms/apple/Artifacts/
 /platforms/apple/.build/
+/platforms/apple-speech-livekit/.build/
+/platforms/apple-speech-livekit/.swiftpm/
 /platforms/watch/.build/
 /platforms/watch/.swiftpm/
 /tests/consumers/watch-control/.build/

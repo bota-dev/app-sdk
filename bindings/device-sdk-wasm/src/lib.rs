@@ -8,7 +8,11 @@ use bota_device_sdk_core::{
 };
 
 mod codecs;
+#[cfg(target_arch = "wasm32")]
+mod speech;
 mod workflows;
+#[cfg(target_arch = "wasm32")]
+pub use speech::*;
 
 pub use codecs::*;
 
