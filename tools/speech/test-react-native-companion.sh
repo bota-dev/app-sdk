@@ -17,7 +17,7 @@ mkdir -p "$output"
 if [[ "$mode" == --android ]]; then
     if [[ -z "${JAVA_HOME:-}" && -d /opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home ]]; then export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home; fi
     if [[ -z "${ANDROID_HOME:-}" && -d /opt/homebrew/share/android-commandlinetools/platforms ]]; then export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools; fi
-    "$root/platforms/android/gradlew" -p "$root/platforms/android" :sdk:publishMavenPublicationToLocalRepository :speech-livekit:assembleRelease
+    "$root/platforms/android/gradlew" -p "$root/platforms/android" :sdk:publishMavenPublicationToLocalRepository
     # Internal APK: bundled JS/Hermes, no Metro or development reload, disposable test key.
     "$JAVA_HOME/bin/keytool" -genkeypair -keystore "$app/android/app/speech-debug.keystore" -storepass android -alias androiddebugkey -keypass android \
         -dname 'CN=Internal Speech Companion' -keyalg RSA -validity 30

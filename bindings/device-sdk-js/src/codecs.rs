@@ -17,7 +17,6 @@ const MAX_LOG_PENDING_BYTES: usize = 64 * 1024;
 
 #[derive(Default)]
 pub(crate) struct CodecState {
-    speech: crate::speech::SpeechClients,
     wifi_provisioning: crate::wifi_provisioning::WifiProvisioningCodecs,
     local_wifi: crate::local_wifi::LocalWifiCodecs,
     regulatory: crate::regulatory::RegulatoryCodecs,
@@ -252,17 +251,6 @@ struct ReceiverEvent {
 impl CodecState {
     #[inline(never)]
     pub(crate) fn execute(&mut self, name: &str, value: Value) -> Result<Vec<u8>, DeviceSdkError> {
-        if name == "recordingSpeech" {
-            return bota_device_sdk_core::recording_speech::dispatch_json(&value.to_string())
-                .map(String::into_bytes);
-        }
-        if name == "speechCapture" {
-            return bota_device_sdk_core::speech::capture::dispatch_json(&value.to_string())
-                .map(String::into_bytes);
-        }
-        if name == "speechSession" {
-            return self.speech.call(value);
-        }
         if name == "prepareCountryConfiguration" {
             return crate::country_config::prepare(value);
         }

@@ -82,9 +82,11 @@ upload-only activities do not acquire a translation binding implicitly.
 ## Maintained microphone consumers
 
 The default native, RN and Flutter speech companions now use `RecordingLabOwner`.
-Web uses `tests/consumers/web-vite/recording.html`. The older conversation samples
-remain for gated legacy compatibility tests; they are not the current product
-model. To serve the already-built Web consumer, supply these server-only settings:
+Web uses `tests/consumers/web-vite/recording.html`. The React Native room
+preview and its LiveKit dependencies have been removed; its speech policies
+execute only in the native owner. Other older conversation samples remain for
+gated legacy compatibility tests; they are not the current product model. See
+the [usage audit](legacy-speech-cleanup.md). To serve the already-built Web consumer, supply these server-only settings:
 
 - `BOTA_SPEECH_API_ORIGIN`: the enabled HTTPS API origin (WSS is required).
 - `BOTA_SPEECH_API_KEY`: project credential with recording-speech/capture access.

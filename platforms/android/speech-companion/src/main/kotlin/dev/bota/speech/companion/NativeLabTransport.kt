@@ -15,6 +15,9 @@ import okhttp3.Response
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
+internal data class OriginalView(val enabled: Boolean = false, val capturing: Boolean = false, val finished: Boolean = false,
+    val status: String = "", val passages: List<String> = emptyList()) {
+
 internal class LabFailure : IllegalStateException("Speech host unavailable")
 internal class LabRequest(val url: String, val headers: Map<String, String>, val body: String) {
     override fun toString() = "LabRequest(redacted)"

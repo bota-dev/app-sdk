@@ -3,10 +3,6 @@ import BotaAppSDK
 import BotaSpeechLiveKit
 import Foundation
 
-struct OriginalView: Sendable {
-    var enabled = false, capturing = false, finished = false
-    var status = "", passages: [String] = []
-}
 @MainActor protocol LabOriginalOwner: AnyObject, Sendable {
     var capturing: Bool { get }
     var finished: Bool { get }

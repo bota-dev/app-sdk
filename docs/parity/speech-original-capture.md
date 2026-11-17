@@ -51,21 +51,18 @@ during recorder creation to `UNAUTHORIZED`, retaining the recoverable archive.
 | Apple | `SpeechCaptureArchive`, `SpeechCapturePump`, `SpeechMicrophoneCapture`, `SpeechCapturePolicy` | `stop` or `interruptAndStop`, then archive `finish`, `flush` and joined `close`. The optional `ExternalPCMInput` receives the same PCM. |
 | Android | The corresponding public classes in `dev.bota.sdk.speech` | `stop` or `interruptAndStop`, then archive `finish`, `flush` and `close`; feed the optional `ExternalPcmInput` from the same source. |
 | Flutter | `setSpeechConnectionFactory` installs a native `BotaFlutterSpeechConnection`; Dart remains a typed Pigeon facade | `session.originalView()` and `session.finishOriginal()` remain available after RTC failure. Native connection close joins original and RTC ownership. |
-| React Native | `/speech/native-media`: `createNativeSpeechMedia` consumes a host-supplied `NativeSpeechMediaIO` | The App retains the native original owner independently, exposes bounded display metadata and explicit stop, and joins it on departure. Session decisions still execute in generated Rust JavaScript. |
+| React Native | `/speech/recording`: `createRecordingSpeechClient` and native `RecordingLabOwner` | Capture, archive policy and playback stay native; JS receives bounded captions and explicit stop/close controls. |
 
 The native companions' `LabOriginal` coordinators and Web's `speechOriginal.ts`
 show scoped preparation, recovery, upload, source binding and final-text polling.
-Flutter and RN consume those same native capture/archive implementations. The RN
-companion uses the native Swift/Kotlin LiveKit adapters, avoiding a second JS
-WebRTC microphone/runtime in that App. The existing `/speech/livekit` adapter
-remains available for applications that supply the RN vendor stack themselves.
+Flutter retains its gated room compatibility adapter. React Native uses the
+[direct recording owner](recording-speech.md); its unpublished room entries,
+media bridge and LiveKit consumer dependencies have been removed. Native-only
+speech policies are no longer duplicated in its generated JavaScript runtime.
+No PCM, encrypted part, capture key or archive retry cursor enters Flutter/RN
+display messages.
 
-`NativeSpeechMediaIO.mediaFence` must execute synchronously and fence late
-acquisitions. `closeMedia` joins submitted RTC IO and retires callbacks; it must
-not delete or stop the independently owned original. The example native bridge
-bounds event delivery and closes media on overflow, background, invalidation or
-authorization expiry. No PCM, encrypted part, capture key or archive retry cursor
-enters Flutter/RN display messages.
+
 
 ## Publication and text
 

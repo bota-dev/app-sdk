@@ -42,7 +42,7 @@ function Recording() {
     void work().catch(() => setStatus('The operation could not complete. Original audio remains independent.')).finally(() => { lock.current = false; setBusy(false); }); };
   const start = async () => {
     const revision = ++generation.current, access = code; setCode(''); setStatus('Requesting microphone permission…'); lines.current.clear(); setCaptions([]); setFinalText('');
-    if (!await NativeModules.SpeechLabHost.microphonePermission() || generation.current !== revision) { setStatus('Microphone permission was not granted.'); return; }
+    if (!await NativeModules.MicrophonePermission.microphonePermission() || generation.current !== revision) { setStatus('Microphone permission was not granted.'); return; }
     const id = await native.prepare(origin, access, target, retention);
     if (generation.current !== revision) { await native.leave(); return; }
     setStatus('Connecting…'); setActive(true);

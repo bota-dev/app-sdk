@@ -16,8 +16,6 @@ import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
 
-internal data class OriginalView(val enabled: Boolean = false, val capturing: Boolean = false, val finished: Boolean = false,
-    val status: String = "", val passages: List<String> = emptyList()) {
     override fun toString() = "OriginalView(content redacted)"
 }
 internal interface LabOriginalOwner {

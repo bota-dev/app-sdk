@@ -45,8 +45,6 @@ replace(android / "app/build.gradle", "file('debug.keystore')", "file('speech-de
 replace(android / "app/build.gradle", 'implementation("com.facebook.react:react-android")',
         f'''implementation("com.facebook.react:react-android")
     implementation("dev.bota:bota-app-sdk:{version}")
-    implementation(files({json.dumps(str(root / "platforms/android/speech-livekit/build/outputs/aar/speech-livekit-release.aar"))}))
-    implementation("io.livekit:livekit-android:2.29.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")''')
 with (android / "build.gradle").open("a") as output:
@@ -55,21 +53,17 @@ with (android / "build.gradle").open("a") as output:
             forRepository {{ maven {{ url = uri({json.dumps(str(root / "target/android-m2"))}) }} }}
             filter {{ includeGroup("dev.bota") }}
         }}
-        exclusiveContent {{
-            forRepository {{ maven {{ url = uri("https://jitpack.io") }} }}
-            filter {{ includeVersion("com.github.davidliu", "audioswitch", "039a35aefab7747c557242fa216c9ea11743b604") }}
-        }}
     }} }}\n''')
 kotlin = android / "app/src/main/java/com/helloworld"
-replace(kotlin / "MainApplication.kt", 'PackageList(this).packages.apply {', 'PackageList(this).packages.apply {\n          add(SpeechLabPackage())')
-shutil.copyfile(app / "native/android/SpeechLabHost.kt", kotlin / "SpeechLabHost.kt")
+replace(kotlin / "MainApplication.kt", 'PackageList(this).packages.apply {', 'PackageList(this).packages.apply {\n          add(RecordingLabPackage())')
+shutil.copyfile(app / "native/android/MicrophonePermission.kt", kotlin / "MicrophonePermission.kt")
 shutil.copyfile(app / "native/android/RecordingLabHost.kt", kotlin / "RecordingLabHost.kt")
 native = root / "platforms/android/speech-companion/src/main"
-for name in ["NativeLabTransport.kt", "LabHost.kt", "LabOriginal.kt", "ReactNativeLabOwner.kt", "RecordingLabOwner.kt", "RecordingLabBridge.kt"]:
+for name in ["NativeLabTransport.kt", "RecordingLabOwner.kt", "RecordingLabBridge.kt"]:
     shutil.copyfile(native / "kotlin/dev/bota/speech/companion" / name, kotlin / name)
 shutil.copytree(native / "res/xml", android / "app/src/main/res/xml", dirs_exist_ok=True)
 shutil.copyfile(native / "res/drawable/companion_icon.xml", android / "app/src/main/res/drawable/companion_icon.xml")
-replace(android / "app/src/main/res/values/strings.xml", 'Hello App Display Name', 'Bota Conversation')
+replace(android / "app/src/main/res/values/strings.xml", 'Hello App Display Name', 'Bota Recording')
 manifest = android / "app/src/main/AndroidManifest.xml"
 replace(manifest, '<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
         '<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">')
@@ -84,27 +78,12 @@ ios = app / "ios"
 runner = ios / "SpeechCompanion"
 for source in (app / "native/ios").iterdir():
     shutil.copyfile(source, runner / source.name)
-for name in ["LabTransport.swift", "LabHost.swift", "LabOriginal.swift", "ReactNativeLabOwner.swift", "RecordingLabOwner.swift", "RecordingLabBridge.swift"]:
+for name in ["LabTransport.swift", "RecordingLabOwner.swift", "RecordingLabBridge.swift"]:
     shutil.copyfile(root / "platforms/apple-speech-livekit/Examples/SpeechCompanion" / name, runner / name)
-speech = ios / "native/speech-livekit"
-shutil.copytree(root / "platforms/apple-speech-livekit/Sources", speech / "Sources", dirs_exist_ok=True)
-(speech / "Package.swift").write_text(f'''// swift-tools-version: 6.1
-import PackageDescription
-let package = Package(name: "BotaSpeechLiveKit", platforms: [.iOS(.v15)],
-    products: [.library(name: "BotaSpeechLiveKit", targets: ["BotaSpeechLiveKit"])],
-    dependencies: [.package(name: "app-sdk", path: {json.dumps(str(root / "platforms/apple"))}),
-        .package(url: "https://github.com/livekit/client-sdk-swift.git", exact: "2.18.0")],
-    targets: [.target(name: "BotaSpeechLiveKit", dependencies: [
-        .product(name: "BotaAppSDK", package: "app-sdk"), .product(name: "LiveKit", package: "client-sdk-swift")])],
-    swiftLanguageModes: [.v6])
-''')
-lock = ios / "SpeechCompanion.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
-lock.parent.mkdir(parents=True, exist_ok=True)
-shutil.copyfile(root / "platforms/apple-speech-livekit/Package.resolved", lock)
 with (runner / "Info.plist").open('rb') as stream:
     info = plistlib.load(stream)
-info['CFBundleDisplayName'] = 'Bota Conversation'
-info['NSMicrophoneUsageDescription'] = 'Send your voice to the conversation after you enable the microphone.'
+info['CFBundleDisplayName'] = 'Bota Recording'
+info['NSMicrophoneUsageDescription'] = 'Capture your voice after you start recording.'
 info.pop('NSLocationWhenInUseUsageDescription', None)
 with (runner / "Info.plist").open('wb') as stream:
     plistlib.dump(info, stream)

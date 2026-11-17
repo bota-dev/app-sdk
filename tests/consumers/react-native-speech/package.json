@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "check": "tsc --noEmit",
-    "test": "tsc -p tsconfig.test.json && node --test test/*.test.cjs",
+    "test": "node --test ../../../frameworks/react-native/test/recording-speech.test.mjs",
     "start": "react-native start"
   },
   "dependencies": {
