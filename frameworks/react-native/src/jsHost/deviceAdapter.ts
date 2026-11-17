@@ -278,6 +278,10 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
           resolveBoundDeviceModel: options.resolveBoundDeviceModel,
           emit, gatt: (lease, body) => executor.gatt(lease, body),
           onCleanupFailure: error => executor.markCleanupFailed(error) });
+        if (ports.ble.ensureSecure) {
+          await executor.gatt(context, () => ports.ble.ensureSecure!(initial.id, context));
+          executor.check(context);
+        }
         connection = { device: initial, generation };
         presenceSession = '';
         const identity = await deviceControls.execute('readIdentity', [initial], context) as Partial<NativeConnectedDevice>;

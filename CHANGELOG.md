@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.0-beta.24 (candidate)
+
+- Prepare the current main SDK for Demo Android development delivery, including mandatory BLE security admission in the generated React Native host.
+- Android requests system Bond when needed; Android and iOS both verify the current connection through the protected LINK_SECURITY characteristic before business access. Scan remains available and security failures never downgrade to plaintext.
+- Regenerate synchronized version identities, portable Rust-generated JavaScript, native archive checksums and the Flutter inventory. Public publication, Demo native delivery and firmware/device acceptance are separate gates.
+
 ## 2.0.0-beta.23 (unreleased)
 
 - Prepare the synchronized SDK release containing connected Pin/Note model normalization and discovered WiFi service capabilities for Android/iOS React Native consumers.

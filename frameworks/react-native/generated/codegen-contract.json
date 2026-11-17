@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "package": "@bota.dev/react-native-app-sdk",
-  "packageVersion": "2.0.0-beta.23",
+  "packageVersion": "2.0.0-beta.24",
   "reactNativeVersion": "0.86.3",
   "codegenLibrary": "BotaDeviceSDKSpec",
   "nativeModule": "BotaDeviceSDK",
@@ -4545,11 +4545,84 @@
           ]
         },
         "moduleName": "BotaLocalWifiTransport"
+      },
+      "NativeBotaBleSecurity": {
+        "type": "NativeModule",
+        "aliasMap": {},
+        "enumMap": {},
+        "spec": {
+          "eventEmitters": [],
+          "methods": [
+            {
+              "name": "ensureBond",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "peripheralId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  },
+                  {
+                    "name": "requestId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  },
+                  {
+                    "name": "timeoutMs",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "NumberTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "cancelBond",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "requestId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "moduleName": "BotaBleSecurity"
       }
     }
   },
   "artifacts": {
     "android": [
+      {
+        "path": "java/dev/bota/sdk/reactnative/NativeBotaBleSecuritySpec.java",
+        "sha256": "91d2fc720f448f0c26486ef92339fa480e6f912b5b72f8eb06281b0dbcc61c53"
+      },
       {
         "path": "java/dev/bota/sdk/reactnative/NativeBotaDeviceSDKSpec.java",
         "sha256": "3f1acef6907956745c7db721b5ec768a7d099da4a8e85bc50ae960451c261e2d"
@@ -4564,11 +4637,11 @@
       },
       {
         "path": "jni/BotaDeviceSDKSpec-generated.cpp",
-        "sha256": "38c4f2b7fa4f7b6496d74926e4fdf7146495f02f1fdd10e5a0a2030274095ac9"
+        "sha256": "978c9168128170f09467f19eaa94d004fc7c6746589c82c23cc646bd375fcb18"
       },
       {
         "path": "jni/BotaDeviceSDKSpec.h",
-        "sha256": "1ca4a5e0d8c1babd1a3fbdf92bdf0c0b5944843de2f210c6054a4e9946f1ca90"
+        "sha256": "a9e8e2912033746ba767954806d0fd62abbe39e091d4a92508940e0831c1f45d"
       },
       {
         "path": "jni/CMakeLists.txt",
@@ -4576,23 +4649,23 @@
       },
       {
         "path": "jni/react/renderer/components/BotaDeviceSDKSpec/BotaDeviceSDKSpecJSI.h",
-        "sha256": "1389d9692d3a9be38aa292b3459c17a7cd94f6f2ec6e236bfec031e1e52ceaff"
+        "sha256": "661b85577d9c91d56300bbb00e8f4800c5bd95b75440b25c3715028a4e81dfba"
       }
     ],
     "ios": [
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec-generated.mm",
-        "sha256": "719539a88111330243e8da9a5a1cc3b85e32d567f77726ca6e6c1376d75260f9"
+        "sha256": "ebb2a7e718edc51555aa06a28bcb8a004517e378020363ab8f5c22d6481a05b1"
       },
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec.h",
-        "sha256": "2a66f5565b625840e3929e1c5bcb2baaf065a14450adb06dd506dbfc69225c4d"
+        "sha256": "a1dc1972cbaa643dbbee11bbb03d1413694221f9f8e22254b460b774d23cb15a"
       },
       {
         "path": "BotaDeviceSDKSpecJSI.h",
-        "sha256": "1389d9692d3a9be38aa292b3459c17a7cd94f6f2ec6e236bfec031e1e52ceaff"
+        "sha256": "661b85577d9c91d56300bbb00e8f4800c5bd95b75440b25c3715028a4e81dfba"
       }
     ]
   },
-  "contractDigest": "abbd8e91b1a869fd389f77ff954376d7b4d26118d3e6e61bf0b1ee6458c593d5"
+  "contractDigest": "773d8f1333f1faaad8aa33860ff34d96c72ac4d35dd68276defc172d83a96dc2"
 }

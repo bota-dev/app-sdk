@@ -294,9 +294,11 @@ impl CodecState {
             return crate::native_v2::execute(name, value);
         }
         match name {
-            "protocolMetadata" | "decodeText" | "decodeHex" | "decodeProvisioningState" => {
-                self.execute_basic(name, value)
-            }
+            "protocolMetadata"
+            | "decodeText"
+            | "decodeHex"
+            | "decodeProvisioningState"
+            | "validateBleLinkSecurity" => self.execute_basic(name, value),
             "decodeDeviceStatus"
             | "decodeConnectionSettings"
             | "decodeConnectionSettingsRaw"
@@ -380,6 +382,11 @@ impl CodecState {
     fn execute_basic(&mut self, name: &str, value: Value) -> Result<Vec<u8>, DeviceSdkError> {
         match name {
             "protocolMetadata" => public_output(metadata()),
+            "validateBleLinkSecurity" => {
+                let request: Bytes = input(value)?;
+                bota_device_sdk_core::protocol::validate_ble_link_security(&request.bytes)?;
+                output(&true)
+            }
             "decodeText" => {
                 let request: DecodeText = input(value)?;
                 let text = std::str::from_utf8(&request.bytes)
@@ -1198,6 +1205,7 @@ fn metadata() -> Value {
         CHAR_AUTH_NONCE,
         CHAR_BACKEND_PUBKEY,
         CHAR_DEVICE_CERT,
+        CHAR_LINK_SECURITY,
         SERVICE_BOTA_WIFI_CONFIG,
         CHAR_WIFI_GRANT,
         CHAR_WIFI_CREDENTIAL,

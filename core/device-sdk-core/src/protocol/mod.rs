@@ -1,4 +1,6 @@
+mod ble_link_security;
 mod find_device;
+pub use ble_link_security::*;
 pub use find_device::*;
 mod country_config;
 pub use country_config::*;
