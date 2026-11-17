@@ -40,5 +40,13 @@ the required design comparison is recorded here directly.
 | Complete security analysis | Existing CodeQL and Semgrep configuration retained | Exact-source full build and CodeQL must finish before reporting qualification. |
 
 Baseline generated source at `2f7a2a05` is 5,804,332 bytes (gzip 1,134,901).
-Canonical regenerated size and hosted results will be recorded after verification.
+Canonical Linux preparation [44009980418](https://github.com/bota-dev/app-sdk/actions/runs/44009980418)
+rebuilt the same source twice and produced 4,621,289 bytes (gzip 945,418):
+1,183,043 fewer source bytes, a 20.38% reduction. The artifact archive digest,
+producer revision and file digest were checked before adoption; current-source
+provenance also passes. Core SHA-256 is
+`2d65a4422164d185ff0082628be2c339681b4945b525a896f83603883fba0111`.
+The intervening main merge changes only firmware documentation/changelog;
+generator inputs remain identical. Exact final-source full CI and CodeQL are
+still pending at this checkpoint.
 Source size is not installed App size or measured runtime heap usage.
