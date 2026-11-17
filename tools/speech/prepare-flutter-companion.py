@@ -30,7 +30,7 @@ kotlin = android / "app/src/main/kotlin/dev/bota/speech/companion"
 kotlin.mkdir(parents=True, exist_ok=True)
 shutil.copyfile(source / "android/FlutterCompanionActivity.kt", kotlin / "FlutterCompanionActivity.kt")
 shutil.copyfile(source / "android/RecordingFlutterHost.kt", kotlin / "RecordingFlutterHost.kt")
-for name in ["LabHost.kt", "NativeLabTransport.kt", "FlutterLabOwner.kt", "LabOriginal.kt", "RecordingLabOwner.kt"]:
+for name in ["LabHost.kt", "NativeLabTransport.kt", "FlutterLabOwner.kt", "LabOriginal.kt", "RecordingAudioSupport.kt", "RecordingLabOwner.kt"]:
     shutil.copyfile(root / "platforms/android/speech-companion/src/main/kotlin/dev/bota/speech/companion" / name, kotlin / name)
 xml = android / "app/src/main/res/xml"
 xml.mkdir(parents=True, exist_ok=True)
@@ -88,7 +88,7 @@ let package = Package(name: "BotaSpeechLiveKit", platforms: [.iOS(.v15)],
 runner = app / "ios/Runner"
 for name in ["AppDelegate.swift", "SceneDelegate.swift", "RecordingFlutterHost.swift"]:
     shutil.copyfile(source / "ios" / name, runner / name)
-for name in ["LabHost.swift", "LabTransport.swift", "FlutterLabOwner.swift", "LabOriginal.swift", "RecordingLabOwner.swift"]:
+for name in ["LabHost.swift", "LabTransport.swift", "FlutterLabOwner.swift", "LabOriginal.swift", "RecordingAudioSupport.swift", "RecordingLabOwner.swift"]:
     shutil.copyfile(root / "platforms/apple-speech-livekit/Examples/SpeechCompanion" / name, runner / name)
 info = runner / "Info.plist"
 with info.open("rb") as handle:

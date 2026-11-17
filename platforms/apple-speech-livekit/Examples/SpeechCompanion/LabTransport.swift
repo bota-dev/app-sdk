@@ -1,10 +1,5 @@
 import Foundation
 
-struct OriginalView: Sendable {
-    var enabled = false, capturing = false, finished = false
-    var status = "", passages: [String] = []
-}
-
 enum LabFailure: String, Error, Sendable {
     case invalidConfiguration, unavailable, unsupportedSession, conflict, closed
 }

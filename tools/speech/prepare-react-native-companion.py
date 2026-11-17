@@ -59,7 +59,7 @@ replace(kotlin / "MainApplication.kt", 'PackageList(this).packages.apply {', 'Pa
 shutil.copyfile(app / "native/android/MicrophonePermission.kt", kotlin / "MicrophonePermission.kt")
 shutil.copyfile(app / "native/android/RecordingLabHost.kt", kotlin / "RecordingLabHost.kt")
 native = root / "platforms/android/speech-companion/src/main"
-for name in ["NativeLabTransport.kt", "RecordingLabOwner.kt", "RecordingLabBridge.kt"]:
+for name in ["NativeLabTransport.kt", "RecordingAudioSupport.kt", "RecordingLabOwner.kt", "RecordingLabBridge.kt"]:
     shutil.copyfile(native / "kotlin/dev/bota/speech/companion" / name, kotlin / name)
 shutil.copytree(native / "res/xml", android / "app/src/main/res/xml", dirs_exist_ok=True)
 shutil.copyfile(native / "res/drawable/companion_icon.xml", android / "app/src/main/res/drawable/companion_icon.xml")
@@ -78,7 +78,7 @@ ios = app / "ios"
 runner = ios / "SpeechCompanion"
 for source in (app / "native/ios").iterdir():
     shutil.copyfile(source, runner / source.name)
-for name in ["LabTransport.swift", "RecordingLabOwner.swift", "RecordingLabBridge.swift"]:
+for name in ["LabTransport.swift", "RecordingAudioSupport.swift", "RecordingLabOwner.swift", "RecordingLabBridge.swift"]:
     shutil.copyfile(root / "platforms/apple-speech-livekit/Examples/SpeechCompanion" / name, runner / name)
 with (runner / "Info.plist").open('rb') as stream:
     info = plistlib.load(stream)

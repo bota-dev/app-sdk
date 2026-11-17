@@ -17,7 +17,7 @@ project admission, provider configuration or deployed room resources.
 | JS RPC `speechCapture` | Generated-JS parity test only | Remove the duplicate JS entry; retain canonical capture tests and real native/Web owners. |
 | JS RPC `recordingSpeech` | No production RN caller; `createRecordingSpeechClient` sends bounded controls to `NativeRecordingSpeechIO` | Remove the duplicate JS entry; preserve native and WASM implementations. |
 | RN native room hosts and `ReactNativeLabOwner` | Removed JS conversation controller and dedicated compatibility tests | Remove the room bridge and owners. Keep a permission-only module and direct recording bridge. |
-| RN consuming App LiveKit dependencies | Old media/archive bridge | Remove Android vendor/AAR dependencies, the Apple LiveKit package and copied room sources. Shared original display metadata moves to the existing transport support file. |
+| RN consuming App LiveKit dependencies | Old media/archive bridge | Remove Android vendor/AAR dependencies, the Apple LiveKit package and copied room sources. Shared original display metadata and audio-route ownership move to `RecordingAudioSupport` in Swift/Kotlin, without RTC imports or behavior changes. |
 | Web WASM `WebSpeechClient`, room host and LiveKit entry | Separate Web room samples and their browser compatibility tests | Retained as an explicit legacy integration; not reachable through RN generated JS. |
 | Rust room core, native FFI/JNI, Swift/Kotlin `SpeechSession`, Flutter adapter | Native/Flutter compatibility surfaces and dedicated conformance consumers | Retained. Retiring these exported surfaces and all dependent native consumers is separate from removing unused RN code. Shared capture/storage/clock capabilities remain required by direct recording. |
 | Backend rooms/provider journals | Runtime use is not established by SDK source searches | No backend cleanup or environment changes. Drain/cleanup evidence remains required. |
@@ -55,3 +55,13 @@ first run; its Cargo fingerprint test lacked Cargo on PATH, and all five cases
 in that file passed with the pinned toolchain. Full hosted CI and CodeQL are
 still pending at this checkpoint.
 Source size is not installed App size or measured runtime heap usage.
+
+The isolated iOS consumer build exposed that direct recording also needs the
+audio-route owner formerly declared in `LabOriginal`. Both native route owners
+and display models now live in independent `RecordingAudioSupport` files, copied
+into the RN and Flutter consumers. Their route implementations are byte-identical
+to the original source; they do not require restoring any LiveKit dependency.
+The affected Android companion compiles locally with the pinned JDK 17 and
+`-PincludeSpeechCompanion=true`; isolated RN project preparation includes the
+shared declarations without LiveKit imports. Swift parsing passes locally;
+full iOS type checking requires the pinned hosted Xcode toolchain.
