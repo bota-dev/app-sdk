@@ -19,11 +19,11 @@ tracked separately.
 
 ## Unreleased
 
-- Add an internal React Native conversation App using the generated Rust speech
-  policy and pinned native LiveKit dependencies, paired captions, foreground
-  ownership and bounded loopback authorization. Bundled Android/iOS consumers
-  remain separate from real media, physical lifecycle, original archival and
-  public release qualification.
+- Use the native recording owner in the internal React Native App. Remove the
+  unpublished room/session JS entries, their generated-core RPC handlers and
+  old LiveKit consumer dependencies. Retain caption/target/stop/close controls,
+  native capture/archive ownership and default-off server admission. Builds and
+  security scans remain separate from real provider/device qualification.
 
 - Add an internal Flutter conversation companion using native-prepared grants
   and Apple/Android LiveKit factories, with paired captions and independent
@@ -70,11 +70,16 @@ tracked separately.
   pending. See the [Apple](docs/parity/apple-speech-session.md) and
   [Android](docs/parity/android-speech-session.md) integration contracts.
 
-- Add optional authorized external audio input to Web and React Native speech
+- Add optional authorized external audio input to Web speech
   adapters, with `setInput` / `finishInput` aliases. Web preserves host mute through
   an owned Web Audio branch; native hosts supply an independent media bridge and
   may coordinate audio ownership through a lease. Host integration, real RTC and
   physical audio coexistence remain unqualified.
+- Document the new firmware-only ordinary encrypted WS contract, including
+  ciphertext replay, byte-zero full HTTP fallback and signed receipt cleanup.
+  This reference update adds no SDK runtime API or released package capability.
+  See [firmware integration](FIRMWARE_PROTOCOL.md#ordinary-direct-ws-encryption).
+
 - Restore WiFi connection notifications in the generated React Native runtime.
   Authenticated configuration receipts no longer terminate the independent WiFi
   status subscription because of a missing codec dispatch entry. See the
