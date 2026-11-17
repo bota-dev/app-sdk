@@ -79,6 +79,7 @@ See [sequence diagrams and joint acceptance](docs/parity/ble-link-security.md).
 - [Device status](#device-status)
 - [Recording list and legacy transfer](#recording-list-and-legacy-transfer)
 - [Encrypted upload v2](#encrypted-upload-v2)
+- [Ordinary direct WS encryption](#ordinary-direct-ws-encryption)
 - [BYO customer storage](#byo-customer-storage)
 - [Authenticated factory reset](#authenticated-factory-reset)
 - [Device diagnostics](#device-diagnostics)
@@ -384,6 +385,75 @@ See [context/catalog contracts](docs/parity/v2-demo-protocol.md),
 [wire codecs](core/device-sdk-core/src/protocol/encrypted_upload_v2.rs), and
 [completion recovery](docs/parity/upload-recovery.md). Protected direct
 STREAMING below is a separate device HTTP contract, not an implicit BLE relay.
+
+## Ordinary direct WS encryption
+
+This is an unreleased device-to-cloud firmware contract. It does not add an App
+SDK relay API or change BLE framing, SDK versions or published package support.
+It retains an encrypted local source and is independent of the source-free
+protected STREAMING appendix. The backend requires migration
+`146_coordinated_upload_encryption.sql`; `RECORDING_UPLOAD_ENCRYPTED_ENABLED`
+defaults off, alongside the existing upload/device admission gates. Firmware,
+backend deployment and physical qualification remain separate.
+
+1. Generate the recording data key locally and encrypt encoded audio once into
+   BOTAENC2 before persistence/transmission. Negotiate only `botaenc2.v1` on
+   `/v1/recordings/ws` using `bota.stream.v1`; an unavailable profile is an error,
+   never permission to offer `plain.v1`. Retain the original ciphertext source.
+2. Send its exact bytes through ordinary WS descriptors/DATA. The first logical
+   segment includes the complete 128-byte header, durable-source flags `1` and
+   matching UUID/generation. Offsets, lengths, hashes and checkpoints refer to
+   ciphertext; `sample_start: "0"`, `sample_count: 0` and `total_samples: "0"`.
+3. After stop/trailer/seal, reconcile recording/current task. If initial START
+   was unavailable or uncertain, use existing `POST /v1/recordings/upload-tasks`
+   with the same UUID/generation, encrypted profile digest and `mode: "http_full"`.
+   Respect the returned current authority before any task selection.
+4. Request `POST /v1/recordings/{id}/upload-encryption` with ciphertext
+   `source_size` (decimal string), `source_sha256` (lowercase hex), canonical
+   Base64 `auth_nonce_base64` (16 decoded bytes), and `channel` (`wifi` or
+   `cellular`). Both material routes require the bound device token. Response
+   `data` contains `profile_digest`, `session_id`, `owner_revision`,
+   `authorization_base64`, `authorization_sha256`, `staging_object_digest`,
+   `expires_at` and `manifest_accepted`.
+5. Validate the existing signed 408-byte UploadAuthorizationV2, including its
+   recipient PK and source/identity/nonce/expiry bindings. HPKE-wrap the existing
+   recording key, then POST its exact 580-byte `manifest_base64` to
+   `/v1/recordings/{id}/upload-encryption/manifest`. Response `data` is
+   `{state: "accepted", session_id, idempotent}`. Preserve the exact manifest
+   for uncertain-response replay; acceptance is not completion.
+6. Complete WS or the current coordinated HTTP task. The common
+   `upload_receipt.encrypted_completion_receipt_base64` carries the existing
+   336-byte signed V2 proof. Source size/hash describes ciphertext; final object
+   size/hash describes verified plaintext. Verify the proof against retained
+   authorization/source, persist and read back terminal state, then allow source
+   cleanup. DURABLE_ACK and PUT success do not authorize deletion.
+
+The nested historical WS `session.receipt` is not ciphertext completion proof:
+its `content_sha256` is verified plaintext, `total_bytes` is ciphertext size and
+`total_samples` is `"0"`. Use the common receipt's separate source/object fields
+and signed proof. Recording generation and binding generation are independent;
+verify both, never substitute one counter for the other.
+
+Live WS can persist ciphertext before PK export because capture uses the local
+data key. Material expires after 15 minutes; only expired/unaccepted material
+may be replaced, up to eight total generations. Replacement retains the source
+and selected Wi-Fi/cellular channel. An accepted exact manifest remains
+processable after material expiry, subject to current ownership/policy checks.
+
+WS recovery allows three additional reconnects per recording at 1/2/4 seconds;
+success does not reset the budget. Preserve UUID/generation, handoff/epoch and
+checkpoint; replay original bytes. Initial failure or exhausted retries retains
+capture to seal and selects `http_full` under current task/revision, PUTting the
+same complete ciphertext from byte zero. `http_stream`, plaintext fallback and
+HTTP-to-WS return are forbidden; URL renewal is not HTTP range resume. Restore
+persisted source/identity after reboot, fence late writers and keep modem
+close/quarantine ordering. Marked recordings retain their separate dual proofs.
+
+Bota storage and BYO share encrypt-once source/lifecycle rules; BYO still has its
+own grants, footer, customer verification and transport. See the
+[ordinary encrypted-upload reference](https://docs.bota.dev/api-reference/uploads/coordinated-encryption)
+and [streaming flow](https://docs.bota.dev/guides/streaming-upload#encrypted-ordinary-websocket-source-preview).
+Those source-preview pages and this reference do not establish published support.
 
 ## BYO Customer Storage
 

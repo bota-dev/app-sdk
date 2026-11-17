@@ -19,6 +19,11 @@ tracked separately.
 
 ## Unreleased
 
+- Document the new firmware-only ordinary encrypted WS contract, including
+  ciphertext replay, byte-zero full HTTP fallback and signed receipt cleanup.
+  This reference update adds no SDK runtime API or released package capability.
+  See [firmware integration](FIRMWARE_PROTOCOL.md#ordinary-direct-ws-encryption).
+
 - Restore WiFi connection notifications in the generated React Native runtime.
   Authenticated configuration receipts no longer terminate the independent WiFi
   status subscription because of a missing codec dispatch entry. See the
