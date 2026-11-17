@@ -47,6 +47,11 @@ producer revision and file digest were checked before adoption; current-source
 provenance also passes. Core SHA-256 is
 `2d65a4422164d185ff0082628be2c339681b4945b525a896f83603883fba0111`.
 The intervening main merge changes only firmware documentation/changelog;
-generator inputs remain identical. Exact final-source full CI and CodeQL are
+generator inputs remain identical. Local verification passes: 738 RN tests plus package/types/Codegen/licenses,
+182 native-Rust/generated-JS differential cases, all 79 JS-bridge Rust tests,
+13 direct recording/capture Rust tests, companion type checking and prepared
+Android/iOS source/dependency checks. Repository tooling passed 125 cases on the
+first run; its Cargo fingerprint test lacked Cargo on PATH, and all five cases
+in that file passed with the pinned toolchain. Full hosted CI and CodeQL are
 still pending at this checkpoint.
 Source size is not installed App size or measured runtime heap usage.
