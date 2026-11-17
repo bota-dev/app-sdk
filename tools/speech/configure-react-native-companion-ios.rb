@@ -11,7 +11,7 @@ group = project.main_group.find_subpath('SpeechCompanion', false)
   target.source_build_phase.add_file_reference(reference)
 end
 package = project.new(Xcodeproj::Project::Object::XCLocalSwiftPackageReference)
-package.relative_path = '../../../../../platforms/apple'
+package.relative_path = '../../../../platforms/apple'
 project.root_object.package_references << package
 product = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
 product.package = package
