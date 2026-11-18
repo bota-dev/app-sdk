@@ -104,7 +104,8 @@ test "$("$ADB" shell getprop sys.boot_completed | tr -d '\r')" = "1"
 
 run_speech_smoke() {
   local smoke_environment="$ROOT/target/speech-smoke-python"
-  python3 -m venv "$smoke_environment"
+  # target may be restored from a build cache; never reuse a partial Python environment.
+  python3 -I -m venv --clear "$smoke_environment"
   "$smoke_environment/bin/python" -m pip install --disable-pip-version-check --require-hashes --no-deps \
     -r "$ROOT/tools/speech/smoke-requirements.txt"
   "$smoke_environment/bin/python" "$ROOT/tools/speech/smoke-react-native-companion.py" \
