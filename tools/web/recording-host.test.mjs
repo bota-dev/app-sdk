@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { createRecordingHost } from './recording-host.mjs'
+import { createRecordingHost, recordingSocketOrigin } from './recording-host.mjs'
 
 const id = '11111111-1111-4111-8111-111111111111', clockId = '22222222-2222-4222-8222-222222222222'
 const platformProjectId = 'proj_0123456789ABCDEFGHIJKLMN'
@@ -87,4 +87,9 @@ test('archive operations retain the fixed owner independently of the live connec
   assert.equal((await f.request('capture_transcript', { captureId: clockId, afterSegment: 20, resultSha256: 'a'.repeat(64) })).status, 200)
   assert.ok(f.calls.at(-1).url.includes('end_user_id=eu_test'))
   assert.ok(f.calls.at(-1).url.includes('after_segment=20'))
+})
+
+test('pins only the DEV recording socket to the Platform edge', () => {
+  assert.equal(recordingSocketOrigin('https://api.dev.bota.dev'), 'wss://platform.dev.bota.dev')
+  assert.equal(recordingSocketOrigin('https://api.example.invalid'), 'wss://api.example.invalid')
 })

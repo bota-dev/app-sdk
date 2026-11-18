@@ -13,6 +13,9 @@ type Result<T> = std::result::Result<T, DeviceSdkError>;
 fn invalid() -> DeviceSdkError {
     DeviceSdkError::new(ErrorCode::InvalidInput, Operation::Validate, false)
 }
+// The issuer and the device may disagree slightly at grant delivery. The server
+// consumes the token against its own clock. Never extend the local ready timeout.
+const MAX_ISSUER_CLOCK_LEAD_MS: u64 = 1_000;
 const MAX_INTEGER: u64 = 9_007_199_254_740_991;
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -375,7 +378,7 @@ pub fn dispatch_json(raw: &str) -> Result<String> {
                     .bytes()
                     .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
                 || now_ms >= expires
-                || expires - now_ms > profile().maximum_grant_lifetime_ms
+                || expires - now_ms > profile().maximum_grant_lifetime_ms + MAX_ISSUER_CLOCK_LEAD_MS
                 || expires > MAX_INTEGER
                 || (grant.generation > 1) != configuration.resume.is_some()
                 || configuration
@@ -393,7 +396,8 @@ pub fn dispatch_json(raw: &str) -> Result<String> {
                 version: 1,
                 configuration,
                 generation: grant.generation,
-                grant_deadline: expires,
+                grant_deadline: expires
+                    .min(now_ms.saturating_add(profile().maximum_grant_lifetime_ms)),
                 ready: false,
                 closed: false,
                 finishing: false,

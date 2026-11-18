@@ -118,7 +118,7 @@ execute only in the native owner. Other older conversation samples remain for
 gated legacy compatibility tests; they are not the current product model. See
 the [usage audit](legacy-speech-cleanup.md). To serve the already-built Web consumer, supply these server-only settings:
 
-- `BOTA_SPEECH_API_ORIGIN`: the enabled HTTPS API origin (WSS is required).
+- `BOTA_SPEECH_API_ORIGIN`: the enabled HTTPS API origin. DEV admission uses `https://api.dev.bota.dev` and the host pins the socket to `wss://platform.dev.bota.dev/v1/recording-speech/ws`. Other environments use their configured API host.
 - `BOTA_SPEECH_API_KEY`: project credential with recording-speech/capture access.
 - `BOTA_SPEECH_PROJECT_ID`: copy the `proj_…` ID from Platform project settings. Use the same ID in the backend project whitelist.
 - `BOTA_SPEECH_END_USER_ID`: the `eu_…` ID of the test user in that project.
@@ -151,3 +151,5 @@ composition only. Complete Xcode/iOS artifacts and their source-bound checksums,
 real providers, hardware, route/long-duration/concurrency/latency evidence and
 protected publication remain separate gates. The single delivery checklist is
 [Realtime Speech Design](https://github.com/bota-dev/internal-docs/blob/feat/realtime-translation/Realtime%20Speech%20Design.md#phase-3-evidence-and-unresolved-release-choices).
+
+The recording client tolerates up to one second of issuer clock lead at grant delivery. Its local handshake deadline is capped at the earlier of the advertised expiry and 30 seconds after receipt. The server checks the single-use grant against its own expiry at claim.

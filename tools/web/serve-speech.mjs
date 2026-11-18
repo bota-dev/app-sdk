@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createSpeechHost } from './speech-host.mjs'
-import { createRecordingHost } from './recording-host.mjs'
+import { createRecordingHost, recordingSocketOrigin } from './recording-host.mjs'
 
 const headers = {
   'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer',
@@ -18,7 +18,7 @@ export async function startSpeechLab(config, options = {}) {
   const recording = config.endUserId !== undefined
   const page = recording ? 'recording.html' : 'speech.html'
   const responseHeaders = recording ? { ...headers, 'content-security-policy':
-    headers['content-security-policy'].replace('https://*.livekit.cloud wss://*.livekit.cloud', new URL(config.apiOrigin).origin.replace(/^http/, 'ws')) } : headers
+    headers['content-security-policy'].replace('https://*.livekit.cloud wss://*.livekit.cloud', recordingSocketOrigin(config.apiOrigin)) } : headers
   const directory = options.directory ?? fileURLToPath(new URL('../../tests/consumers/web-vite/dist', import.meta.url))
   // Refuse to start until the actual consumer is built. This never runs Vite or installs packages.
   await readFile(resolve(directory, page))
