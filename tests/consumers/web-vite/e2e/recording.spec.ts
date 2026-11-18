@@ -1,6 +1,8 @@
 import { createDecipheriv, createHash } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 
+const projectId = 'proj_0123456789ABCDEFGHIJKLMN'
+
 // Synthetic API/provider, real packaged WASM, microphone worklet, WebCrypto,
 // IndexedDB, WebSocket framing and consuming App controls.
 for (const interrupted of [false, true]) test(`recording consumer completes the independent original; live interrupted=${interrupted}`, async ({ page }) => {
@@ -25,10 +27,10 @@ for (const interrupted of [false, true]) test(`recording consumer completes the 
       { id: 'mt_amazon_translate', label: 'Amazon Translate', stage: 'translation', available: true } ] }
     else if (action === 'start') {
       admission = body
-      result = { scope: JSON.stringify(['prj_test', 'eu_test']), clockId: body.clockId,
+      result = { scope: JSON.stringify([projectId, 'eu_test']), clockId: body.clockId,
         activity: { id: body.activityId, expires_at: new Date(Date.now() + 60000).toISOString() },
-        configuration: { projectId: 'prj_test', activityId: body.activityId, endpoint: 'wss://api.example.invalid/v1/recording-speech/ws' },
-        grant: { version: 1, project_id: 'prj_test', activity_id: body.activityId, transport: 'websocket', protocol: 'bota.recording-speech.v1',
+        configuration: { projectId, activityId: body.activityId, endpoint: 'wss://api.example.invalid/v1/recording-speech/ws' },
+        grant: { version: 1, project_id: projectId, activity_id: body.activityId, transport: 'websocket', protocol: 'bota.recording-speech.v1',
           url: 'wss://api.example.invalid/v1/recording-speech/ws', token: 'a'.repeat(43), generation: 1, expires_at: new Date(Date.now() + 20000).toISOString() },
         prepared: { protocol_version: 1, profile: 'speech_capture_pcm_v1', capture_id: body.captureId, recording_id: 'rec_browser', sample_rate: 48000,
           channels: 1, format: 'pcm_s16le', cipher: 'AES-256-GCM', data_key: key.toString('base64'), maximum_chunk_samples: 48000, upload_until: new Date(Date.now() + 60000).toISOString() } }
@@ -113,8 +115,8 @@ test('leaving during microphone permission retires the late input without sendin
       admission = route.request().postDataJSON()
       const endpoint = 'wss://api.example.invalid/v1/recording-speech/ws'
       result = { scope: 'permission-test', clockId: admission.clockId, activity: { id: admission.activityId, expires_at: new Date(Date.now() + 60000).toISOString() },
-        configuration: { projectId: 'prj_test', activityId: admission.activityId, endpoint },
-        grant: { version: 1, project_id: 'prj_test', activity_id: admission.activityId, transport: 'websocket', protocol: 'bota.recording-speech.v1',
+        configuration: { projectId, activityId: admission.activityId, endpoint },
+        grant: { version: 1, project_id: projectId, activity_id: admission.activityId, transport: 'websocket', protocol: 'bota.recording-speech.v1',
           url: endpoint, token: 'a'.repeat(43), generation: 1, expires_at: new Date(Date.now() + 20000).toISOString() } }
     }
     await route.fulfill({ json: result })

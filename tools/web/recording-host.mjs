@@ -32,7 +32,7 @@ export function createRecordingHost(config, dependencies = {}) {
   if (origin.origin !== fixed.origin || origin.protocol !== 'http:' || origin.hostname !== '127.0.0.1' ||
       api.origin !== fixed.apiOrigin || api.username || api.password ||
       api.protocol !== 'https:' ||
-      !/^prj_[A-Za-z0-9_-]+$/.test(fixed.projectId) || !/^eu_[A-Za-z0-9_-]{1,76}$/.test(fixed.endUserId) ||
+      !/^(?:proj|prj)_[A-Za-z0-9_-]+$/.test(fixed.projectId) || !/^eu_[A-Za-z0-9_-]{1,76}$/.test(fixed.endUserId) ||
       typeof fixed.apiKey !== 'string' || !fixed.apiKey || !/^[A-Za-z0-9_-]{32,128}$/.test(fixed.code)) throw Error('Invalid recording lab configuration')
   const fetch = dependencies.fetch ?? globalThis.fetch, attempted = new Set(), admitted = new Set()
   const root = '/v1/recording-speech'

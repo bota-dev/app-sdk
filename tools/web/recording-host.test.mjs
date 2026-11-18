@@ -3,9 +3,10 @@ import test from 'node:test'
 import { createRecordingHost } from './recording-host.mjs'
 
 const id = '11111111-1111-4111-8111-111111111111', clockId = '22222222-2222-4222-8222-222222222222'
-function fixture(createStatus = 200) {
+const platformProjectId = 'proj_0123456789ABCDEFGHIJKLMN'
+function fixture(createStatus = 200, projectId = platformProjectId) {
   const calls = [], code = 'a'.repeat(40), origin = 'http://127.0.0.1:4173'
-  const config = { origin, apiOrigin: 'https://api.example.invalid', apiKey: 'server-only', projectId: 'prj_test', endUserId: 'eu_test', code }
+  const config = { origin, apiOrigin: 'https://api.example.invalid', apiKey: 'server-only', projectId, endUserId: 'eu_test', code }
   const host = createRecordingHost(config, { fetch: async (url, options) => {
     const body = options.body && JSON.parse(options.body); calls.push({ url, ...options, body })
     if (url.endsWith('/captures')) return Response.json({ capture_id: clockId, recording_id: 'rec_test' })
@@ -17,6 +18,17 @@ function fixture(createStatus = 200) {
     headers: { 'content-type': 'application/json', origin, 'x-recording-code': code, ...headers }, body: JSON.stringify(body) }))
   return { request, calls }
 }
+test('returns the fixed Platform or legacy project ID unchanged and rejects malformed IDs', async () => {
+  for (const id of [platformProjectId, 'prj_test']) {
+    const { request } = fixture(200, id)
+    const response = await request('context', {})
+    assert.equal(response.status, 200)
+    assert.deepEqual((await response.json()).scope, JSON.stringify([id, 'eu_test']))
+  }
+  for (const id of ['proj_', 'proj_a/b', 'org_0123456789ABCDEFGHIJKLMN']) {
+    assert.throws(() => fixture(200, id), /Invalid recording lab configuration/)
+  }
+})
 const input = { activityId: id, clockId, captureId: clockId, retention: 'original_audio_and_text', targetLanguage: 'zh', sourceLanguage: 'multi' }
 test('passes opaque model choices and catalog revision to admission without exposing credentials', async () => {
   const f = fixture(), models = { asr: 'asr_deepgram_nova3', translation: 'mt_amazon_translate', tts: 'tts_elevenlabs_flash25' }
