@@ -7,6 +7,8 @@ export interface WebSpeechCaptureInputOptions {
   clockId?: string
   /** Serve the packaged speechCaptureWorklet.js under the host's CSP. */
   workletUrl?: string | URL
+  /** Duration of a full onAudio frame. Defaults to 20 ms; the final frame may be shorter. */
+  liveFrameDurationMs?: 20 | 100
   onError?(code: 'archive_write_failed' | 'capture_interrupted'): void
   /** Synchronous borrowed same-source frames; copy before retaining. A live
    * transport failure must leave this independently owned archive running. */
@@ -25,6 +27,7 @@ export interface WebSpeechCaptureInput {
 /** One browser microphone and one render clock feed independent RTC and
  * encrypted archival branches. RTC teardown never closes this owner. */
 export async function createWebSpeechCaptureInput(options: WebSpeechCaptureInputOptions): Promise<WebSpeechCaptureInput> {
+  const liveFrameSamples = options.liveFrameDurationMs === 100 ? 4800 : 960
   const context = new AudioContext({ sampleRate: 48000 }), destination = context.createMediaStreamDestination()
   const candidate = destination.stream.getAudioTracks()[0]
   if (context.sampleRate !== 48000 || !candidate) { await context.close(); throw Error('speech_capture_unsupported') }
@@ -91,13 +94,13 @@ export async function createWebSpeechCaptureInput(options: WebSpeechCaptureInput
           ended = new Promise(resolve => { reportEnd = resolve })
           source = context.createMediaStreamSource(stream)
           node = new AudioWorkletNode(context, 'bota-speech-capture-v1', { numberOfInputs: 1, numberOfOutputs: 1,
-            outputChannelCount: [1], channelCount: 1, channelCountMode: 'explicit', processorOptions: { directFrames: !!options.onAudio } })
+            outputChannelCount: [1], channelCount: 1, channelCountMode: 'explicit', processorOptions: { directFrames: !!options.onAudio, liveFrameSamples } })
           const owned = node
           node.onprocessorerror = interrupt
           node.port.onmessage = event => {
             const value = event.data
             if (value?.type === 'live') {
-              if (!(value.bytes instanceof ArrayBuffer) || !value.bytes.byteLength || value.bytes.byteLength > 1920 || value.bytes.byteLength % 2 ||
+              if (!(value.bytes instanceof ArrayBuffer) || !value.bytes.byteLength || value.bytes.byteLength > liveFrameSamples * 2 || value.bytes.byteLength % 2 ||
                 !Number.isSafeInteger(value.firstSample) || value.firstSample < 0) { interrupt(); return }
               const bytes = new Uint8Array(value.bytes)
               try { options.onAudio?.(value.firstSample, bytes) } catch { /* Live IO does not own archival. */ }

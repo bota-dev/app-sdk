@@ -59,6 +59,7 @@ for (const interrupted of [false, true]) test(`recording consumer completes the 
     socket.onMessage(message => {
       if (typeof message !== 'string') {
         liveFrames++; expect(message.subarray(0, 4).toString()).toBe('BRS1')
+        if (liveFrames === 1) expect(message.length).toBe(32 + 4800 * 2)
         if (liveFrames === 1) {
           send({ type: 'caption', activityId: admission.activityId, generation: 1, revision: currentRevision, final: true,
             caption: { unitId: `${admission.activityId}:1:${currentRevision}:microphone:1:1`, sourceId: 'microphone', sourceEpoch: 1, revision: currentRevision,

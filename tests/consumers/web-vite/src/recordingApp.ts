@@ -97,7 +97,7 @@ export async function startRecording(options: { code: string; target: string; re
       await live.setRoute(await playback.qualifyHeadphones() ? 'headphones' : 'unqualified')
     } catch { await live?.close().catch(() => {}); live = undefined; options.status('Live connection unavailable. Original capture continues.') }
     abort.signal.throwIfAborted()
-    input = await createWebSpeechCaptureInput({ ...(archive ? { archive } : {}), clockId,
+    input = await createWebSpeechCaptureInput({ ...(archive ? { archive } : {}), clockId, liveFrameDurationMs: 100,
       onAudio: (first, pcm) => { live?.push(0, first, pcm) }, onError: code => options.status(code === 'archive_write_failed' ?
         'Original storage interrupted; missing samples remain explicit. Live captions continue.' : 'Microphone interrupted. Original gaps are retained.') })
     abort.signal.throwIfAborted(); await input.start(); abort.signal.throwIfAborted()
