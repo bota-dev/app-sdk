@@ -120,7 +120,8 @@ the [usage audit](legacy-speech-cleanup.md). To serve the already-built Web cons
 
 - `BOTA_SPEECH_API_ORIGIN`: the enabled HTTPS API origin (WSS is required).
 - `BOTA_SPEECH_API_KEY`: project credential with recording-speech/capture access.
-- `BOTA_SPEECH_PROJECT_ID`, `BOTA_SPEECH_END_USER_ID`: one fixed lab owner.
+- `BOTA_SPEECH_PROJECT_ID`: copy the `proj_…` ID from Platform project settings. Use the same ID in the backend project whitelist.
+- `BOTA_SPEECH_END_USER_ID`: the `eu_…` ID of the test user in that project.
 - `BOTA_SPEECH_CODE`: an independently generated 32–128 character operator code.
 
 Run `node --env-file=/absolute/private/lab.env tools/web/serve-speech.mjs`. This
