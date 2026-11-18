@@ -1,7 +1,7 @@
 // @ts-nocheck
 // Generated from shared Rust by tools/react-native/generate-js-core.mjs. Do not edit.
 // Rust 1.98.0 / Binaryen 132.0.0; runtime uses ordinary JS and typed arrays.
-export const GENERATED_CORE_SOURCE_SHA256 = 'd0ee3fb0f4e57b4acd05c0449f0ef9aae4294196975b196d87b5c7f3e9b13b6b';
+export const GENERATED_CORE_SOURCE_SHA256 = '57bb5cbc683a7fb96ace91d312080b5e4c2489fa11f4b43a13c0b810293c0f36';
 export interface GeneratedCoreExports {
   memory: { readonly buffer: ArrayBuffer };
   bota_js_abi_version(...args: number[]): number;

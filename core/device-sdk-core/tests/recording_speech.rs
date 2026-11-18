@@ -4,12 +4,31 @@ use serde_json::{Value, json};
 fn call(value: Value) -> Value {
     serde_json::from_str(&dispatch_json(&value.to_string()).unwrap()).unwrap()
 }
-fn opened() -> Value {
-    let created = call(json!({"op":"create", "nowMs":1000,
+fn create_command() -> Value {
+    json!({"op":"create", "nowMs":1000,
         "configuration":{"projectId":"prj_test","activityId":"11111111-1111-4111-8111-111111111111","endpoint":"wss://api.example.com/v1/recording-speech/ws"},
         "grant":{"version":1,"project_id":"prj_test","activity_id":"11111111-1111-4111-8111-111111111111","transport":"websocket",
             "protocol":"bota.recording-speech.v1","url":"wss://api.example.com/v1/recording-speech/ws","token":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            "generation":1,"expires_at":"1970-01-01T00:00:30.000Z"}}));
+            "generation":1,"expires_at":"1970-01-01T00:00:30.000Z"}})
+}
+#[test]
+fn grant_clock_lead_is_bounded_and_never_extends_the_local_deadline() {
+    let mut command = create_command();
+    for (expiry, deadline) in [
+        ("1970-01-01T00:00:30.000Z", 30_000),
+        ("1970-01-01T00:00:31.163Z", 31_000),
+        ("1970-01-01T00:00:32.000Z", 31_000),
+    ] {
+        command["grant"]["expires_at"] = json!(expiry);
+        assert_eq!(call(command.clone())["state"]["grantDeadline"], deadline);
+    }
+    for expiry in ["1970-01-01T00:00:32.001Z", "1970-01-01T00:00:01.000Z"] {
+        command["grant"]["expires_at"] = json!(expiry);
+        assert!(dispatch_json(&command.to_string()).is_err());
+    }
+}
+fn opened() -> Value {
+    let created = call(create_command());
     assert!(!created["state"].to_string().contains("aaaaaaaa"));
     call(json!({"op":"ready","state":created["state"], "nowMs":1001,
         "event":{"type":"ready","version":1,"activityId":"11111111-1111-4111-8111-111111111111","generation":1,

@@ -24,6 +24,11 @@ async function json(message, limit, signal) {
   } finally { signal.removeEventListener('abort', cancel); cancel(); for (const chunk of chunks) chunk.fill(0) }
 }
 
+// Admission uses HTTPS. Only the reviewed DEV edge has a separate WSS origin.
+export function recordingSocketOrigin(apiOrigin) {
+  return apiOrigin === 'https://api.dev.bota.dev' ? 'wss://platform.dev.bota.dev' : new URL(apiOrigin).origin.replace(/^https:/, 'wss:')
+}
+
 /** Operator-only loopback adapter for one authenticated end user. Production
  * hosts must resolve this identity from their own login. API keys stay here;
  * the client gets only a one-use activity grant and its own archive key. */
@@ -32,7 +37,7 @@ export function createRecordingHost(config, dependencies = {}) {
   if (origin.origin !== fixed.origin || origin.protocol !== 'http:' || origin.hostname !== '127.0.0.1' ||
       api.origin !== fixed.apiOrigin || api.username || api.password ||
       api.protocol !== 'https:' ||
-      !/^prj_[A-Za-z0-9_-]+$/.test(fixed.projectId) || !/^eu_[A-Za-z0-9_-]{1,76}$/.test(fixed.endUserId) ||
+      !/^(?:proj|prj)_[A-Za-z0-9_-]+$/.test(fixed.projectId) || !/^eu_[A-Za-z0-9_-]{1,76}$/.test(fixed.endUserId) ||
       typeof fixed.apiKey !== 'string' || !fixed.apiKey || !/^[A-Za-z0-9_-]{32,128}$/.test(fixed.code)) throw Error('Invalid recording lab configuration')
   const fetch = dependencies.fetch ?? globalThis.fetch, attempted = new Set(), admitted = new Set()
   const root = '/v1/recording-speech'
@@ -98,7 +103,7 @@ export function createRecordingHost(config, dependencies = {}) {
         admitted.add(body.activityId)
         const grant = await upstream(`${root}/${body.activityId}/grant`, {})
         result = { scope: JSON.stringify([fixed.projectId, fixed.endUserId]), activity: value.activity, configuration: { projectId: fixed.projectId, activityId: body.activityId,
-          endpoint: fixed.apiOrigin.replace(/^http/, 'ws') + `${root}/ws` }, grant, clockId: body.clockId, ...(prepared ? { prepared } : {}) }
+          endpoint: recordingSocketOrigin(fixed.apiOrigin) + `${root}/ws` }, grant, clockId: body.clockId, ...(prepared ? { prepared } : {}) }
       } else if (['grant','end'].includes(action)) {
         fields(body, ['activityId'])
         if (!uuid(body.activityId) || !admitted.has(body.activityId)) fail(403, 'unauthorized')
