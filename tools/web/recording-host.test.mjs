@@ -18,6 +18,22 @@ function fixture(createStatus = 200) {
   return { request, calls }
 }
 const input = { activityId: id, clockId, captureId: clockId, retention: 'original_audio_and_text', targetLanguage: 'zh', sourceLanguage: 'multi' }
+test('passes opaque model choices and catalog revision to admission without exposing credentials', async () => {
+  const f = fixture(), models = { asr: 'asr_deepgram_nova3', translation: 'mt_amazon_translate', tts: 'tts_elevenlabs_flash25' }
+  const response = await f.request('start', { ...input, models, modelCatalogRevision: 'catalog_revision' })
+  assert.equal(response.status, 200)
+  assert.deepEqual(f.calls[1].body.models, models)
+  assert.equal(f.calls[1].body.model_catalog_revision, 'catalog_revision')
+  assert.ok(!JSON.stringify(await response.json()).includes('server-only'))
+})
+test('model catalog reads are fixed to the host owner and never create an activity', async () => {
+  const f = fixture()
+  assert.equal((await f.request('models', {})).status, 200)
+  assert.equal(f.calls.length, 1)
+  assert.equal(f.calls[0].method, 'GET')
+  assert.ok(f.calls[0].url.endsWith('/models?end_user_id=eu_test'))
+  assert.equal((await f.request('models', { projectId: 'foreign' })).status, 400)
+})
 test('failed or uncertain creation never authorizes a grant or end against an existing foreign activity', async () => {
   for (const status of [409, 503]) {
     const f = fixture(status)

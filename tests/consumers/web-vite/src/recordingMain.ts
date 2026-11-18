@@ -1,20 +1,48 @@
+import { recordingHost } from './recordingHost'
 import { startRecording } from './recordingApp'
 const element = <T extends HTMLElement>(id: string) => document.getElementById(id) as T
 const status = (value: string) => { element('status').textContent = value }
 const captions = new Map<string, string>()
 let owner: Awaited<ReturnType<typeof startRecording>> | undefined, busy = false
+let modelCatalogRevision: string | undefined
+let catalogCode: string | undefined
+let modelStages: Record<string, boolean> = {}
 let lifetime: AbortController | undefined, departed = false
 function buttons(active: boolean) {
   element<HTMLButtonElement>('start').disabled = active
+  element<HTMLButtonElement>('load-models').disabled = active
+  for (const stage of ['asr', 'translation', 'tts']) element<HTMLSelectElement>(`${stage}-model`).disabled = active || !modelCatalogRevision || modelStages[stage] === false
   for (const id of ['change','route','finish','close']) element<HTMLButtonElement>(id).disabled = !active
 }
 async function action(work: () => Promise<void>) { if (busy) return; busy = true; try { await work() } catch { status('The operation could not complete. Retained originals remain available for recovery.') } finally { busy = false } }
+element('load-models').onclick = () => { void action(async () => {
+  const code = element<HTMLInputElement>('code').value
+  const catalog = await recordingHost(code).models(new AbortController().signal)
+  if (code !== element<HTMLInputElement>('code').value) return
+  for (const stage of ['asr', 'translation', 'tts']) {
+    const select = element<HTMLSelectElement>(`${stage}-model`)
+    const inherited = catalog.models.find(model => model.id === catalog.defaults[stage])
+    select.replaceChildren(new Option(`Default${inherited ? ` · ${inherited.label}` : ''}`, ''))
+    for (const model of catalog.models.filter(model => model.stage === stage)) {
+      const option = new Option(model.label + (model.available ? '' : ' · Unavailable'), model.id)
+      option.disabled = !model.available; select.add(option)
+    }
+    select.disabled = catalog.stages?.[stage] === false
+  }
+  modelStages = catalog.stages ?? {}; modelCatalogRevision = catalog.revision; catalogCode = code; status('Models loaded. Processing switches are unchanged.')
+}) }
+element('code').oninput = () => {
+  modelCatalogRevision = undefined; catalogCode = undefined
+  for (const stage of ['asr', 'translation', 'tts']) { const select = element<HTMLSelectElement>(`${stage}-model`); select.replaceChildren(new Option('Default', '')); select.disabled = true }
+}
 element('start').onclick = () => { void action(async () => {
   buttons(true); captions.clear(); element('captions').textContent = ''; element('final').textContent = ''; status('Starting microphone…')
   try {
     lifetime = new AbortController(); departed = false
     owner = await startRecording({ code: element<HTMLInputElement>('code').value, target: element<HTMLSelectElement>('target').value,
       signal: lifetime.signal,
+      models: Object.fromEntries(['asr', 'translation', 'tts'].flatMap(stage => { const value = element<HTMLSelectElement>(`${stage}-model`).value; return value ? [[stage, value]] : [] })),
+      ...(catalogCode === element<HTMLInputElement>('code').value && modelCatalogRevision ? { modelCatalogRevision } : {}),
       retention: element<HTMLSelectElement>('retention').value, headphones: () => element<HTMLInputElement>('headphones').checked,
       status: value => { if (value.startsWith('Headphone route changed')) element<HTMLInputElement>('headphones').checked = false; status(value) },
       caption: (value, final) => { captions.set(`${value.unitId}:${value.targetLanguage ?? 'source'}`, `[${value.targetLanguage ?? value.sourceLanguage}; target revision ${value.revision}${final ? '' : '; interim'}] ${value.text}`)

@@ -20,7 +20,10 @@ for (const interrupted of [false, true]) test(`recording consumer completes the 
   await page.route('**/recording-host/*', async route => {
     const body = route.request().postDataJSON(), action = route.request().url().split('/').at(-1)
     let result: any = {}
-    if (action === 'start') {
+    if (action === 'models') result = { revision: 'catalog-1', defaults: { asr: 'asr_deepgram_nova3', translation: 'mt_deepl', tts: 'tts_elevenlabs_flash25' }, models: [
+      { id: 'mt_deepl', label: 'DeepL', stage: 'translation', available: false },
+      { id: 'mt_amazon_translate', label: 'Amazon Translate', stage: 'translation', available: true } ] }
+    else if (action === 'start') {
       admission = body
       result = { scope: JSON.stringify(['prj_test', 'eu_test']), clockId: body.clockId,
         activity: { id: body.activityId, expires_at: new Date(Date.now() + 60000).toISOString() },
@@ -71,7 +74,13 @@ for (const interrupted of [false, true]) test(`recording consumer completes the 
       if (value.type === 'finish') send({ type: 'finished', activityId: admission.activityId, generation: 1 })
     })
   })
-  await page.goto('/recording.html'); await page.locator('#code').fill('a'.repeat(40)); await page.locator('#start').click()
+  await page.goto('/recording.html'); await page.locator('#code').fill('a'.repeat(40)); await page.locator('#load-models').click()
+  await expect(page.locator('#status')).toContainText('Models loaded')
+  await expect(page.locator('#translation-model option[value=mt_deepl]')).toHaveJSProperty('disabled', true)
+  await page.locator('#translation-model').selectOption('mt_amazon_translate')
+  await page.locator('#start').click()
+  await expect.poll(() => admission?.modelCatalogRevision).toBe('catalog-1')
+  expect(admission.models).toEqual({ translation: 'mt_amazon_translate' })
   await expect.poll(() => liveFrames).toBeGreaterThan(0)
   if (!interrupted) {
     await expect(page.locator('#captions')).toContainText('Live original sentence.')

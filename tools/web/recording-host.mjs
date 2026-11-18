@@ -65,11 +65,19 @@ export function createRecordingHost(config, dependencies = {}) {
       if (action === 'context') {
         fields(body, [])
         result = { scope: JSON.stringify([fixed.projectId, fixed.endUserId]) }
+      } else if (action === 'models') {
+        fields(body, [])
+        result = await upstream(`${root}/models?end_user_id=${encodeURIComponent(fixed.endUserId)}`)
       } else if (action === 'start') {
-        fields(body, ['activityId','clockId','captureId','retention','targetLanguage','sourceLanguage'])
+        fields(body, ['activityId','clockId','captureId','retention','targetLanguage','sourceLanguage','models','modelCatalogRevision'])
         if (!uuid(body.activityId) || !uuid(body.clockId) || !languages.includes(body.targetLanguage) ||
             !['en','zh','multi'].includes(body.sourceLanguage) || !['original_audio_and_text','text_only','live_only'].includes(body.retention) ||
             (body.retention === 'original_audio_and_text' ? !uuid(body.captureId) : body.captureId !== undefined)) fail(400, 'invalid_input')
+        if (body.models !== undefined) {
+          fields(body.models, ['asr', 'translation', 'tts'])
+          if (Object.values(body.models).some(id => typeof id !== 'string' || !/^[a-z][a-z0-9_]{1,79}$/.test(id))) fail(400, 'invalid_input')
+        }
+        if (body.modelCatalogRevision !== undefined && (typeof body.modelCatalogRevision !== 'string' || !/^[A-Za-z0-9_-]{1,8192}$/.test(body.modelCatalogRevision))) fail(400, 'invalid_input')
         // Never retry uncertain creation or grant issuance. A new explicit run
         // gets a new activity ID; expired slots are retired by the backend.
         if (attempted.has(body.activityId)) fail(409, 'conflict')
@@ -80,6 +88,8 @@ export function createRecordingHost(config, dependencies = {}) {
         if (prepared && (prepared.capture_id !== body.captureId || !/^rec_[A-Za-z0-9_-]+$/.test(prepared.recording_id))) fail(503, 'unavailable')
         const value = await upstream(root, { id: body.activityId, end_user_id: fixed.endUserId,
           ...(prepared ? { recording_id: prepared.recording_id } : {}), retention: body.retention,
+          ...(body.models === undefined ? {} : { models: body.models }),
+          ...(body.modelCatalogRevision === undefined ? {} : { model_catalog_revision: body.modelCatalogRevision }),
           target_language: body.targetLanguage, audience: 'personal', duration_seconds: 7200,
           sources: [{ id: 'microphone', epoch: 1, role: 'mixed', speaker: 'unknown', language: body.sourceLanguage, startSample: 0, captureClockId: body.clockId }] })
         if (value.activity?.id !== body.activityId) fail(503, 'unavailable')

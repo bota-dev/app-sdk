@@ -1,6 +1,16 @@
 import initWasm, { recordingSpeech } from './generated/bota_device_sdk_core.js'
 export { WebRecordingSpeechPlayback } from './recordingSpeechPlayback.ts'
 
+/** Opaque server-catalog choices passed to the authenticated host at activity
+ * creation. Omission inherits defaults; these fields never activate a stage. */
+export interface RecordingSpeechModelSelection {
+  models?: { asr?: string; translation?: string; tts?: string }
+  model_catalog_revision?: string
+}
+export interface RecordingSpeechModelIdentity {
+  id: string; revision: string; label: string; selection: 'explicit' | 'default'
+}
+
 export interface RecordingSpeechConfiguration {
   projectId: string; activityId: string; endpoint: string;
   /** Required when grant generation is greater than one. Snapshot the current
