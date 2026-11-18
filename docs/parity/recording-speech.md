@@ -9,24 +9,54 @@ source preview is default-off and is not a published SDK feature.
 
 The backend requires its `RECORDING_SPEECH_ENABLED` master switch and an exact
 project ID in `RECORDING_SPEECH_PROJECT_IDS`; an empty whitelist admits nobody.
-Its separate `RECORDING_SPEECH_ASR_ENABLED`, `RECORDING_SPEECH_TTS_ENABLED` and
+Its separate `RECORDING_SPEECH_ASR_ENABLED`, `RECORDING_SPEECH_TRANSLATION_ENABLED`,
+`RECORDING_SPEECH_TTS_ENABLED` and
 `RECORDING_SPEECH_DOWNLINK_ENABLED` flags also default to `false`.
 
 - ASR off permits capture and encrypted upload, with no realtime ASR, translation
   or TTS. New upload-only activities have null provider bindings and no final MT.
+- Translation off keeps original-language captions and skips translation/TTS.
 - TTS off permits enabled source/translated captions without synthesized audio.
 - Downlink off blocks generated-audio delivery even after headphone confirmation.
   Captions continue when ASR is enabled; synthesis without an output consumer is
-  skipped. Effective TTS therefore requires ASR, TTS and downlink all enabled.
+  skipped. Effective TTS therefore requires ASR, translation, TTS and downlink all enabled.
 
 These are server process settings applied by deployment, not client permissions,
 Portal controls or hot session toggles. Client route/target messages cannot
-override them. The DEV deployment JSON uses `asrEnabled`, `ttsEnabled` and
+override them. The DEV deployment JSON uses `asrEnabled`, `translationEnabled`, `ttsEnabled` and
 `downlinkEnabled`, defaulting to `false`, alongside the master `enabled` and
 `projectIds`. Only selected provider dependencies require credentials: upload-only
-needs no realtime providers; captions-only needs Deepgram and DeepL; effective
+needs no realtime providers; ASR-only needs Deepgram; translated captions also need the selected translation service; effective
 speech additionally needs ElevenLabs. The current preview refuses HIPAA/GDPR
 projects and BYO provider routes.
+
+## Choose processing models
+
+The application backend reads `GET /v1/recording-speech/models` for its authorized
+end user or recording. Use the returned opaque IDs for independent `asr`,
+`translation` and `tts` choices; omission inherits scoped defaults. Pass optional
+`models` and `model_catalog_revision` on activity creation, before requesting the
+grant. Record the response's safe model IDs, revisions, labels and explicit/default
+selection. A new default never changes an already admitted activity; unavailable
+or stale choices fail instead of silently switching services.
+
+The initial catalog contains Deepgram Nova-3 ASR, DeepL / Amazon Translate / OpenAI
+GPT-4o mini translation, and ElevenLabs Flash v2.5 TTS. Configured credentials and
+project route authority are still required. The catalog is read-only: listing or
+choosing a model never starts processing or enables a stage.
+
+The Web SDK exports `RecordingSpeechModelSelection` and
+`RecordingSpeechModelIdentity` from `@bota.dev/web-app-sdk/speech/recording`.
+The Mac consuming example loads models through its fixed-owner operator host,
+submits chosen IDs at Start, and invalidates the list when the access code changes.
+Keep project/provider secrets on the host. Native, RN and Flutter transports
+consume the admitted activity/grant, so model selection belongs in their app's
+existing server admission callback, not in audio frames or device protocol fields.
+The low-level recording transport and wire schemas are unchanged.
+
+New services implement and register the backend adapter/model contract. No vendor
+SDK or provider enumeration is added to the client. Real-provider configuration,
+physical microphone acceptance and published SDK adoption remain separate gates.
 
 ## Integrate the direct owner
 

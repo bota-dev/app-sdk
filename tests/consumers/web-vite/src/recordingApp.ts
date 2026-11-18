@@ -1,10 +1,10 @@
-import { createWebRecordingSpeech, WebRecordingSpeechPlayback, type WebRecordingSpeech, type RecordingSpeechCaption } from '@bota.dev/web-app-sdk/speech/recording'
+import { createWebRecordingSpeech, WebRecordingSpeechPlayback, type WebRecordingSpeech, type RecordingSpeechCaption, type RecordingSpeechModelSelection } from '@bota.dev/web-app-sdk/speech/recording'
 import { createWebSpeechCapture, recoverWebSpeechCapture, listWebSpeechCaptures, listWebSpeechCaptureReceipts, type WebSpeechCapture } from '@bota.dev/web-app-sdk/speech/capture'
 import { createWebSpeechCaptureInput } from '@bota.dev/web-app-sdk/speech/capture-input'
 import { recordingHost } from './recordingHost'
 
 export async function startRecording(options: { code: string; target: string; retention: string; headphones: () => boolean;
-  signal?: AbortSignal;
+  signal?: AbortSignal; models?: RecordingSpeechModelSelection['models']; modelCatalogRevision?: string;
   caption: (value: RecordingSpeechCaption, final: boolean) => void; status: (value: string) => void;
   final: (captureId: string, sourceVersion: string, segments: Record<string, any>[], translation: string) => void }) {
   const host = recordingHost(options.code), abort = new AbortController(), archives = new Map<string, WebSpeechCapture>()
@@ -76,7 +76,8 @@ export async function startRecording(options: { code: string; target: string; re
   }
   try {
     const admission = await host.start({ activityId, clockId, ...(original ? { captureId: crypto.randomUUID() } : {}),
-      retention: options.retention, sourceLanguage: 'multi', targetLanguage: options.target }, abort.signal)
+      retention: options.retention, ...(options.models ? { models: options.models } : {}),
+      ...(options.modelCatalogRevision ? { modelCatalogRevision: options.modelCatalogRevision } : {}), sourceLanguage: 'multi', targetLanguage: options.target }, abort.signal)
     if (original) {
       for (const { captureId } of await listWebSpeechCaptures(admission.scope).catch(() => { options.status('Earlier original storage could not be opened.'); return [] })) {
         try { archives.set(captureId, await recoverWebSpeechCapture({ scope: admission.scope, captureId })) }

@@ -1,9 +1,9 @@
-import type { RecordingSpeechConfiguration, RecordingSpeechGrant } from '@bota.dev/web-app-sdk/speech/recording'
+import type { RecordingSpeechConfiguration, RecordingSpeechGrant, RecordingSpeechModelSelection, RecordingSpeechModelIdentity } from '@bota.dev/web-app-sdk/speech/recording'
 import type { SpeechCaptureHost, SpeechCapturePreparation } from '@bota.dev/web-app-sdk/speech/capture'
 
 export interface RecordingAdmission {
   scope: string; clockId: string; configuration: RecordingSpeechConfiguration; grant: RecordingSpeechGrant
-  activity: { id: string; expires_at: string }; prepared?: SpeechCapturePreparation
+  activity: { id: string; expires_at: string; models?: Record<'asr' | 'translation' | 'tts', RecordingSpeechModelIdentity | null> }; prepared?: SpeechCapturePreparation
 }
 export function recordingHost(code: string) {
   async function request<T>(action: string, body: unknown, signal: AbortSignal): Promise<T> {
@@ -20,7 +20,8 @@ export function recordingHost(code: string) {
     } finally { await reader.cancel(); for (const chunk of chunks) chunk.fill(0) }
   }
   return {
-    start: (body: { activityId: string; clockId: string; captureId?: string; retention: string; targetLanguage: string; sourceLanguage: string }, signal: AbortSignal) =>
+    models: (signal: AbortSignal) => request<{ revision: string; stages?: Record<string, boolean>; defaults: Record<string, string>; models: { id: string; label: string; stage: string; available: boolean }[] }>('models', {}, signal),
+    start: (body: { activityId: string; clockId: string; captureId?: string; retention: string; targetLanguage: string; sourceLanguage: string; models?: RecordingSpeechModelSelection['models']; modelCatalogRevision?: string }, signal: AbortSignal) =>
       request<RecordingAdmission>('start', body, signal),
     end: (activityId: string, signal: AbortSignal) => request('end', { activityId }, signal),
     capture(captureId: string): SpeechCaptureHost {
