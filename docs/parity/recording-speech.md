@@ -112,7 +112,7 @@ upload-only activities do not acquire a translation binding implicitly.
 ## Maintained microphone consumers
 
 The default native, RN and Flutter speech companions now use `RecordingLabOwner`.
-Web uses `tests/consumers/web-vite/recording.html`. The React Native room
+Web uses `tests/consumers/web-vite/recording.html`. Load project options to check the current project's ASR permission. Select **Transcribe this recording live** to open the recording WebSocket. Each new recording starts with this option off. An original-only run prepares and uploads the encrypted archive independently. The React Native room
 preview and its LiveKit dependencies have been removed; its speech policies
 execute only in the native owner. Other older conversation samples remain for
 gated legacy compatibility tests; they are not the current product model. See

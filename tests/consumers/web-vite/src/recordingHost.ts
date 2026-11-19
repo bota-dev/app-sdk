@@ -21,7 +21,9 @@ export function recordingHost(code: string) {
   }
   return {
     models: (signal: AbortSignal) => request<{ revision: string; stages?: Record<string, boolean>; defaults: Record<string, string>; models: { id: string; label: string; stage: string; available: boolean }[] }>('models', {}, signal),
-    start: (body: { activityId: string; clockId: string; captureId?: string; retention: string; targetLanguage: string; sourceLanguage: string; models?: RecordingSpeechModelSelection['models']; modelCatalogRevision?: string }, signal: AbortSignal) =>
+    prepareCapture: (captureId: string, signal: AbortSignal) =>
+      request<{ scope: string; prepared: SpeechCapturePreparation }>('capture_prepare', { captureId }, signal),
+    start: (body: { realtimeTranscription: true; activityId: string; clockId: string; captureId?: string; retention: string; targetLanguage: string; sourceLanguage: string; models?: RecordingSpeechModelSelection['models']; modelCatalogRevision?: string }, signal: AbortSignal) =>
       request<RecordingAdmission>('start', body, signal),
     end: (activityId: string, signal: AbortSignal) => request('end', { activityId }, signal),
     capture(captureId: string): SpeechCaptureHost {

@@ -29,7 +29,7 @@ test('returns the fixed Platform or legacy project ID unchanged and rejects malf
     assert.throws(() => fixture(200, id), /Invalid recording lab configuration/)
   }
 })
-const input = { activityId: id, clockId, captureId: clockId, retention: 'original_audio_and_text', targetLanguage: 'zh', sourceLanguage: 'multi' }
+const input = { realtimeTranscription: true, activityId: id, clockId, captureId: clockId, retention: 'original_audio_and_text', targetLanguage: 'zh', sourceLanguage: 'multi' }
 test('passes opaque model choices and catalog revision to admission without exposing credentials', async () => {
   const f = fixture(), models = { asr: 'asr_deepgram_nova3', translation: 'mt_amazon_translate', tts: 'tts_elevenlabs_flash25' }
   const response = await f.request('start', { ...input, models, modelCatalogRevision: 'catalog_revision' })
@@ -89,7 +89,24 @@ test('archive operations retain the fixed owner independently of the live connec
   assert.ok(f.calls.at(-1).url.includes('after_segment=20'))
 })
 
-test('pins only the DEV recording socket to the Platform edge', () => {
+test('pins each Bota API to its own Platform socket and keeps custom origins isolated', () => {
   assert.equal(recordingSocketOrigin('https://api.dev.bota.dev'), 'wss://platform.dev.bota.dev')
+  assert.equal(recordingSocketOrigin('https://api.gamma.bota.dev'), 'wss://platform.gamma.bota.dev')
+  assert.equal(recordingSocketOrigin('https://api.bota.dev'), 'wss://platform.bota.dev')
+  assert.equal(recordingSocketOrigin('https://api.bota.dev.example.invalid'), 'wss://api.bota.dev.example.invalid')
   assert.equal(recordingSocketOrigin('https://api.example.invalid'), 'wss://api.example.invalid')
+})
+
+test('archive-only preparation creates no activity or grant; live start requires explicit opt-in', async () => {
+  const f = fixture()
+  for (const realtimeTranscription of [false, undefined]) {
+    assert.equal((await f.request('start', { ...input, realtimeTranscription })).status, 400)
+  }
+  assert.equal(f.calls.length, 0)
+  const result = await f.request('capture_prepare', { captureId: clockId })
+  assert.equal(result.status, 200)
+  assert.equal((await result.json()).prepared.capture_id, clockId)
+  assert.equal(f.calls.length, 1)
+  assert.ok(f.calls[0].url.endsWith('/captures'))
+  assert.equal((await f.request('grant', { activityId: id })).status, 403)
 })
