@@ -19,7 +19,7 @@ All integer fields are little-endian (ECDSA signature r/s encoding is separately
 
 | offset | bytes | Field |
 |---|---:|---|
-| 0 | 1 | environment: 0 development, 1 gamma, 2 production |
+| 0 | 1 | Highlight environment (BOTATOK1 numbering): 0 development, 1 production, 2 gamma |
 | 1 | 1 | mode: 1 BATCH, 2 STREAMING |
 | 2 | 2 | reserved=0 |
 | 4 | 4 | owner_revision |
@@ -33,6 +33,15 @@ All integer fields are little-endian (ECDSA signature r/s encoding is separately
 | 144 | 32 | configuration_digest |
 
 `context_digest = SHA256(ASCII BOTA-MARKER-CONTEXT-V1 + NUL + CaptureIdentityV1)`. Every new BOTA-MARKER string domain in this schema is its exact listed ASCII text followed by one 0x00, without quotes or newlines. The device constructs context from verified authorization and its own recording identity, not a blindly trusted request digest. Owner/session replacement requires reauthorization, new context, and a new derived key. Event IDs/content remain unchanged; the recording's existing K_data does not change with transport. Offline BATCH capture does not depend on this upload context. It first uses local recording identity and existing at-rest protection, and constructs the rec_*-bound context at upload.
+
+The Highlight mapping applies to BATCH marker contexts and to the one shared
+protected STREAMING audio/marker context. Bytes 2–3 remain reserved and zero.
+Validate the exact Highlight byte against the expected logical environment;
+reject unknown values and do not try the other mapping. The existing BATCH
+encrypted-upload V2 audio authorization and receipt still encode development
+0, gamma 1, production 2. Compare the logical environment across those domains,
+not the raw bytes. SDK/App relays forward the exact context and signed documents
+without translating either wire encoding.
 
 ## Common document header
 

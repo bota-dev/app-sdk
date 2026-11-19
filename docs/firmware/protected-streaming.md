@@ -20,7 +20,10 @@ All integer fields below are unsigned little-endian unless explicitly stated; UU
 
 The stream header `SHeader` is 64 bytes: magic `BOTASTR1` at 0 (8), version=1 at 8 (u16), kind at 10 (u16), total document length at 12 (u32), request UUID at 16 (16), marker-compatible context digest at 32 (32). It is NOT a BOTAMRK1 document despite sharing offsets.
 
-Context remains the existing 176-byte CaptureIdentityV1 with mode=2. Backend constructs it from authoritative identity and recording admission; device compares all local capture identities. STREAMING starts only after this admission and key grant succeed. No silent fallback to legacy dual-write recording. BATCH remains available through its own explicit mode.
+Context is the 176-byte CaptureIdentityV1 with mode=2 and uses the
+Highlight environment (development 0, production 1, gamma 2). The exact same
+context digest binds protected STREAMING audio and markers. The existing BATCH
+encrypted-upload V2 audio authorization and receipt encoding is unchanged. Backend constructs it from authoritative identity and recording admission; device compares all local capture identities. STREAMING starts only after this admission and key grant succeed. No silent fallback to legacy dual-write recording. BATCH remains available through its own explicit mode.
 
 ## Stream authorization — kind 0x1100, 468 bytes
 
