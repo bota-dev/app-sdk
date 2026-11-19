@@ -69,3 +69,9 @@ interoperability fixtures at implementation revision
 not a package version or released wire-profile claim. SHA-256 pins above detect
 accidental drift. The public pack includes only deterministic test material,
 with no service credentials, production keys or internal deployment paths.
+
+The fixture audit also checks six literal CaptureIdentityV1 prefixes for all
+three Highlight environments and both modes, preserving the reserved bytes.
+Pinned signed STREAMING fixtures use development (byte 0 in either domain) and
+remain byte-for-byte unchanged. The prefix matrix checks encoding and wrong-domain
+rejection only; it is not a signed Gamma/Production interoperability pack.

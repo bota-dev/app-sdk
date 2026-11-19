@@ -40,8 +40,22 @@ function signed(bytes, magic, kind, length, label, keys, context) {
   assert(!check(Buffer.concat([domain(`${label}-WRONG`), bytes.subarray(0, -64)]), sig));
   signatures++;
 }
+// Cross-check against the existing BOTATOK1 wire contract, not a second Highlight enum.
+const tokenContract = readFileSync(new URL('../../../protocol/device-token-v1.md', import.meta.url), 'utf8');
+const tokenEnv = tokenContract.match(/^\| 14 \| 1 \| Environment: dev=(\d+), prod=(\d+), gamma=(\d+) \|$/m);
+assert(tokenEnv, 'BOTATOK1 environment field is missing');
+const tokenEnvironmentBytes = { dev: Number(tokenEnv[1]), prod: Number(tokenEnv[2]), gamma: Number(tokenEnv[3]) };
+// Fixture audit only; production environment comes from trusted configuration.
+function captureContext(bytes, mode, environment) {
+  const environmentByte = { dev: 0, prod: 1, gamma: 2 }[environment];
+  assert.equal(bytes.length, 176);
+  assert.equal(bytes[0], environmentByte);
+  assert.equal(bytes[1], mode);
+  assert.equal(bytes.readUInt16LE(2), 0);
+  return hash(domain('BOTA-MARKER-CONTEXT-V1'), bytes);
+}
 function authorization(bytes, keys) {
-  const context = hash(domain('BOTA-MARKER-CONTEXT-V1'), bytes.subarray(64, 240));
+  const context = captureContext(bytes.subarray(64, 240), 2, 'dev');
   signed(bytes, 'BOTASTR1', 0x1100, 468, 'BOTA-STREAM-AUTH-V1', keys, context);
   assert.equal(bytes[65], 2);
   return context;
@@ -112,4 +126,26 @@ for (const vector of json('recording-markers-v1.json').vectors) {
   const body = hex(vector.hex); assert.equal(body.length, 52);
   assert.equal(hash(domain('BOTA-MARKER-EVENT-V1'), body).toString('hex'), vector.marker_digest);
 }
-console.log(`PASS: 5 pinned fixtures; ${signatures} signed documents; identity/hash bindings and negative mutations. HPKE/runtime acceptance is separate.`);
+// Literal wire prefixes: Highlight environment, mode, then reserved zero.
+const contextHeaders = [
+  [1, 'dev', '00010000'], [1, 'prod', '01010000'], [1, 'gamma', '02010000'],
+  [2, 'dev', '00020000'], [2, 'prod', '01020000'], [2, 'gamma', '02020000'],
+];
+for (const [mode, environment, prefix] of contextHeaders) {
+  const capture = Buffer.from(auth.subarray(64, 240));
+  hex(prefix).copy(capture);
+  assert.equal(capture[0], tokenEnvironmentBytes[environment]);
+  captureContext(capture, mode, environment);
+  const wrongEnvironment = Buffer.from(capture);
+  // Gamma/Prod audio-v2 bytes are each invalid in the corresponding Highlight context.
+  wrongEnvironment[0] = environment === 'dev' ? 3 : 3 - capture[0];
+  assert.throws(() => captureContext(wrongEnvironment, mode, environment));
+  assert.throws(() => captureContext(capture, 3 - mode, environment));
+  const unknownEnvironment = Buffer.from(capture);
+  unknownEnvironment[0] = 3;
+  assert.throws(() => captureContext(unknownEnvironment, mode, environment));
+  const nonzeroReserved = Buffer.from(capture);
+  nonzeroReserved[3] = 1;
+  assert.throws(() => captureContext(nonzeroReserved, mode, environment));
+}
+console.log(`PASS: 5 pinned fixtures; ${signatures} signed documents; 6 Highlight context prefix vectors; identity/hash bindings and negative mutations. HPKE/runtime acceptance is separate.`);
