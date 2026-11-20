@@ -5,7 +5,9 @@ const projectId = 'proj_0123456789ABCDEFGHIJKLMN'
 
 // Synthetic API/provider, real packaged WASM, microphone worklet, WebCrypto,
 // IndexedDB, WebSocket framing and consuming App controls.
-for (const interrupted of [false, true]) test(`recording consumer completes the independent original; live interrupted=${interrupted}`, async ({ page }) => {
+for (const mode of ['live', 'interrupted', 'original']) test(`records and uploads an original in ${mode} mode`, async ({ page }) => {
+  const originalOnly = mode === 'original', interrupted = mode === 'interrupted'
+  let sockets = 0, liveStarts = 0
   let admission: any, chunks = 0, samples = 0, ended = false, liveFrames = 0, changed = false, currentRevision = 1
   const key = Buffer.alloc(32, 7), hash = (bytes: Buffer | string) => createHash('sha256').update(bytes).digest('hex')
   const uuid = (value: string) => Buffer.from(value.replaceAll('-', ''), 'hex')
@@ -22,10 +24,11 @@ for (const interrupted of [false, true]) test(`recording consumer completes the 
   await page.route('**/recording-host/*', async route => {
     const body = route.request().postDataJSON(), action = route.request().url().split('/').at(-1)
     let result: any = {}
-    if (action === 'models') result = { revision: 'catalog-1', defaults: { asr: 'asr_deepgram_nova3', translation: 'mt_deepl', tts: 'tts_elevenlabs_flash25' }, models: [
+    if (action === 'models') result = { stages: { asr: true, translation: true, tts: false }, revision: 'catalog-1', defaults: { asr: 'asr_deepgram_nova3', translation: 'mt_deepl', tts: 'tts_elevenlabs_flash25' }, models: [
       { id: 'mt_deepl', label: 'DeepL', stage: 'translation', available: false },
       { id: 'mt_amazon_translate', label: 'Amazon Translate', stage: 'translation', available: true } ] }
-    else if (action === 'start') {
+    else if (action === 'capture_prepare' || action === 'start') {
+      if (action === 'start') liveStarts++
       admission = body
       result = { scope: JSON.stringify([projectId, 'eu_test']), clockId: body.clockId,
         activity: { id: body.activityId, expires_at: new Date(Date.now() + 60000).toISOString() },
@@ -34,12 +37,14 @@ for (const interrupted of [false, true]) test(`recording consumer completes the 
           url: 'wss://api.example.invalid/v1/recording-speech/ws', token: 'a'.repeat(43), generation: 1, expires_at: new Date(Date.now() + 20000).toISOString() },
         prepared: { protocol_version: 1, profile: 'speech_capture_pcm_v1', capture_id: body.captureId, recording_id: 'rec_browser', sample_rate: 48000,
           channels: 1, format: 'pcm_s16le', cipher: 'AES-256-GCM', data_key: key.toString('base64'), maximum_chunk_samples: 48000, upload_until: new Date(Date.now() + 60000).toISOString() } }
+      if (action === 'capture_prepare') result = { scope: result.scope, prepared: result.prepared }
     } else if (action === 'capture_status') result = { state: 'open' }
     else if (action === 'capture_chunk') {
       const packet = body.packet, h = packet.header, numbers = Buffer.alloc(24)
       numbers.writeUInt32BE(h.sequence); numbers.writeBigUInt64BE(BigInt(h.firstSample), 4); numbers.writeUInt32BE(h.samples, 12); numbers.writeBigUInt64BE(BigInt(h.archiveSample), 16)
       const aad = Buffer.concat([Buffer.from('bota.speech.capture.chunk.v1\0'), uuid(body.captureId), uuid(h.clockId), numbers])
-      expect(h.clockId).toBe(admission.clockId); expect(h.archiveSample).toBe(samples)
+      if (!originalOnly) expect(h.clockId).toBe(admission.clockId)
+      expect(h.archiveSample).toBe(samples)
       chunks++; samples += h.samples
       result = { sequence: h.sequence, stored: true, sha256: hash(Buffer.concat([aad, Buffer.from(packet.nonce, 'base64'), Buffer.from(packet.ciphertext, 'base64')])) }
     } else if (action === 'capture_complete') {
@@ -55,6 +60,7 @@ for (const interrupted of [false, true]) test(`recording consumer completes the 
     await route.fulfill({ json: result })
   })
   await page.routeWebSocket('**/v1/recording-speech/ws', socket => {
+    sockets++
     const send = (value: object) => socket.send(JSON.stringify(value))
     socket.onMessage(message => {
       if (typeof message !== 'string') {
@@ -77,23 +83,36 @@ for (const interrupted of [false, true]) test(`recording consumer completes the 
     })
   })
   await page.goto('/recording.html'); await page.locator('#code').fill('a'.repeat(40)); await page.locator('#load-models').click()
-  await expect(page.locator('#status')).toContainText('Models loaded')
-  await expect(page.locator('#translation-model option[value=mt_deepl]')).toHaveJSProperty('disabled', true)
-  await page.locator('#translation-model').selectOption('mt_amazon_translate')
+  await expect(page.locator('#status')).toContainText('Project options loaded')
+  await expect(page.locator('#live')).not.toBeChecked()
+  if (!originalOnly) {
+    await page.locator('#live').check()
+    await expect(page.locator('#translation-model option[value=mt_deepl]')).toHaveJSProperty('disabled', true)
+    await page.locator('#translation-model').selectOption('mt_amazon_translate')
+  }
   await page.locator('#start').click()
-  await expect.poll(() => admission?.modelCatalogRevision).toBe('catalog-1')
-  expect(admission.models).toEqual({ translation: 'mt_amazon_translate' })
-  await expect.poll(() => liveFrames).toBeGreaterThan(0)
-  if (!interrupted) {
+  if (!originalOnly) {
+    await expect.poll(() => admission?.modelCatalogRevision).toBe('catalog-1')
+    expect(admission.models).toEqual({ translation: 'mt_amazon_translate' })
+    expect(admission.realtimeTranscription).toBe(true)
+    await expect.poll(() => liveFrames).toBeGreaterThan(0)
+  }
+  if (mode === 'live') {
     await expect(page.locator('#captions')).toContainText('Live original sentence.')
     await page.locator('#target').selectOption('ja'); await page.locator('#change').click()
     await expect.poll(() => changed).toBe(true); await expect(page.locator('#status')).toContainText('acknowledged')
   }
   await expect.poll(() => chunks, { timeout: 10000 }).toBeGreaterThan(0)
   await page.locator('#finish').click()
-  await expect(page.locator('#final')).toContainText('Verified original sentence.', { timeout: 10000 })
-  await expect(page.locator('#final')).toContainText('最终译文。')
-  expect(ended).toBe(true); expect(samples).toBeGreaterThan(0)
+  if (originalOnly) {
+    await expect(page.locator('#status')).toContainText('Original recording uploaded.')
+    expect(liveStarts).toBe(0); expect(sockets).toBe(0); expect(ended).toBe(false)
+  } else {
+    await expect(page.locator('#final')).toContainText('Verified original sentence.', { timeout: 10000 })
+    await expect(page.locator('#final')).toContainText('最终译文。')
+    expect(ended).toBe(true)
+  }
+  expect(samples).toBeGreaterThan(0)
   await page.locator('#close').click(); await expect(page.locator('#status')).toHaveText('Closed.')
 })
 
@@ -111,6 +130,7 @@ test('leaving during microphone permission retires the late input without sendin
   })
   await page.route('**/recording-host/*', async route => {
     let result: object = {}
+    if (route.request().url().endsWith('/models')) result = { stages: { asr: true }, revision: 'test', models: [], defaults: {} }
     if (route.request().url().endsWith('/start')) {
       admission = route.request().postDataJSON()
       const endpoint = 'wss://api.example.invalid/v1/recording-speech/ws'
@@ -127,7 +147,7 @@ test('leaving during microphone permission retires the late input without sendin
       target: { revision: 1, language: 'zh' }, sources: [{ id: 'microphone', epoch: 1, role: 'mixed', speaker: 'unknown', language: 'multi', startSample: 0, captureClockId: admission.clockId }],
       input: { format: 'pcm_s16le', sampleRate: 48000, maxFrameSamples: 4800 }, playbackRoute: 'unqualified' }))
   }))
-  await page.goto('/recording.html'); await page.locator('#retention').selectOption('text_only'); await page.locator('#start').click()
+  await page.goto('/recording.html'); await page.locator('#load-models').click(); await page.locator('#live').check(); await page.locator('#retention').selectOption('text_only'); await page.locator('#start').click()
   await page.waitForFunction(() => typeof (window as any).releaseRecordingPermission === 'function')
   await page.evaluate(() => { window.dispatchEvent(new Event('pagehide')); (window as any).releaseRecordingPermission() })
   await page.waitForFunction(() => (window as any).recordingInputStopped === true)

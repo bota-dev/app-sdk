@@ -3,7 +3,7 @@ import { createWebSpeechCapture, recoverWebSpeechCapture, listWebSpeechCaptures,
 import { createWebSpeechCaptureInput } from '@bota.dev/web-app-sdk/speech/capture-input'
 import { recordingHost } from './recordingHost'
 
-export async function startRecording(options: { code: string; target: string; retention: string; headphones: () => boolean;
+export async function startRecording(options: { realtimeTranscription: boolean; code: string; target: string; retention: string; headphones: () => boolean;
   signal?: AbortSignal; models?: RecordingSpeechModelSelection['models']; modelCatalogRevision?: string;
   caption: (value: RecordingSpeechCaption, final: boolean) => void; status: (value: string) => void;
   final: (captureId: string, sourceVersion: string, segments: Record<string, any>[], translation: string) => void }) {
@@ -25,7 +25,11 @@ export async function startRecording(options: { code: string; target: string; re
       if (closed) return
       try {
         const receipt = await archive.flush(host.capture(id), abort.signal) as { state?: string }
-        if (receipt.state === 'published') { await archive.close(); archives.delete(id); completed.set(id, { after: 0, segments: [], done: false }) }
+        if (receipt.state === 'published') {
+          await archive.close(); archives.delete(id)
+          if (options.realtimeTranscription) completed.set(id, { after: 0, segments: [], done: false })
+          else options.status('Original recording uploaded.')
+        }
       } catch { if (!closed) options.status('Encrypted original retained locally. Upload will retry while this page is open.') }
     }
     for (const [id, page] of completed) {
@@ -58,9 +62,9 @@ export async function startRecording(options: { code: string; target: string; re
       clearTimeout(expiry)
       try { await input?.finish() } finally {
         try { if (live?.active) await live.finish() } catch { options.status('Live translation ended with an interruption. Original upload continues.') }
-        await host.end(activityId, abort.signal)
+        if (options.realtimeTranscription) await host.end(activityId, abort.signal)
       }
-      options.status(original ? 'Capture stopped. Waiting for verified original and final text.' : 'Capture stopped. No original audio was retained.'); await poll; await update()
+      options.status(!options.realtimeTranscription ? 'Capture stopped. Uploading original recording.' : original ? 'Capture stopped. Waiting for verified original and final text.' : 'Capture stopped. No original audio was retained.'); await poll; await update()
     })()
   }
   function close(): Promise<void> {
@@ -70,27 +74,28 @@ export async function startRecording(options: { code: string; target: string; re
     return closing = (async () => {
       const results = await Promise.allSettled([input?.close(), live?.close(), playback.close(), poll, finishing])
       await Promise.allSettled([...archives.values()].map(value => value.close()))
-      await host.end(activityId, AbortSignal.timeout(15000)).catch(() => {})
+      if (options.realtimeTranscription) await host.end(activityId, AbortSignal.timeout(15000)).catch(() => {})
       if (results.some(result => result.status === 'rejected')) throw Error('recording_cleanup_failed')
     })()
   }
   try {
-    const admission = await host.start({ activityId, clockId, ...(original ? { captureId: crypto.randomUUID() } : {}),
+    if (!options.realtimeTranscription && !original) throw Error('original_required')
+    const admission = options.realtimeTranscription ? await host.start({ realtimeTranscription: true, activityId, clockId, ...(original ? { captureId: crypto.randomUUID() } : {}),
       retention: options.retention, ...(options.models ? { models: options.models } : {}),
-      ...(options.modelCatalogRevision ? { modelCatalogRevision: options.modelCatalogRevision } : {}), sourceLanguage: 'multi', targetLanguage: options.target }, abort.signal)
+      ...(options.modelCatalogRevision ? { modelCatalogRevision: options.modelCatalogRevision } : {}), sourceLanguage: 'multi', targetLanguage: options.target }, abort.signal) : await host.prepareCapture(crypto.randomUUID(), abort.signal)
     if (original) {
       for (const { captureId } of await listWebSpeechCaptures(admission.scope).catch(() => { options.status('Earlier original storage could not be opened.'); return [] })) {
         try { archives.set(captureId, await recoverWebSpeechCapture({ scope: admission.scope, captureId })) }
         catch { options.status('An earlier encrypted original needs recovery and is retained.') }
       }
-      for (const { captureId } of await listWebSpeechCaptureReceipts(admission.scope).catch(() => [])) completed.set(captureId, { after: 0, segments: [], done: false })
+      if (options.realtimeTranscription) for (const { captureId } of await listWebSpeechCaptureReceipts(admission.scope).catch(() => [])) completed.set(captureId, { after: 0, segments: [], done: false })
     }
     let archive: WebSpeechCapture | undefined
     if (admission.prepared) {
       try { archive = await createWebSpeechCapture({ scope: admission.scope, prepared: admission.prepared }); archives.set(admission.prepared.capture_id, archive) }
-      catch { options.status('Original storage is unavailable. Live captions can continue; this capture will not have verified final text.') }
+      catch (error) { if (!options.realtimeTranscription) throw error; options.status('Original storage is unavailable. Live captions can continue; this capture will not have verified final text.') }
     }
-    try {
+    if ('configuration' in admission) try {
       live = await createWebRecordingSpeech({ configuration: admission.configuration, grant: admission.grant, playback, signal: abort.signal,
         onCaption: options.caption, onStatus: () => options.status('Live processing was interrupted. Original capture continues.') })
       await live.ready; live.bindMicrophone(clockId)
@@ -102,7 +107,8 @@ export async function startRecording(options: { code: string; target: string; re
         'Original storage interrupted; missing samples remain explicit. Live captions continue.' : 'Microphone interrupted. Original gaps are retained.') })
     abort.signal.throwIfAborted(); await input.start(); abort.signal.throwIfAborted()
     if (live?.active && (!original || archive)) options.status(original ? 'Capturing. Live text remains provisional until the original is verified.' : 'Capturing. Live captions are provisional; original audio is not retained.')
-    expiry = setTimeout(() => { void finish().catch(() => options.status('Capture authorization expired.')) }, Math.max(0, Date.parse(admission.activity.expires_at) - Date.now()))
+    if (!options.realtimeTranscription) options.status('Recording original audio.')
+    if ('activity' in admission) expiry = setTimeout(() => { void finish().catch(() => options.status('Capture authorization expired.')) }, Math.max(0, Date.parse(admission.activity.expires_at) - Date.now()))
     schedule()
     return { finish, close, changeTarget: async (language: string) => { if (!live?.active) throw Error('live_unavailable'); await live.changeTarget(language, crypto.randomUUID()) },
       qualifyHeadphones: async () => { const qualified = await playback.qualifyHeadphones(); await live?.setRoute(qualified ? 'headphones' : 'unqualified'); return qualified } }

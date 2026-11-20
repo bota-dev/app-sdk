@@ -24,9 +24,15 @@ async function json(message, limit, signal) {
   } finally { signal.removeEventListener('abort', cancel); cancel(); for (const chunk of chunks) chunk.fill(0) }
 }
 
-// Admission uses HTTPS. Only the reviewed DEV edge has a separate WSS origin.
+// REST admission and the WebSocket upgrade use different hosts on Bota deployments.
+const platformSocketOrigins = new Map([
+  ['https://api.dev.bota.dev', 'wss://platform.dev.bota.dev'],
+  ['https://api.gamma.bota.dev', 'wss://platform.gamma.bota.dev'],
+  ['https://api.bota.dev', 'wss://platform.bota.dev'],
+])
+
 export function recordingSocketOrigin(apiOrigin) {
-  return apiOrigin === 'https://api.dev.bota.dev' ? 'wss://platform.dev.bota.dev' : new URL(apiOrigin).origin.replace(/^https:/, 'wss:')
+  return platformSocketOrigins.get(apiOrigin) ?? new URL(apiOrigin).origin.replace(/^https:/, 'wss:')
 }
 
 /** Operator-only loopback adapter for one authenticated end user. Production
@@ -64,17 +70,27 @@ export function createRecordingHost(config, dependencies = {}) {
           [401,403].includes(response.status) ? 'unauthorized' : response.status === 409 ? 'conflict' : 'unavailable')
         return value
       }
+      async function prepareCapture(captureId) {
+        if (!uuid(captureId)) fail(400, 'invalid_input')
+        const capture = await upstream(`${root}/captures`, { end_user_id: fixed.endUserId, capture_id: captureId, profile: 'speech_capture_pcm_v1' })
+        if (capture.capture_id !== captureId || !/^rec_[A-Za-z0-9_-]+$/.test(capture.recording_id)) fail(503, 'unavailable')
+        return capture
+      }
       let result
       const action = url.pathname.slice('/recording-host/'.length)
       if (!url.pathname.startsWith('/recording-host/')) fail(404, 'not_found')
       if (action === 'context') {
         fields(body, [])
         result = { scope: JSON.stringify([fixed.projectId, fixed.endUserId]) }
+      } else if (action === 'capture_prepare') {
+        fields(body, ['captureId'])
+        result = { scope: JSON.stringify([fixed.projectId, fixed.endUserId]), prepared: await prepareCapture(body.captureId) }
       } else if (action === 'models') {
         fields(body, [])
         result = await upstream(`${root}/models?end_user_id=${encodeURIComponent(fixed.endUserId)}`)
       } else if (action === 'start') {
-        fields(body, ['activityId','clockId','captureId','retention','targetLanguage','sourceLanguage','models','modelCatalogRevision'])
+        fields(body, ['activityId','clockId','captureId','realtimeTranscription','retention','targetLanguage','sourceLanguage','models','modelCatalogRevision'])
+        if (body.realtimeTranscription !== true) fail(400, 'invalid_input')
         if (!uuid(body.activityId) || !uuid(body.clockId) || !languages.includes(body.targetLanguage) ||
             !['en','zh','multi'].includes(body.sourceLanguage) || !['original_audio_and_text','text_only','live_only'].includes(body.retention) ||
             (body.retention === 'original_audio_and_text' ? !uuid(body.captureId) : body.captureId !== undefined)) fail(400, 'invalid_input')
@@ -88,10 +104,8 @@ export function createRecordingHost(config, dependencies = {}) {
         if (attempted.has(body.activityId)) fail(409, 'conflict')
         if (attempted.size >= 32) fail(429, 'busy')
         attempted.add(body.activityId)
-        const prepared = body.retention === 'original_audio_and_text' ? await upstream(`${root}/captures`, {
-          end_user_id: fixed.endUserId, capture_id: body.captureId, profile: 'speech_capture_pcm_v1' }) : undefined
-        if (prepared && (prepared.capture_id !== body.captureId || !/^rec_[A-Za-z0-9_-]+$/.test(prepared.recording_id))) fail(503, 'unavailable')
-        const value = await upstream(root, { id: body.activityId, end_user_id: fixed.endUserId,
+        const prepared = body.retention === 'original_audio_and_text' ? await prepareCapture(body.captureId) : undefined
+        const value = await upstream(root, { id: body.activityId, end_user_id: fixed.endUserId, realtime_transcription: true,
           ...(prepared ? { recording_id: prepared.recording_id } : {}), retention: body.retention,
           ...(body.models === undefined ? {} : { models: body.models }),
           ...(body.modelCatalogRevision === undefined ? {} : { model_catalog_revision: body.modelCatalogRevision }),
