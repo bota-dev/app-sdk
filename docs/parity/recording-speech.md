@@ -87,6 +87,9 @@ publication receipt remains separate from the temporary input's stored receipt.
 Native PCM, grants, archive keys and upload retry state never cross RN/Dart.
 Web forks the same AudioWorklet samples into live transport and the original
 journal. A failed live connection does not stop the physical input or archive.
+The Mac/Web recording example requests 100 ms microphone frames for live
+upload (4,800 samples at 48 kHz). Other capture-input callers default to 20 ms.
+Both sizes allow a shorter final frame when capture stops.
 Changing target language uses sample barriers and clear acknowledgement. Earlier
 text retains its original target revision, while stale output is rejected.
 

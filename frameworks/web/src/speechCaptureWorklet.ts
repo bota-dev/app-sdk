@@ -15,25 +15,33 @@ class SpeechCaptureProcessor extends AudioWorkletProcessor {
   private live = false
   private liveUsed = 0
   private liveFirst = 0
-  private liveBuffer = new ArrayBuffer(1920)
-  private liveView = new DataView(this.liveBuffer)
-  private liveCredits = 10
-  constructor(options?: { processorOptions?: { directFrames?: boolean } }) {
+  private readonly liveFrameSamples: number
+  private readonly maxLiveCredits: number
+  private liveBuffer: ArrayBuffer
+  private liveView: DataView
+  private liveCredits: number
+  constructor(options?: { processorOptions?: { directFrames?: boolean; liveFrameSamples?: number } }) {
     super()
     this.live = options?.processorOptions?.directFrames === true
+    this.liveFrameSamples = options?.processorOptions?.liveFrameSamples === 4800 ? 4800 : 960
+    // Bound outstanding live PCM to 200 ms at either frame duration.
+    this.maxLiveCredits = 9600 / this.liveFrameSamples
+    this.liveCredits = this.maxLiveCredits
+    this.liveBuffer = new ArrayBuffer(this.liveFrameSamples * 2)
+    this.liveView = new DataView(this.liveBuffer)
     if (sampleRate !== 48000) throw Error('speech_capture_sample_rate')
     this.port.onmessage = event => {
       if (event.data?.type === 'credit') this.credits = Math.min(4, this.credits + 1)
-      if (event.data?.type === 'live_credit') this.liveCredits = Math.min(10, this.liveCredits + 1)
+      if (event.data?.type === 'live_credit') this.liveCredits = Math.min(this.maxLiveCredits, this.liveCredits + 1)
       if (event.data?.type === 'stop') this.stop()
     }
   }
   private flushLive() {
     if (!this.liveUsed) return
     if (this.liveCredits > 0) {
-      const bytes = this.liveUsed === 960 ? this.liveBuffer : this.liveBuffer.slice(0, this.liveUsed * 2)
+      const bytes = this.liveUsed === this.liveFrameSamples ? this.liveBuffer : this.liveBuffer.slice(0, this.liveUsed * 2)
       this.port.postMessage({ type: 'live', firstSample: this.liveFirst, bytes }, [bytes]); this.liveCredits--
-      this.liveBuffer = new ArrayBuffer(1920); this.liveView = new DataView(this.liveBuffer)
+      this.liveBuffer = new ArrayBuffer(this.liveFrameSamples * 2); this.liveView = new DataView(this.liveBuffer)
     }
     this.liveUsed = 0
   }
@@ -73,7 +81,7 @@ class SpeechCaptureProcessor extends AudioWorkletProcessor {
       if (this.live) {
         if (this.liveUsed === 0) this.liveFirst = this.samples
         this.liveView.setInt16(this.liveUsed * 2, pcm, true); this.liveUsed++
-        if (this.liveUsed === 960) this.flushLive()
+        if (this.liveUsed === this.liveFrameSamples) this.flushLive()
       }
       this.samples++; this.used++
       if (this.used === 48000) this.flush()

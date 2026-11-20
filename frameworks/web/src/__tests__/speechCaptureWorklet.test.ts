@@ -3,7 +3,7 @@ import test from 'node:test'
 
 test('one quantized sample stream feeds RTC and bounded archival, preserving dropped positions', async () => {
   const messages: { type: string; firstSample?: number; bytes?: ArrayBuffer; samples?: number }[] = []
-  let Processor: new (options?: { processorOptions: { directFrames: boolean } }) => { port: { onmessage: (event: { data: unknown }) => void }; process(inputs: Float32Array[][], outputs: Float32Array[][]): boolean }
+  let Processor: new (options?: { processorOptions: { directFrames: boolean; liveFrameSamples?: number } }) => { port: { onmessage: (event: { data: unknown }) => void }; process(inputs: Float32Array[][], outputs: Float32Array[][]): boolean }
   Object.assign(globalThis, { sampleRate: 48000, AudioWorkletProcessor: class {
     port = { onmessage: () => {}, postMessage: (value: typeof messages[number]) => messages.push(value) }
   }, registerProcessor: (_name: string, constructor: typeof Processor) => { Processor = constructor } })
@@ -33,4 +33,19 @@ test('one quantized sample stream feeds RTC and bounded archival, preserving dro
     assert.equal(live[index]!.firstSample, index * 960)
     assert.deepEqual(new Uint8Array(live[index]!.bytes!), originalBytes.subarray(index * 1920, (index + 1) * 1920))
   }
+  messages.length = 0
+  const recording = new Processor!({ processorOptions: { directFrames: true, liveFrameSamples: 4800 } })
+  for (let sample = 0; sample < 48000; sample += 128) recording.process([[input]], [[output]])
+  const frames = messages.filter(value => value.type === 'live')
+  assert.deepEqual(frames.map(frame => frame.firstSample), [0, 4800])
+  for (const [index, frame] of frames.entries()) {
+    assert.deepEqual(new Uint8Array(frame.bytes!), originalBytes.subarray(index * 9600, (index + 1) * 9600))
+  }
+  recording.port.onmessage({ data: { type: 'live_credit' } })
+  recording.process([[input]], [[output]])
+  recording.port.onmessage({ data: { type: 'stop' } })
+  const tail = messages.filter(value => value.type === 'live').at(-1)!
+  assert.equal(tail.firstSample, 48000)
+  assert.deepEqual(new Uint8Array(tail.bytes!), originalBytes.subarray(0, 256))
+  assert.deepEqual(messages.at(-1), { type: 'ended', samples: 48128 })
 })
