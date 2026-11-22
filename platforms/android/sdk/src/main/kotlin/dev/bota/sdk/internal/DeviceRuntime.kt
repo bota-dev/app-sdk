@@ -180,7 +180,6 @@ internal class DeviceRuntime(
     },
     val connectionGeneration: (String) -> Long = { 1L },
     val encryptedUploadV2Checkpoint: suspend (String, String, UInt) -> EncryptedUploadV2Checkpoint? = { _, _, _ -> null },
-    val byoRefreshContext: suspend (dev.bota.sdk.EncryptedUploadV2ContextProvider) -> Unit = { error("BYO context unavailable") },
     val encryptedUploadV2MaximumWriteLength: (String) -> Int = { error("encrypted upload v2 MTU unavailable") },
     val registerEncryptedUploadV2Material: suspend (String, EncryptedUploadV2Material) -> Unit = { _, _ ->
         error("encrypted upload v2 material registry unavailable")
@@ -481,7 +480,6 @@ internal class DeviceRuntime(
                     connectionGeneration = driver::connectionGeneration,
                     encryptedUploadV2Checkpoint = encryptedHost::checkpoint,
                     encryptedUploadV2MaximumWriteLength = driver::maximumWriteLength,
-                    byoRefreshContext = refreshEncryptedContext,
                     registerEncryptedUploadV2Material = encryptedMaterial::register,
                     terminateEncryptedUploadV2Material = encryptedMaterial::terminate,
                 )

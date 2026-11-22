@@ -155,6 +155,7 @@ struct UploadContext: Sendable {
       formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
       let data = try await request(base + "/recordings", method: "POST", body: [
         "device_id": input.scope.deviceId, "end_user_id": input.scope.endUserId,
+        "recording_uuid": input.recording.uuid, "recording_generation": input.recording.generation,
         "upload_method": "ble", "streaming": false,
         "metadata": ["started_at": formatter.string(from: Date(timeIntervalSince1970: start / 1000)),
           "ended_at": formatter.string(from: Date(timeIntervalSince1970: end / 1000))],
@@ -310,10 +311,19 @@ struct UploadContext: Sendable {
           let url = components.url else { throw UploadFailure.invalidDocument }
     var request = URLRequest(url: url)
     request.httpMethod = "PUT"
+    var names = Set<String>()
+    var headerBytes = 1
+    let forbidden = ["host", "content-length", "transfer-encoding", "connection", "keep-alive", "te", "trailer",
+      "upgrade", "expect", "cookie", "set-cookie", "proxy-authorization", "proxy-authenticate", "proxy-connection", "accept-encoding"]
     for (name, value) in target.headers {
-      guard UploadValidation.matches(name, "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$"),
-            !value.contains("\r"), !value.contains("\n"), !value.contains("\0"),
-            !["authorization", "cookie", "proxy-authorization"].contains(name.lowercased()) else {
+      let normalized = name.lowercased()
+      headerBytes += name.utf8.count + value.utf8.count + 4
+      guard UploadValidation.matches(name, "^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$"),
+            value.utf8.allSatisfy({ $0 >= 32 && $0 <= 126 }),
+            !forbidden.contains(normalized), !normalized.hasPrefix("sec-"),
+            names.insert(normalized).inserted, names.count <= 32, headerBytes <= 2048,
+            normalized != "authorization" || input.capability.flags & 0x400 != 0,
+            normalized != "content-type" || value == "application/octet-stream" else {
         throw UploadFailure.invalidDocument
       }
       request.setValue(value, forHTTPHeaderField: name)

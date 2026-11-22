@@ -37,7 +37,7 @@ October 12 source adds a generated-JavaScript RN execution route:
 Rust/Binaryen/Terser into ordinary JS, with no WebAssembly runtime or full Bota
 native workflow dependency. Version 1 installed ports perform BLE, scoped durable
 file/journal IO, HTTP and optional sockets. Rust owns wire formats, receivers,
-managed/BYO recovery and queue policy; handwritten JS maps APIs and executes IO.
+managed upload recovery and queue policy; handwritten JS maps APIs and executes IO.
 Bounded ciphertext and signed documents may enter internal JS transport buffers;
 signature trust and decryption remain on device/backend. Legacy PEM delivery and
 raw-token provisioning retain their documented compatibility limitations.
@@ -51,17 +51,15 @@ Publication, app binary delivery and physical acceptance are distinct gates; see
 
 External firmware integrations use the all-English [FIRMWARE_PROTOCOL.md](FIRMWARE_PROTOCOL.md) in this active SDK repository. The #201 marker section is a development contract, not proof of released package support; keep protocol facts aligned with the feature implementation/manifest, distinguish source from release availability, and preserve exact owner/completion/deletion semantics. Do not send new SDK work to the retired standalone react-native-sdk repository.
 
-BYO live and whole-file uploads now connect Rust framing/recovery to Apple/Android
-BLE, HTTP and WS, private durable journals and receipt-gated cleanup. Shared Rust
-customer-package/header/transfer-proof helpers serve the native ABI and generated
-JS; OS adapters execute IO. Package/transfer progress never replaces final receipt
-authority. Native
-`streamByoRecording` and RN `stream(device, null, target)` discover the active
-physical capture; explicit identities also work. Three WS reconnects precede a
-fenced full-file successor; initial WS failure stays on HTTP segments. Stop
-Recording can run during a live upload; unrelated device operations stay exclusive.
-Only metadata crosses JS in the published native distribution. See [integration and review](docs/parity/byo-storage.md)
-for source evidence and separate customer, package and hardware acceptance gates.
+Ordinary encrypted upload owns authorization, opaque manifest transport, target
+PUT, completion polling and receipt-gated cleanup for every storage destination.
+The cloud selects and pins Bota or external storage. Generic target capability
+`0x0400` permits authorization flag `0x0010` and completion result `2`; old
+ordinary result `1` retains its plaintext/audio validation meaning. Exact
+manifest and target binding are required before generic completion can reach
+firmware. Customer hooks, credentials and packaging belong to cloud adapters.
+The unpublished independent BYO API/workflows are removed. See the
+[managed backend contract](docs/parity/v2-managed-backend.md#generic-target-extension-unreleased).
 
 Recording markers #201: [native BATCH integration and successor review](docs/parity/recording-markers.md) covers opaque transfers, authorization recovery, owner/channel fences and dual receipts. The [STREAMING scalar status provider](docs/parity/protected-streaming-status.md) is wired through native HTTPS; Demo uses its dashboard read API and existing BLE control for device-direct streaming. A new BLE audio relay is outside this scope. Published beta.15 includes the new marker/status native capabilities; consuming native App delivery and profile/hardware qualification remain separate. No marker profile is enabled; preserve UUID[16] and 280-byte authorization. See [publication evidence](release/evidence/2.0.0-beta.15-publication.md).
 The beta.15 React Native `pauseAutoReconnect` addition waits for the current

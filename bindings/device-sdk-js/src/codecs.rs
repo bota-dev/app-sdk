@@ -272,9 +272,6 @@ impl CodecState {
         if crate::recording_upload::supports(name) {
             return crate::recording_upload::call(name, value);
         }
-        if crate::byo::supports(name) {
-            return crate::byo::execute(name, value);
-        }
         if crate::planners::supports(name) {
             return crate::planners::execute(name, value);
         }
@@ -1176,6 +1173,8 @@ fn metadata() -> Value {
         CHAR_TRANSFER_CONTROL,
         CHAR_TRANSFER_STATUS,
         CHAR_STORAGE_TRANSFER_CAPABILITIES_V2,
+        SERVICE_BOTA_UPLOAD_EXTENSIONS,
+        CHAR_STORAGE_TRANSFER_CAPABILITIES_EXT,
         CHAR_TRANSFER_SIGNED_BLOB_V2,
         CHAR_TRANSFER_CONTROL_V2,
         CHAR_RECORDING_TRANSFER_V2,

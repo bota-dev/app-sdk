@@ -37,7 +37,7 @@ acceptance remain pending.
 The unpublished ordinary-control correction orders simultaneous status,
 subscription and settings calls before their executor leases. It accepts one
 active and up to 32 pending calls, retains exact scope/connection identity and
-rejects queued work on teardown. Workflow and BYO ownership remain exclusive.
+rejects queued work on teardown. Upload ownership remains exclusive.
 See [source qualification](../../docs/parity/ordinary-control-admission.md).
 
 The unpublished bound-model correction adds optional `resolveBoundDeviceModel`
@@ -128,7 +128,6 @@ const ports: BotaJsHostPorts = {
 const runtime = createBotaReactNativeJsRuntime(ports, {
   backend: { fetch: redirectRefusingHttps },
   uploadFile: uploadOpaqueFile,
-  openSocket: openAuthenticatedSocket,
 });
 await runtime.client.configure({ environment: 'production' });
 lifetime.abort(); // logout, reassignment or teardown
@@ -148,13 +147,12 @@ Bluetooth permissions and own installed libraries. Files support scoped reopen,
 bounded reads and durable flush/readback. Journals retain one captured private
 namespace. HTTP/file upload refuses redirects before credentials/data are sent
 and joins cancellation; RN's default XHR-backed fetch cannot provide that fence.
-Optional WSS preserves the qualified BYO subprotocol and joins pending I/O on
-close. Shape preflight checks API version 1 before any OS effect.
+Shape preflight checks API version 1 before any OS effect.
 
 Generated Rust chooses framing, transfer windows, retries, backend recovery and
 receipt-gated cleanup; JS executes OS I/O. Ciphertext and signed documents are
 bounded internal SDK transport values, while public APIs return metadata and
-progress/results. V2/BYO keys remain on the device or behind installed secure
+progress/results. Recording keys remain on the device or behind installed secure
 handles; JS gains no signing/decryption authority. The historical private-PEM
 import remains a compatibility gap outside the modern key target.
 

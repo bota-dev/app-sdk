@@ -307,13 +307,13 @@ fn capabilities_distinguish_readiness_admission_and_expired_recovery() {
     }
     assert!(
         engine
-            .call(packet(0x520, capabilities(0x400)), false)
+            .call(packet(0x520, capabilities(0x800)), false)
             .is_err()
     );
     assert!(
         engine
             .call(
-                packet(0x52c, capabilities(0x77f)).with_bool(204, true),
+                packet(0x52c, capabilities(0xb7f)).with_bool(204, true),
                 false
             )
             .is_err()
@@ -534,7 +534,7 @@ fn all_new_codecs_reject_missing_extra_duplicate_and_mistyped_inputs() {
     let mut trailing = snapshot(3, 0, &[]);
     trailing.push(0);
     assert!(engine.call(packet(0x529, trailing), false).is_err());
-    for bit in 10..32 {
+    for bit in 11..32 {
         assert!(
             engine
                 .call(packet(0x520, capabilities(0x37f | (1 << bit))), false)

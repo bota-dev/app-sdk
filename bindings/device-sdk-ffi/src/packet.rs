@@ -177,6 +177,7 @@ pub mod kind {
     pub const PROTOCOL_DECODE_UPLOAD_CONTEXT_DOCUMENT: u32 = 0x052a;
     pub const PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_AUTHORIZATION_IDENTITY: u32 = 0x052b;
     pub const PROTOCOL_VALIDATE_ENCRYPTED_UPLOAD_V2_ADMISSION: u32 = 0x052c;
+    // Retired unpublished upload API slots. Never reassign.
     pub const PROTOCOL_REDUCE_BYO_RECOVERY: u32 = 0x052d;
     pub const PROTOCOL_ENCODE_BYO_BLE: u32 = 0x052e;
     pub const PROTOCOL_DECODE_BYO_BLE: u32 = 0x052f;

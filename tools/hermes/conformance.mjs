@@ -6,7 +6,6 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import ts from 'typescript';
-import { runByoConformance } from '../react-native/byo-conformance.mjs';
 import { runManagedRouteConformance } from '../react-native/managed-route-conformance.mjs';
 import { runBoundModelConformance } from '../react-native/bound-model-conformance.mjs';
 
@@ -54,7 +53,6 @@ const bundle = `'use strict';\nvar generatedModule = { exports: {} };\n` +
   `(function(global, require, module, exports) {\n${compiled.outputText}\n})(this, undefined, generatedModule, generatedModule.exports);\n` +
   `var generated = generatedModule.exports;\n` +
   `var fixtures = ${JSON.stringify(fixtures)};\n` +
-  `var runByoConformance = ${runByoConformance.toString()};\n` +
   `var runManagedRouteConformance = ${runManagedRouteConformance.toString()};\n` +
   `var runBoundModelConformance = ${runBoundModelConformance.toString()};\n` +
   `(${runConformance.toString()})(generated, fixtures);\n`;
@@ -233,7 +231,6 @@ function runConformance(generated, fixtures) {
       }), fixture.name)), fixture.expectedHex, fixture.name + ' golden bytes');
     });
     same(success(codec('decodeText', { bytes: [0xe4, 0xb8, 0xad, 0xf0, 0x9f, 0x93, 0x8e], required: true }), 'Unicode device text'), '中\ud83d\udcce', 'UTF-8 RPC response');
-    runByoConformance(codec, success, check, same, utf8Encode);
     runManagedRouteConformance(codec, success, check, same);
     runBoundModelConformance(codec, success, check, same);
     fixtures.ota.cases.forEach(function (fixture) {

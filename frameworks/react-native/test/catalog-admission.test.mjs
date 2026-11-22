@@ -47,7 +47,8 @@ async function fixture(t, { v2 = false } = {}) {
         if (address.characteristicUuid === metadata.CHAR_DEVICE_STATUS && f.holdStatus) {
           f.holdStatus = false; f.status.enter(); await f.status.pending;
         }
-        if (!v2 && address.characteristicUuid === metadata.CHAR_STORAGE_TRANSFER_CAPABILITIES_V2) {
+        if (address.characteristicUuid === metadata.CHAR_STORAGE_TRANSFER_CAPABILITIES_EXT ||
+            (!v2 && address.characteristicUuid === metadata.CHAR_STORAGE_TRANSFER_CAPABILITIES_V2)) {
           throw Object.assign(new Error('Fixture absent optional capability'), { code: 'characteristic_not_found', ...address });
         }
         assert(values.has(address.characteristicUuid)); return Uint8Array.from(values.get(address.characteristicUuid));

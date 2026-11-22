@@ -1,3 +1,5 @@
+> Historical independent BYO protocol, retired from current source. Use [ordinary generic targets](v2-managed-backend.md#generic-target-extension-unreleased).
+
 # BYO customer envelopes and opaque relay
 
 The current customer-hooks-v2 source packages the existing envelope inside the

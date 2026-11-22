@@ -514,3 +514,42 @@ fn local_recovery_requires_durable_scoped_parent_not_just_a_higher_revision() {
     unknown["upload_session_uuid"] = json!(vec![0xff; 16]);
     assert!(run(&i, event(&restarted, &unknown)).is_err());
 }
+
+#[test]
+fn generic_target_headers_require_capability_and_reject_framing_or_duplicates() {
+    let mut i = input();
+    i["capability"]["flags"] = json!(0x77f);
+    let stage = |headers| {
+        json!({"type":"Staging","expiresAt":"2030-01-01T00:00:00Z","nowMs":0,
+        "responseJson":json!({"url":"https://storage.example.com/object","method":"PUT","headers":headers}).to_string()})
+    };
+    assert!(
+        run(
+            &i,
+            stage(json!({"Authorization":"Bearer target-only","x-ms-blob-type":"BlockBlob"}))
+        )
+        .is_ok()
+    );
+    for name in [
+        "Host",
+        "Content-Length",
+        "Transfer-Encoding",
+        "Connection",
+        "Cookie",
+        "Proxy-Authorization",
+        "Sec-Test",
+    ] {
+        assert_eq!(
+            run(&i, stage(json!({name:"unsafe"}))).unwrap_err(),
+            ManagedUploadError::InvalidDocument
+        );
+    }
+    assert!(
+        run(
+            &i,
+            stage(json!({"Authorization":"first", "authorization":"second"}))
+        )
+        .is_err()
+    );
+    assert!(run(&i, stage(json!({"X-Test":"a".repeat(2049)}))).is_err());
+}

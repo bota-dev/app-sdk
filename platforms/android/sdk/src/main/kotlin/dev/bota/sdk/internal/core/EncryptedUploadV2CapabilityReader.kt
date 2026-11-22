@@ -17,11 +17,11 @@ internal class EncryptedUploadV2CapabilityReader(
     }
 
     suspend fun readFresh(peripheralId: String): EncryptedUploadV2CapabilitySnapshot {
-        val raw = read(
-            peripheralId,
-            BotaBluetoothUUIDs.StorageService,
-            BotaBluetoothUUIDs.TransferCapabilitiesV2,
-        )
+        val raw = try {
+            read(peripheralId, BotaBluetoothUUIDs.UploadExtensionsService, BotaBluetoothUUIDs.TransferCapabilitiesExtended)
+        } catch (_: dev.bota.sdk.internal.bluetooth.BluetoothCharacteristicNotFoundException) {
+            read(peripheralId, BotaBluetoothUUIDs.StorageService, BotaBluetoothUUIDs.TransferCapabilitiesV2)
+        }
         val value = decode(raw)
         return EncryptedUploadV2CapabilitySnapshot(
             raw,

@@ -190,6 +190,7 @@ internal class NativeUpload(
       input.validateCheckpoint(pointer)
       if (pointer == null) {
         val body = JSONObject().put("device_id", input.scope.deviceId).put("end_user_id", input.scope.endUserId)
+          .put("recording_uuid", input.recording.uuid).put("recording_generation", input.recording.generation)
           .put("upload_method", "ble").put("streaming", false).put("metadata", JSONObject()
             .put("started_at", Instant.ofEpochMilli(input.recording.startedAtMs).toString())
             .put("ended_at", Instant.ofEpochMilli(input.recording.startedAtMs + input.recording.durationMs).toString()))
@@ -346,9 +347,18 @@ internal class NativeUpload(
         demand(url.isHttps && url.username.isEmpty() && url.password.isEmpty() && url.fragment == null, "INVALID_DOCUMENT")
         val headers = target.getJSONObject("headers")
         val builder = Request.Builder().url(url)
+        val names = mutableSetOf<String>()
+        var headerBytes = 1
+        val forbidden = setOf("host", "content-length", "transfer-encoding", "connection", "keep-alive", "te", "trailer",
+          "upgrade", "expect", "cookie", "set-cookie", "proxy-authorization", "proxy-authenticate", "proxy-connection", "accept-encoding")
         headers.keys().forEach { key ->
           val value = headers.opt(key) as? String ?: fail("INVALID_DOCUMENT")
-          demand(!key.equals("Authorization", true) && !key.equals("Cookie", true), "INVALID_DOCUMENT")
+          val name = key.lowercase(java.util.Locale.ROOT)
+          headerBytes += key.length + value.length + 4
+          demand(key.matches(Regex("[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}")) && value.all { it.code in 32..126 } &&
+            name !in forbidden && !name.startsWith("sec-") && names.add(name) && names.size <= 32 && headerBytes <= 2048 &&
+            (name != "authorization" || input.flags and 0x400L != 0L) &&
+            (name != "content-type" || value == "application/octet-stream"), "INVALID_DOCUMENT")
           builder.header(key, value)
         }
         // SDK replaces this bodyless template with its verified native ciphertext source.

@@ -14,11 +14,19 @@ struct EncryptedUploadV2CapabilityReader: Sendable {
     }
 
     func readFresh(peripheralID: String) async throws -> EncryptedUploadV2CapabilitySnapshot {
-        let value = try await read(
-            peripheralID,
-            BotaBluetoothUUIDs.storageService,
-            BotaBluetoothUUIDs.storageTransferCapabilitiesV2
-        )
+        let value: Data
+        do {
+            value = try await read(peripheralID, BotaBluetoothUUIDs.uploadExtensionsService,
+                                   BotaBluetoothUUIDs.storageTransferCapabilitiesExtended)
+        } catch let error as CentralDriverError {
+            switch error {
+            case .serviceNotFound(BotaBluetoothUUIDs.uploadExtensionsService),
+                 .characteristicNotFound(BotaBluetoothUUIDs.storageTransferCapabilitiesExtended):
+                value = try await read(peripheralID, BotaBluetoothUUIDs.storageService,
+                                       BotaBluetoothUUIDs.storageTransferCapabilitiesV2)
+            default: throw error
+            }
+        }
         return EncryptedUploadV2CapabilitySnapshot(
             rawValue: value,
             sha256: Data(SHA256.hash(data: value)),

@@ -64,13 +64,13 @@ export function createBlePlxPort(manager: BlePlxManager): JsBlePort {
   const cleanupFailure = (cause: unknown) => Object.assign(new Error('BLE cleanup incomplete'), {
     code: 'cleanup_incomplete', cause,
   });
-  const gattError = (error: unknown, address: { characteristicUuid: string; peripheralId?: string }, write = false) => {
+  const gattError = (error: unknown, address: { serviceUuid: string; characteristicUuid: string; peripheralId?: string }, write = false) => {
     if (!error || typeof error !== 'object' || !('errorCode' in error)) return error;
     // BLE PLX reports these local discovery failures before submitting an ATT write.
     const code = error.errorCode === 404 ? 'characteristic_not_found'
       : error.errorCode === 302 ? 'service_not_found' : undefined;
     return code ? Object.assign(new Error('Requested BLE endpoint is absent'), {
-      code, characteristicUuid: address.characteristicUuid, peripheralId: address.peripheralId,
+      code, serviceUuid: address.serviceUuid, characteristicUuid: address.characteristicUuid, peripheralId: address.peripheralId,
       ...(write ? { notSubmitted: true } : {}),
     }) : error;
   };

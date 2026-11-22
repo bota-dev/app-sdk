@@ -24,7 +24,7 @@ Later BLE Find changes in main remain an unpublished source preview. Packaged
 platform READMEs retain dated preparation snapshots; this installation guide and
 the publication review describe the current public version.
 
-BYO live-upload source now connects encrypted capture, HTTP/WS and fenced Batch recovery. See [current implementation and validation](docs/parity/byo-storage.md); rollout and physical qualification remain separate.
+Ordinary encrypted uploads are the shared device/App contract for Bota and customer storage. The cloud chooses the destination; see [the generic target extension](docs/parity/v2-managed-backend.md#generic-target-extension-unreleased). Release and hardware qualification remain separate.
 
 [![CI](https://github.com/bota-dev/app-sdk/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bota-dev/app-sdk/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -282,7 +282,7 @@ for field mapping and lifecycle rules; the getter does not send heartbeats.
 | Add encrypted recording uploads | [Managed backend adapter](docs/parity/v2-managed-backend.md) |
 | Explore example applications | [Bota examples](https://github.com/bota-dev/examples) |
 | Migrate an existing integration | [Package migration](docs/migrations/app-sdk-package-names.md) and [standalone SDK retirement](docs/migrations/react-native-sdk-sunset.md) |
-| Integrate device firmware | [Firmware protocol](FIRMWARE_PROTOCOL.md) — BLE naming, GATT, provisioning/settings, status, recording transfer, customer BYO encryption, reset, diagnostics, OTA, markers and find |
+| Integrate device firmware | [Firmware protocol](FIRMWARE_PROTOCOL.md) — BLE naming, GATT, provisioning/settings, status, recording transfer, ordinary generic-target encryption, reset, diagnostics, OTA, markers and find |
 | Understand the SDK's design | [Architecture](ARCHITECTURE.md) |
 | See what changed between versions | [Changelog](CHANGELOG.md) |
 
@@ -304,7 +304,7 @@ and documentation conventions. Maintainers use the [release procedure](docs/rele
 
 [MIT](LICENSE)
 
-See [BYO native/RN source preview](docs/parity/byo-storage.md) for integration, recovery and unreleased capability limits.
+The unpublished independent BYO APIs are retired; use the [ordinary managed backend](docs/parity/v2-managed-backend.md).
 
 ### Nearby find (unreleased source)
 

@@ -46,6 +46,9 @@ async function fixture(t, localWifi) {
       async discoverServices() {}, async disconnect(id) { events.push(['disconnect', id]); }, async getMtu() { return 247; },
       async read(address) {
         events.push(['read', address.characteristicUuid]);
+        if (address.characteristicUuid === metadata.CHAR_STORAGE_TRANSFER_CAPABILITIES_EXT) {
+          throw Object.assign(new Error('Optional extension absent'), { code: 'characteristic_not_found', ...address });
+        }
         if (address.characteristicUuid === metadata.CHAR_DEVICE_STATUS && f.holdStatus) {
           f.holdStatus = false; f.statusGate.enter(); await f.statusGate.pending;
         }

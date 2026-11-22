@@ -153,3 +153,11 @@ packet/field allocations early, the checkpoint-evidence limitation, and the
 final build-readiness signal. Broader root/native/RN documentation updates stay
 with those owners. No facade, RN, Demo, version, publication, CI, physical-device,
 cryptographic implementation or trusted-time changes are included here.
+
+
+Unified-upload follow-up (2026-11-22): generic-target support assigns bit `0x400`,
+so the unknown-capability vector now injects `0x800`. Current canonical JSON,
+generated Rust digest, Apple/Android resources and native test pins use SHA-256
+`58e9d78cccc1f82ef8ce63f93ab473dbb006e715e5aa288d7a7fd3a11005bdf7`.
+The earlier validation above remains historical. Generator/resource checks pass;
+updated native XCTest/instrumentation execution is verified separately by PR CI.

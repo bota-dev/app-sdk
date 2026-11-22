@@ -5,8 +5,6 @@ import type { BotaDeviceSDKClient } from './client';
 import { createBotaClient } from './BotaClient';
 import { createManagedEncryptedUploadV2Backend } from './encryptedUploadV2Backend';
 import type { EncryptedUploadV2BackendOptions, EncryptedUploadV2Backend } from './encryptedUploadV2Backend';
-import { createManagedByoStorageBackend } from './byoStorageBackend';
-import type { ByoStorageBackendOptions, ByoStorageBackend } from './byoStorageBackend';
 import { createManagedProtectedStreamingStatusBackend } from './protectedStreamingStatus';
 import type { ProtectedStreamingStatusBackendOptions, ProtectedStreamingStatusBackend } from './protectedStreamingStatus';
 import { BOTA_RUNTIME_API_VERSION, BotaRuntimeCompatibilityError, supportsNativeOperation } from './runtimeAdapter';
@@ -23,8 +21,6 @@ import { createJsEncryptedUploadV2Backend } from './jsHost/uploadBackendV2';
 import type { JsEncryptedUploadV2Backend, JsV2Fetch, JsV2UploadTarget } from './jsHost/uploadBackendV2';
 import type { JsHostContext, OpaqueHostHandle } from './jsHost/contracts';
 import type { JsEncryptedUploadV2Material } from './jsHost/encryptedUploadV2';
-import { createJsByoEffects } from './jsHost/byoEffects';
-import type { JsByoEffects, JsByoSocket } from './jsHost/byoEffects';
 import type { JsRecordingUploadTarget } from './jsHost/recordingUploads';
 import { validateJsHostPorts, BOTA_JS_HOST_PORT_API_VERSION } from './jsHost/ports';
 import { setCompatibilityUploadPolicy } from './managers/NativeUploadQueue';
@@ -44,7 +40,6 @@ export type { ClientPresence, SdkClientContext } from './clientPresence';
 export type { BlePlxManager } from './jsHost/blePlx';
 export type { JsBackendFetch, JsUploadBackendOptions } from './jsHost/backend';
 export type { JsV2Fetch, JsV2UploadTarget } from './jsHost/uploadBackendV2';
-export type { JsByoSocket } from './jsHost/byoEffects';
 export type { JsEncryptedUploadV2Material } from './jsHost/encryptedUploadV2';
 export type { JsRecordingUploadTarget } from './jsHost/recordingUploads';
 export type { JsLocalWifiPort, JsLocalWifiMaterial, JsLocalWifiLease, JsLocalWifiReader } from './jsHost/localWifi';
@@ -68,7 +63,6 @@ export interface BotaReactNativeRuntime {
   client: ReturnType<typeof createBotaClient>;
   supports(operation: BotaNativeOperation): boolean;
   createEncryptedUploadV2Backend(configuration: EncryptedUploadV2BackendOptions): EncryptedUploadV2Backend;
-  createByoStorageBackend(configuration: ByoStorageBackendOptions): ByoStorageBackend;
   createProtectedStreamingStatusBackend(configuration: ProtectedStreamingStatusBackendOptions): ProtectedStreamingStatusBackend;
 }
 
@@ -82,8 +76,6 @@ export interface BotaReactNativeJsRuntimeOptions {
   upload?: JsDeviceAdapterOptions['upload'];
   uploadFile?: (target: JsRecordingUploadTarget, file: OpaqueHostHandle, context: JsHostContext,
     progress?: (completedBytes: string, totalBytes: string) => void) => Promise<void>;
-  openSocket?: (url: string, headers: Readonly<Record<string, string>>, protocol: string,
-    context: JsHostContext) => Promise<JsByoSocket>;
 }
 
 export interface BotaReactNativeJsRuntime extends BotaReactNativeRuntime {
@@ -114,7 +106,6 @@ export function createBotaReactNativeJsRuntime(
     const scalarBackend = backendOptions?.fetch ? createJsUploadBackend(scopedBackendOptions) : undefined;
     if (scalarBackend) constructionCleanups.push(() => scalarBackend.dispose());
     let managedBackend: JsEncryptedUploadV2Backend | undefined;
-    let byoBackend: JsByoEffects | undefined;
     const device = createJsDeviceAdapter(core, ports, { upload: options.upload,
       resolveBoundDeviceModel: options.resolveBoundDeviceModel,
       fetch: backendOptions?.fetch, uploadFile: options.uploadFile,
@@ -136,19 +127,11 @@ export function createBotaReactNativeJsRuntime(
         signal: scopedBackendOptions.signal, checkScope: scopedBackendOptions.checkScope });
       const constructedManagedBackend = managedBackend;
       constructionCleanups.push(() => constructedManagedBackend.dispose());
-      byoBackend = createJsByoEffects({ core, files: ports.files, persistence: ports.persistence,
-        fetch: backendOptions.fetch, uploadFile: options.uploadFile, openSocket: options.openSocket,
-        randomBytes: length => ports.randomBytes(length),
-        requestCredentials: (operationId, signal) => scalarBackend.requestCredentials(operationId, signal),
-        withDevice: (value, operationId, live, signal, body) => device.withByoDevice(value, operationId, live, signal, body),
-        onCleanupFailure: error => device.markCleanupFailed(error),
-        signal: scopedBackendOptions.signal, checkScope: scopedBackendOptions.checkScope });
-      const constructedByoBackend = byoBackend;
-      constructionCleanups.push(() => constructedByoBackend.dispose());
+
     }
     device.destroy = async () => {
       let failure: unknown;
-      const stopped = await Promise.allSettled([destroyDevice(), byoBackend?.dispose(), bluetoothState.dispose()]);
+      const stopped = await Promise.allSettled([destroyDevice(), bluetoothState.dispose()]);
       for (const result of stopped) if (result.status === 'rejected') failure ??= result.reason;
       try { await managedBackend?.dispose(); } catch (error) { failure ??= error; }
       try { await scalarBackend?.dispose(); } catch (error) { failure ??= error; }
@@ -156,7 +139,7 @@ export function createBotaReactNativeJsRuntime(
       core.dispose();
       if (failure) throw failure;
     };
-    const backend = scalarBackend ? { ...scalarBackend, ...managedBackend, ...byoBackend } : null;
+    const backend = scalarBackend ? { ...scalarBackend, ...managedBackend } : null;
     runtime = createBotaReactNativeRuntime({ apiVersion: BOTA_RUNTIME_API_VERSION,
       device, encryptedUploadBackend: backend }, { ...options, generatedPolicy: { reconnect,
         planReconnect(attempt, retryable) {
@@ -197,8 +180,6 @@ export function createBotaReactNativeRuntime(
     supports: (operation: BotaNativeOperation) => supportsNativeOperation(device, operation),
     createEncryptedUploadV2Backend: (configuration: EncryptedUploadV2BackendOptions) =>
       createManagedEncryptedUploadV2Backend(backend, sdk.recordings, configuration),
-    createByoStorageBackend: (configuration: ByoStorageBackendOptions) =>
-      createManagedByoStorageBackend(backend, configuration),
     createProtectedStreamingStatusBackend: (configuration: ProtectedStreamingStatusBackendOptions) =>
       createManagedProtectedStreamingStatusBackend(backend, configuration),
   };

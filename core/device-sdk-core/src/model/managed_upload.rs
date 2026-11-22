@@ -1039,15 +1039,12 @@ impl ManagedUploadRequest {
                 let t: Target = decode(response_json)?;
                 if t.method != "PUT"
                     || !https_url(&t.url, false)
-                    || t.headers.iter().any(|(k, v)| {
-                        k.is_empty()
-                            || !k.bytes().all(|c| {
-                                c.is_ascii_alphanumeric() || b"!#$%&'*+.^_`|~-".contains(&c)
-                            })
-                            || v.bytes().any(|c| matches!(c, 0 | 10 | 13))
-                            || ["authorization", "cookie", "proxy-authorization"]
-                                .contains(&k.to_ascii_lowercase().as_str())
-                    })
+                    || !target_headers_valid(
+                        &t.headers,
+                        input.capability.flags
+                            & crate::generated::protocol::ENCRYPTED_UPLOAD_V2_CAP_GENERIC_TARGET
+                            != 0,
+                    )
                 {
                     return Err(ManagedUploadError::InvalidDocument);
                 }
@@ -1327,6 +1324,54 @@ fn uuid(v: &str) -> bool {
             }
         })
 }
+fn target_headers_valid(
+    headers: &std::collections::BTreeMap<String, String>,
+    generic: bool,
+) -> bool {
+    let mut names = std::collections::BTreeSet::new();
+    let mut size = 0usize;
+    if headers.len() > 32 {
+        return false;
+    }
+    for (name, value) in headers {
+        let lower = name.to_ascii_lowercase();
+        size += name.len() + value.len() + 4;
+        if name.is_empty()
+            || name.len() > 128
+            || size > 2048
+            || !name
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || b"!#$%&'*+.^_`|~-".contains(&c))
+            || !value.bytes().all(|c| (32..=126).contains(&c))
+            || !names.insert(lower.clone())
+            || lower.starts_with("sec-")
+            || [
+                "host",
+                "content-length",
+                "transfer-encoding",
+                "connection",
+                "keep-alive",
+                "te",
+                "trailer",
+                "upgrade",
+                "expect",
+                "cookie",
+                "set-cookie",
+                "proxy-authorization",
+                "proxy-authenticate",
+                "proxy-connection",
+                "accept-encoding",
+            ]
+            .contains(&lower.as_str())
+            || (lower == "authorization" && !generic)
+            || (lower == "content-type" && value != "application/octet-stream")
+        {
+            return false;
+        }
+    }
+    true
+}
+
 fn https_url(v: &str, origin: bool) -> bool {
     let Some(rest) = v.strip_prefix("https://") else {
         return false;

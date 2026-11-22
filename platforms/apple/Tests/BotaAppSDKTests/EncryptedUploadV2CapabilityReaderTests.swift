@@ -67,17 +67,51 @@ final class EncryptedUploadV2CapabilityReaderTests: XCTestCase {
         XCTAssertEqual(secondSnapshot.capabilities.maximumMissingSequences, 2)
         let calls = await probe.calls
         XCTAssertEqual(calls, [
+            .init(peripheralID: "peripheral-1", serviceUUID: BotaBluetoothUUIDs.uploadExtensionsService,
+                  characteristicUUID: BotaBluetoothUUIDs.storageTransferCapabilitiesExtended),
             .init(
                 peripheralID: "peripheral-1",
                 serviceUUID: BotaBluetoothUUIDs.storageService,
                 characteristicUUID: BotaBluetoothUUIDs.storageTransferCapabilitiesV2
             ),
+            .init(peripheralID: "peripheral-1", serviceUUID: BotaBluetoothUUIDs.uploadExtensionsService,
+                  characteristicUUID: BotaBluetoothUUIDs.storageTransferCapabilitiesExtended),
             .init(
                 peripheralID: "peripheral-1",
                 serviceUUID: BotaBluetoothUUIDs.storageService,
                 characteristicUUID: BotaBluetoothUUIDs.storageTransferCapabilitiesV2
             ),
         ])
+    }
+
+    func testExtensionSnapshotIsHashedAndDecodedWithoutReadingLegacy() async throws {
+        let bytes = Self.data("010218007f07000000040004f40010000800000010000000")
+        let probe = CapabilityReadProbe(values: [bytes], hasExtension: true)
+        let mapper = try CoreModelMapper()
+        let reader = EncryptedUploadV2CapabilityReader(read: { try await probe.read(
+            peripheralID: $0, serviceUUID: $1, characteristicUUID: $2)
+        }, decode: { try mapper.decodeEncryptedUploadV2Capabilities($0) })
+        let snapshot = try await reader.readFresh(peripheralID: "device")
+        XCTAssertEqual(snapshot.rawValue, bytes)
+        XCTAssertEqual(snapshot.sha256, Data(SHA256.hash(data: bytes)))
+        XCTAssertEqual(snapshot.capabilities.flags, 0x77f)
+        let calls = await probe.calls
+        XCTAssertEqual(calls.count, 1)
+        XCTAssertEqual(calls.first?.characteristicUUID, BotaBluetoothUUIDs.storageTransferCapabilitiesExtended)
+    }
+
+    func testExtensionTransportFailureAndUnrelatedAbsenceCannotDowngrade() async throws {
+        for failure in [CentralDriverError.serviceDiscoveryTimedOut("device"), .disconnected("device"),
+                        .serviceNotFound("another-service"), .characteristicNotFound("another-characteristic")] {
+            let reader = EncryptedUploadV2CapabilityReader(read: { _, service, _ in
+                XCTAssertEqual(service, BotaBluetoothUUIDs.uploadExtensionsService)
+                throw failure
+            }, decode: { _ in XCTFail("must not decode"); throw failure })
+            do {
+                _ = try await reader.readFresh(peripheralID: "device")
+                XCTFail("Expected discovery failure")
+            } catch { XCTAssertEqual(error as? CentralDriverError, failure) }
+        }
     }
 
     func testMalformedCapabilityIsRejectedBySharedCoreDecoder() async throws {
@@ -112,10 +146,12 @@ private struct CapabilityReadCall: Equatable {
 
 private actor CapabilityReadProbe {
     private var values: [Data]
+    private let hasExtension: Bool
     private(set) var calls: [CapabilityReadCall] = []
 
-    init(values: [Data]) {
+    init(values: [Data], hasExtension: Bool = false) {
         self.values = values
+        self.hasExtension = hasExtension
     }
 
     func read(peripheralID: String, serviceUUID: String, characteristicUUID: String) throws -> Data {
@@ -124,6 +160,9 @@ private actor CapabilityReadProbe {
             serviceUUID: serviceUUID,
             characteristicUUID: characteristicUUID
         ))
+        if characteristicUUID == BotaBluetoothUUIDs.storageTransferCapabilitiesExtended && !hasExtension {
+            throw CentralDriverError.characteristicNotFound(characteristicUUID)
+        }
         guard !values.isEmpty else { throw NativeHostError.missingResource("capability value") }
         return values.removeFirst()
     }

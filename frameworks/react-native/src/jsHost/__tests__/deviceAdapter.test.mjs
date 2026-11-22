@@ -31,6 +31,9 @@ function fixture(options = {}) {
       async connect(id) { calls.push(['connect', id]); }, async discoverServices(id) { calls.push(['discover', id]); },
       async disconnect(id) { calls.push(['disconnect', id]); }, async getMtu() { return 247; },
       async read(address) { calls.push(['read', address]); const value = values.get(address.characteristicUuid);
+        if (!value && address.characteristicUuid === metadata.CHAR_STORAGE_TRANSFER_CAPABILITIES_EXT) {
+          throw Object.assign(new Error('Optional extension is absent'), { code: 'characteristic_not_found', ...address });
+        }
         if (!value) throw new Error(`No fixture for ${address.characteristicUuid}`); return Uint8Array.from(value); },
       async write(address, bytes) { calls.push(['write', address, Array.from(bytes)]); },
       async subscribe() { return { async remove() {} }; },
@@ -845,12 +848,12 @@ test('the generated runtime factory executes public device operations without We
   }
 });
 
-test('a custom public JS provider can register material under its exact operation and cancellation fences it before device IO', { timeout: 5000 }, async () => {
+for (const extended of [false, true]) test(`a custom public JS provider uses ${extended ? 'extended' : 'legacy'} capabilities and cancellation fences material before device IO`, { timeout: 5000 }, async () => {
   const f = fixture({ files: { async flush() {} } });
   const { createBotaReactNativeJsRuntime } = loadSource('../runtime.ts');
   const runtime = createBotaReactNativeJsRuntime(f.ports);
-  f.values.set(f.metadata.CHAR_STORAGE_TRANSFER_CAPABILITIES_V2,
-    Uint8Array.from([1, 2, 24, 0, 127, 1, 0, 0, 0, 4, 0, 4, 244, 0, 16, 0, 8, 0, 0, 0, 16, 0, 0, 0]));
+  f.values.set(extended ? f.metadata.CHAR_STORAGE_TRANSFER_CAPABILITIES_EXT : f.metadata.CHAR_STORAGE_TRANSFER_CAPABILITIES_V2,
+    Uint8Array.from([1, 2, 24, 0, 127, extended ? 7 : 1, 0, 0, 0, 4, 0, 4, 244, 0, 16, 0, 8, 0, 0, 0, 16, 0, 0, 0]));
   const controller = new AbortController();
   const operationId = '11112233-4455-6677-8899-aabbccddeeff';
   let registrationId;
@@ -872,6 +875,11 @@ test('a custom public JS provider can register material under its exact operatio
         ownerRevision: 1, securityPolicy: 'v2_required', materialRegistrationId: registrationId };
     }, undefined, { operationId, signal: controller.signal }));
     assert.match(registrationId, /^js-material\//);
+    const capabilityReads = f.calls.filter(call => Array.isArray(call) && call[0] === 'read' &&
+      [f.metadata.CHAR_STORAGE_TRANSFER_CAPABILITIES_EXT, f.metadata.CHAR_STORAGE_TRANSFER_CAPABILITIES_V2].includes(call[1].characteristicUuid));
+    assert.deepEqual(capabilityReads.map(call => call[1].characteristicUuid), extended
+      ? [f.metadata.CHAR_STORAGE_TRANSFER_CAPABILITIES_EXT]
+      : [f.metadata.CHAR_STORAGE_TRANSFER_CAPABILITIES_EXT, f.metadata.CHAR_STORAGE_TRANSFER_CAPABILITIES_V2]);
     assert.equal(writesBeyondTimeSync(f).length, 0);
     assert.throws(() => runtime.registerEncryptedUploadV2Material(operationId, {}), { code: 'stale_material_request' });
     await runtime.releaseEncryptedUploadV2Material(registrationId);
@@ -945,74 +953,6 @@ test('destroy closes new device admission while captured file upload cancellatio
     await Promise.all([destruction, uploadRejected]);
     assert.equal(destroyed, true);
   } finally { release(); await destruction?.catch(() => {}); await f.adapter.destroy(); f.core.dispose(); }
-});
-
-function byoAdapterFixture(options = {}) {
-  const f = fixture();
-  const listeners = new Map();
-  f.ports.ble.subscribe = async (address, callback) => {
-    listeners.set(address.characteristicUuid, callback);
-    return { async remove() { f.calls.push(['remove-byo-subscription', address.characteristicUuid]); listeners.delete(address.characteristicUuid); } };
-  };
-  f.ports.ble.write = async (address, bytes) => {
-    f.calls.push(['write', address, [...bytes]]);
-    if (address.characteristicUuid === f.metadata.CHAR_DEVICE_COMMAND) await options.grant?.();
-    if (address.characteristicUuid === f.metadata.CHAR_RECORDING_CONTROL) listeners.get(f.metadata.CHAR_RECORDING_STATUS)(new Uint8Array(18));
-    if (address.characteristicUuid === f.metadata.CHAR_TRANSFER_CONTROL_V2) {
-      const reply = Buffer.alloc(12);
-      reply.set([0x71, 3, bytes[2], 0]);
-      reply.writeUInt32LE(Buffer.from(bytes).readUInt32LE(4), 4);
-      listeners.get(f.metadata.CHAR_RECORDING_TRANSFER_V2)(Uint8Array.from(reply));
-    }
-  };
-  return f;
-}
-
-test('a BYO live lease permits shared-policy Stop Recording and keeps unrelated controls exclusive', { timeout: 5000 }, async () => {
-  const f = byoAdapterFixture();
-  let entered, release;
-  const active = new Promise(resolve => { entered = resolve; });
-  const gate = new Promise(resolve => { release = resolve; });
-  const controller = new AbortController();
-  await f.adapter.configure({ logLevel: 'none' });
-  const device = await f.adapter.connectSelected({ id: 'selected', rssi: -50, discoveredAtMs: 0 });
-  const live = f.adapter.withByoDevice(device, 'byo-live-owner', true, controller.signal, async () => { entered(); await gate; return 'finished'; });
-  try {
-    await Promise.race([active, live]);
-    const count = f.calls.length;
-    await assert.rejects(f.adapter.syncTime(device), { code: 'operation_in_progress' });
-    assert.equal(f.calls.length, count);
-    assert.deepEqual(await f.adapter.requestStopRecording(device, Buffer.alloc(171, 1).toString('base64')), { success: true });
-    assert.equal(f.calls.filter(call => Array.isArray(call) && call[0] === 'write' && call[1].characteristicUuid === f.metadata.CHAR_RECORDING_CONTROL).length, 1);
-    release(); assert.equal(await live, 'finished');
-    const abort = f.core.codec('byoHostPolicy', { mode: 'sync', selectedLive: false }).releaseOperation;
-    assert.deepEqual(f.calls.filter(call => Array.isArray(call) && call[0] === 'write' && call[1].characteristicUuid === f.metadata.CHAR_TRANSFER_CONTROL_V2)
-      .map(call => call[2][2]), [abort]);
-  } finally { release(); await live.catch(() => {}); await f.adapter.destroy(); f.core.dispose(); }
-});
-
-test('BYO cancellation joins an already submitted borrowed grant and suppresses its Stop Recording command', { timeout: 5000 }, async () => {
-  let entered, release, grantEntered, grantRelease;
-  const active = new Promise(resolve => { entered = resolve; });
-  const bodyGate = new Promise(resolve => { release = resolve; });
-  const grant = new Promise(resolve => { grantEntered = resolve; });
-  const grantGate = new Promise(resolve => { grantRelease = resolve; });
-  const f = byoAdapterFixture({ async grant() { grantEntered(); await grantGate; } });
-  const controller = new AbortController();
-  await f.adapter.configure({ logLevel: 'none' });
-  const device = await f.adapter.connectSelected({ id: 'selected', rssi: -50, discoveredAtMs: 0 });
-  const live = f.adapter.withByoDevice(device, 'byo-cancelled-owner', true, controller.signal, async () => { entered(); await bodyGate; });
-  void live.catch(() => {});
-  try {
-    await Promise.race([active, live]);
-    const stopping = f.adapter.requestStopRecording(device, Buffer.alloc(171, 1).toString('base64'));
-    const rejectedStop = assert.rejects(stopping);
-    await Promise.race([grant, stopping]);
-    controller.abort(); release();
-    await assert.rejects(f.adapter.syncTime(device), { code: 'operation_in_progress' });
-    grantRelease(); await rejectedStop; await assert.rejects(live);
-    assert.equal(f.calls.filter(call => Array.isArray(call) && call[0] === 'write' && call[1].characteristicUuid === f.metadata.CHAR_RECORDING_CONTROL).length, 0);
-  } finally { release(); grantRelease(); await live.catch(() => {}); await f.adapter.destroy(); f.core.dispose(); }
 });
 
 function otaFixture(options = {}) {

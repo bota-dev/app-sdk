@@ -94,6 +94,10 @@ struct Receipt {
     request: EncryptedUploadV2BatchRequest,
     bytes: Vec<u8>,
     markers_required: bool,
+    #[serde(default)]
+    authorization: Vec<u8>,
+    #[serde(default)]
+    manifest: Vec<u8>,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -636,7 +640,11 @@ fn admit_authorization(input: Authorization) -> Result<AdmittedDocument, DeviceS
                 auth.channels & 1 != 0
             }
             && (!request.local_wifi || !markers_required)
-            && auth.flags & !0x0f == 0
+            && auth.flags & !wire::ENCRYPTED_UPLOAD_V2_AUTH_KNOWN_MASK == 0
+            && (auth.flags & wire::ENCRYPTED_UPLOAD_V2_AUTH_GENERIC_TARGET == 0
+                || (request.capabilities.flags & wire::ENCRYPTED_UPLOAD_V2_CAP_GENERIC_TARGET
+                    != 0
+                    && !markers_required))
             && auth.flags & 1 != 0
             && auth.upload_session_uuid == request.upload_session_uuid
             && auth.recording_uuid == *request.recording.as_bytes()
@@ -693,8 +701,39 @@ fn admit_receipt(input: Receipt) -> Result<AdmittedDocument, DeviceSdkError> {
     {
         return Err(invalid("completion receipt shape is invalid"));
     }
+    let generic = if input.authorization.is_empty() {
+        false
+    } else {
+        admit_authorization(Authorization {
+            request: request.clone(),
+            bytes: input.authorization.clone(),
+            checkpoint: None,
+            markers_required: Some(input.markers_required),
+        })?;
+        decode_encrypted_upload_v2_authorization_identity(&input.authorization[..408])?.flags
+            & wire::ENCRYPTED_UPLOAD_V2_AUTH_GENERIC_TARGET
+            != 0
+    };
+    if generic {
+        identity(
+            !input.markers_required
+                && input.manifest.len() == wire::UPLOAD_MANIFEST_V2_FIXED_LENGTH,
+            "generic target receipt requires the exact ordinary manifest",
+        )?;
+        let offset = wire::UPLOAD_AUTHORIZATION_V2_STAGING_OBJECT_DIGEST_OFFSET;
+        let mut digest = Sha256::new();
+        digest.update(b"bota/enc-v2/target-completion/v1");
+        digest.update(&input.authorization[offset..offset + 32]);
+        digest.update(Sha256::digest(&input.manifest));
+        digest.update(request.ciphertext_sha256);
+        identity(
+            ordinary[208..240] == digest.finalize()[..],
+            "target completion does not bind the accepted material",
+        )?;
+    }
     identity(
-        ordinary[wire::COMPLETION_RECEIPT_V2_RESULT_OFFSET] == RECEIPT_VERIFIED_RESULT
+        ordinary[wire::COMPLETION_RECEIPT_V2_RESULT_OFFSET]
+            == if generic { 2 } else { RECEIPT_VERIFIED_RESULT }
             && ordinary[wire::COMPLETION_RECEIPT_V2_TRANSPORT_PROFILE_OFFSET]
                 == wire::UPLOAD_PROFILE_ENCRYPTED_UPLOAD_V2
             && ordinary[wire::COMPLETION_RECEIPT_V2_STORAGE_FORMAT_OFFSET]
@@ -1305,6 +1344,61 @@ mod tests {
             )
             .is_err()
         );
+    }
+    #[test]
+    fn generic_receipt_requires_capability_exact_authorization_and_manifest() {
+        let mut authorization = vector("authorization-development");
+        let auth = decode_encrypted_upload_v2_authorization_identity(&authorization).unwrap();
+        let mut request = request();
+        request.recording = RecordingUuid::from_bytes(auth.recording_uuid);
+        request.upload_session_uuid = auth.upload_session_uuid;
+        request.ciphertext_length = auth.minimum_ciphertext_length;
+        request.ciphertext_sha256 = auth.ciphertext_sha256;
+        request.selection.policy = match auth.policy {
+            0 => UploadSecurityPolicy::LegacyAllowed,
+            1 => UploadSecurityPolicy::V2Preferred,
+            _ => UploadSecurityPolicy::V2Required,
+        };
+        authorization[30] |= 0x10;
+        assert!(
+            call(
+                "validateEncryptedUploadV2Authorization",
+                object!({"request":value(&request),"bytes":authorization})
+            )
+            .is_err()
+        );
+        request.capabilities.flags |= 0x400;
+        call(
+            "validateEncryptedUploadV2Authorization",
+            object!({"request":value(&request),"bytes":authorization}),
+        )
+        .unwrap();
+        let manifest = vec![9u8; 580];
+        let mut receipt = vector("completion-receipt");
+        receipt[13] = 2;
+        let mut h = Sha256::new();
+        h.update(b"bota/enc-v2/target-completion/v1");
+        h.update(&authorization[280..312]);
+        h.update(Sha256::digest(&manifest));
+        h.update(request.ciphertext_sha256);
+        receipt[208..240].copy_from_slice(&h.finalize());
+        let payload = object!({"request":value(&request),"bytes":receipt,"markersRequired":false,
+            "authorization":authorization,"manifest":manifest});
+        call("validateEncryptedUploadV2Receipt", payload.clone()).unwrap();
+        for key in ["authorization", "manifest"] {
+            let mut missing = payload.clone();
+            missing.as_object_mut().unwrap().remove(key);
+            assert!(call("validateEncryptedUploadV2Receipt", missing).is_err());
+        }
+        let mut mismatch = payload.clone();
+        mismatch["manifest"][0] = object!(8);
+        assert!(call("validateEncryptedUploadV2Receipt", mismatch).is_err());
+        let mut downgraded = payload.clone();
+        downgraded["bytes"][13] = object!(1);
+        assert!(call("validateEncryptedUploadV2Receipt", downgraded).is_err());
+        let mut ordinary = payload;
+        ordinary["authorization"][30] = object!(1);
+        assert!(call("validateEncryptedUploadV2Receipt", ordinary).is_err());
     }
     #[test]
     fn marker_file_recovery_replaces_only_matching_partial_bytes() {

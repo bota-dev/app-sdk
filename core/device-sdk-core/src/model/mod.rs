@@ -1,6 +1,3 @@
-mod byo_checkpoint;
-pub mod byo_customer;
-mod byo_upload;
 mod device;
 mod discovery;
 mod managed_upload;
@@ -11,7 +8,6 @@ mod settings;
 mod upload;
 mod upload_profile;
 
-pub use byo_upload::*;
 pub use device::*;
 pub use discovery::*;
 pub(crate) use managed_upload::date as parse_rfc3339_millis;

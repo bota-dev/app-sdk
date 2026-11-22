@@ -4,6 +4,7 @@ import dev.bota.sdk.internal.core.CodecCore
 import dev.bota.sdk.internal.core.CoreField
 import dev.bota.sdk.internal.core.CoreModelMapper
 import dev.bota.sdk.internal.core.EncryptedUploadV2CapabilityReader
+import dev.bota.sdk.internal.core.EncryptedUploadV2CapabilitiesValue
 import dev.bota.sdk.internal.core.toNativePacket
 import dev.bota.sdk.internal.host.EncryptedUploadV2HostException
 import java.util.UUID
@@ -65,6 +66,30 @@ class EncryptedUploadV2CatalogReaderTest {
             read = { _, _, _ -> byteArrayOf(1) }, decode = { error("malformed") },
         )
         assertTrue(runCatching { malformed.readIfPresent("device") }.isFailure)
+    }
+
+    @Test
+    fun capabilityDiscoveryPrefersExtensionAndFallsBackOnlyWhenAbsent() = runTest {
+        for (extended in listOf(true, false)) {
+            val calls = mutableListOf<UUID>()
+            val bytes = byteArrayOf(1, 2, 24, 0, 0x7f, if (extended) 7 else 3)
+            val reader = EncryptedUploadV2CapabilityReader(read = { _, service, characteristic ->
+                calls += characteristic
+                if (characteristic == BotaBluetoothUUIDs.TransferCapabilitiesExtended) {
+                    assertEquals(BotaBluetoothUUIDs.UploadExtensionsService, service)
+                    if (!extended) throw BluetoothCharacteristicNotFoundException()
+                } else assertEquals(BotaBluetoothUUIDs.StorageService, service)
+                bytes
+            }, decode = { selected ->
+                assertTrue(selected === bytes)
+                EncryptedUploadV2CapabilitiesValue(if (extended) 0x77fu else 0x37fu, 1024u, 1024u, 244u, 16u, 8u, 16u)
+            })
+            val snapshot = reader.readFresh("device")
+            assertTrue(snapshot.rawValue.contentEquals(bytes))
+            assertTrue(snapshot.sha256.contentEquals(java.security.MessageDigest.getInstance("SHA-256").digest(bytes)))
+            assertEquals(if (extended) listOf(BotaBluetoothUUIDs.TransferCapabilitiesExtended) else
+                listOf(BotaBluetoothUUIDs.TransferCapabilitiesExtended, BotaBluetoothUUIDs.TransferCapabilitiesV2), calls)
+        }
     }
 
     private fun mapper(malformed: Boolean = false, status: ULong = 9u, flags: MutableList<ULong> = mutableListOf()) = CoreModelMapper(CodecCore(
