@@ -338,6 +338,11 @@ private struct AppleUploadTests {
       _ = try await operation(routed, routeJournal, routeHTTP, routeCredentials).prepare()
       try expect(routeHTTP.requests.map { $0.url!.path } == ["\(prefix)/recordings",
         "\(prefix)/recordings/rec_one/encrypted-upload-v2/sessions"], "Exact configured root or prefixed route")
+      let created = try JSONSerialization.jsonObject(with: routeHTTP.requests[0].httpBody!) as! [String: Any]
+      try expect(created["recording_uuid"] as? String == routed.recording.uuid, "Recording create retains capture UUID")
+      try expect((created["recording_generation"] as? NSNumber)?.uint32Value == routed.recording.generation,
+        "Recording create retains capture generation")
+      try expect(created["recorded_at"] == nil, "Recorded time remains optional in the ordinary request")
     }
     for prefix in ["/", "//evil.example", "v1", "/v1/", "/v1//nested", "/v1/../nested", "/v1?x=1", "/v1#x", "/v%31"] {
       var invalid = try Self.input()

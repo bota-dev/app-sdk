@@ -31,6 +31,9 @@ function fixture(options = {}) {
       async connect(id) { calls.push(['connect', id]); }, async discoverServices(id) { calls.push(['discover', id]); },
       async disconnect(id) { calls.push(['disconnect', id]); }, async getMtu() { return 247; },
       async read(address) { calls.push(['read', address]); const value = values.get(address.characteristicUuid);
+        if (!value && address.characteristicUuid === metadata.CHAR_STORAGE_TRANSFER_CAPABILITIES_EXT) {
+          throw Object.assign(new Error('Optional extension is absent'), { code: 'characteristic_not_found', ...address });
+        }
         if (!value) throw new Error(`No fixture for ${address.characteristicUuid}`); return Uint8Array.from(value); },
       async write(address, bytes) { calls.push(['write', address, Array.from(bytes)]); },
       async subscribe() { return { async remove() {} }; },
@@ -845,12 +848,12 @@ test('the generated runtime factory executes public device operations without We
   }
 });
 
-test('a custom public JS provider can register material under its exact operation and cancellation fences it before device IO', { timeout: 5000 }, async () => {
+for (const extended of [false, true]) test(`a custom public JS provider uses ${extended ? 'extended' : 'legacy'} capabilities and cancellation fences material before device IO`, { timeout: 5000 }, async () => {
   const f = fixture({ files: { async flush() {} } });
   const { createBotaReactNativeJsRuntime } = loadSource('../runtime.ts');
   const runtime = createBotaReactNativeJsRuntime(f.ports);
-  f.values.set(f.metadata.CHAR_STORAGE_TRANSFER_CAPABILITIES_V2,
-    Uint8Array.from([1, 2, 24, 0, 127, 1, 0, 0, 0, 4, 0, 4, 244, 0, 16, 0, 8, 0, 0, 0, 16, 0, 0, 0]));
+  f.values.set(extended ? f.metadata.CHAR_STORAGE_TRANSFER_CAPABILITIES_EXT : f.metadata.CHAR_STORAGE_TRANSFER_CAPABILITIES_V2,
+    Uint8Array.from([1, 2, 24, 0, 127, extended ? 7 : 1, 0, 0, 0, 4, 0, 4, 244, 0, 16, 0, 8, 0, 0, 0, 16, 0, 0, 0]));
   const controller = new AbortController();
   const operationId = '11112233-4455-6677-8899-aabbccddeeff';
   let registrationId;
@@ -872,6 +875,11 @@ test('a custom public JS provider can register material under its exact operatio
         ownerRevision: 1, securityPolicy: 'v2_required', materialRegistrationId: registrationId };
     }, undefined, { operationId, signal: controller.signal }));
     assert.match(registrationId, /^js-material\//);
+    const capabilityReads = f.calls.filter(call => Array.isArray(call) && call[0] === 'read' &&
+      [f.metadata.CHAR_STORAGE_TRANSFER_CAPABILITIES_EXT, f.metadata.CHAR_STORAGE_TRANSFER_CAPABILITIES_V2].includes(call[1].characteristicUuid));
+    assert.deepEqual(capabilityReads.map(call => call[1].characteristicUuid), extended
+      ? [f.metadata.CHAR_STORAGE_TRANSFER_CAPABILITIES_EXT]
+      : [f.metadata.CHAR_STORAGE_TRANSFER_CAPABILITIES_EXT, f.metadata.CHAR_STORAGE_TRANSFER_CAPABILITIES_V2]);
     assert.equal(writesBeyondTimeSync(f).length, 0);
     assert.throws(() => runtime.registerEncryptedUploadV2Material(operationId, {}), { code: 'stale_material_request' });
     await runtime.releaseEncryptedUploadV2Material(registrationId);

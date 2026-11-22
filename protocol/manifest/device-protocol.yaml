@@ -120,6 +120,13 @@ services:
       - { name: CHAR_REGULATORY_STATUS, uuid: B07A000C-0004-1000-8000-00805F9B34FB }
       - { name: CHAR_REGULATORY_RECEIPT, uuid: B07A000C-0005-1000-8000-00805F9B34FB }
 
+  # Optional read-only capability snapshot. The original 0004/0006 keeps its
+  # frozen flag set so SDKs that reject unknown flags continue ordinary uploads.
+  - name: SERVICE_BOTA_UPLOAD_EXTENSIONS
+    uuid: B07A000D-0000-1000-8000-00805F9B34FB
+    characteristics:
+      - { name: CHAR_STORAGE_TRANSFER_CAPABILITIES_EXT, uuid: B07A000D-0001-1000-8000-00805F9B34FB, introduced: encrypted-upload-v2-generic-target-v1 }
+
 constantGroups:
   local_wifi:
     LOCAL_WIFI_VERSION: 2

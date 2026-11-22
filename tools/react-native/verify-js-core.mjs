@@ -60,6 +60,14 @@ codec('encodeFirmwareData', { sequence: 513, payload: [0, 128, 255] });
 codec('decodeText', { bytes: [0xe4, 0xb8, 0xad], required: true });
 codec('decodeEncryptedUploadV2Capabilities', { bytes: [1, 2, 24, 0, 127, 0, 0, 0, 0, 4, 0, 4, 244, 0, 16, 0, 8, 0, 0, 0, 16, 0, 0, 0] });
 const v2Capabilities = expected.at(-1).result;
+const extendedCapability = codec('decodeEncryptedUploadV2Capabilities', {
+  bytes: [1, 2, 24, 0, 127, 7, 0, 0, 0, 4, 0, 4, 244, 0, 16, 0, 8, 0, 0, 0, 16, 0, 0, 0],
+});
+assert.equal(extendedCapability.ok, true);
+assert.equal(extendedCapability.result.flags, 0x77f);
+const uploadDiscovery = codec('protocolMetadata', {});
+assert.equal(uploadDiscovery.result.SERVICE_BOTA_UPLOAD_EXTENSIONS, 'B07A000D-0000-1000-8000-00805F9B34FB');
+assert.equal(uploadDiscovery.result.CHAR_STORAGE_TRANSFER_CAPABILITIES_EXT, 'B07A000D-0001-1000-8000-00805F9B34FB');
 const localCapabilities = [2, 2, 16, 0, 31, 0, 0, 0, 3, 0, 185, 0, 182, 0, 182, 0];
 
 const countryVector = JSON.parse(readFileSync(resolve(root, 'protocol/vectors/country-config-v1.json'), 'utf8'));

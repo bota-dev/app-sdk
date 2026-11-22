@@ -203,7 +203,12 @@ for (const publicEntry of [false, true, 'native-bridge']) test(`existing ${publi
     const priorRead=ports.ble.read;
     Object.assign(ports, { apiVersion:1, platform:'test' });
     Object.assign(ports.ble, { async scan(){return {async remove(){}};},async connect(){},async discoverServices(){},async disconnect(){},async getMtu(){return 185;},
-      async read(address,...args){return values.get(address.characteristicUuid) ?? priorRead(address,...args);} });
+      async read(address,...args){
+        if(address.characteristicUuid===metadata.CHAR_STORAGE_TRANSFER_CAPABILITIES_EXT) {
+          throw Object.assign(new Error('Optional extension absent'),{code:'characteristic_not_found',...address});
+        }
+        return values.get(address.characteristicUuid) ?? priorRead(address,...args);
+      } });
     Object.assign(ports.files,{ async open(id){return { ...sink,id };},async finalize(){},async remove(){} });
     const adapter=createJsDeviceAdapter(rust,ports), sdk=createBotaDeviceSDK(adapter);
     await sdk.configure({logLevel:'none'});

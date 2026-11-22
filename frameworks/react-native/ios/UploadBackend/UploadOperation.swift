@@ -155,6 +155,7 @@ struct UploadContext: Sendable {
       formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
       let data = try await request(base + "/recordings", method: "POST", body: [
         "device_id": input.scope.deviceId, "end_user_id": input.scope.endUserId,
+        "recording_uuid": input.recording.uuid, "recording_generation": input.recording.generation,
         "upload_method": "ble", "streaming": false,
         "metadata": ["started_at": formatter.string(from: Date(timeIntervalSince1970: start / 1000)),
           "ended_at": formatter.string(from: Date(timeIntervalSince1970: end / 1000))],

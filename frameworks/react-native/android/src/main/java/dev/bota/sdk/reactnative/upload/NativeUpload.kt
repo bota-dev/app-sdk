@@ -190,6 +190,7 @@ internal class NativeUpload(
       input.validateCheckpoint(pointer)
       if (pointer == null) {
         val body = JSONObject().put("device_id", input.scope.deviceId).put("end_user_id", input.scope.endUserId)
+          .put("recording_uuid", input.recording.uuid).put("recording_generation", input.recording.generation)
           .put("upload_method", "ble").put("streaming", false).put("metadata", JSONObject()
             .put("started_at", Instant.ofEpochMilli(input.recording.startedAtMs).toString())
             .put("ended_at", Instant.ofEpochMilli(input.recording.startedAtMs + input.recording.durationMs).toString()))

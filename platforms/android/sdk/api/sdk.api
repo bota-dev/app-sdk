@@ -969,67 +969,6 @@ public final class dev/bota/sdk/BuildConfig {
 	public fun <init> ()V
 }
 
-public final class dev/bota/sdk/ByoRecording {
-	public synthetic fun <init> (Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun component1 ()Ljava/lang/String;
-	public final fun component2-pVg5ArA ()I
-	public final fun copy-Qn1smSk (Ljava/lang/String;I)Ldev/bota/sdk/ByoRecording;
-	public static synthetic fun copy-Qn1smSk$default (Ldev/bota/sdk/ByoRecording;Ljava/lang/String;IILjava/lang/Object;)Ldev/bota/sdk/ByoRecording;
-	public fun equals (Ljava/lang/Object;)Z
-	public final fun getGeneration-pVg5ArA ()I
-	public final fun getUuid ()Ljava/lang/String;
-	public fun hashCode ()I
-	public fun toString ()Ljava/lang/String;
-}
-
-public final class dev/bota/sdk/ByoStorageException : java/lang/Exception {
-	public final fun getCode ()Ljava/lang/String;
-	public final fun getHttpStatus ()Ljava/lang/Integer;
-	public final fun getRetryable ()Z
-}
-
-public final class dev/bota/sdk/ByoStorageOptions {
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/io/File;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun component1 ()Ljava/lang/String;
-	public final fun component10 ()Lkotlin/jvm/functions/Function1;
-	public final fun component2 ()Ljava/lang/String;
-	public final fun component3 ()Ljava/lang/String;
-	public final fun component4 ()Ljava/lang/String;
-	public final fun component5 ()Ljava/lang/String;
-	public final fun component6 ()Ljava/lang/String;
-	public final fun component7-pVg5ArA ()I
-	public final fun component8 ()Ljava/io/File;
-	public final fun component9 ()Lkotlin/jvm/functions/Function1;
-	public final fun copy-7ifBTzc (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/io/File;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;)Ldev/bota/sdk/ByoStorageOptions;
-	public static synthetic fun copy-7ifBTzc$default (Ldev/bota/sdk/ByoStorageOptions;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/io/File;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Ldev/bota/sdk/ByoStorageOptions;
-	public fun equals (Ljava/lang/Object;)Z
-	public final fun getAccessToken ()Lkotlin/jvm/functions/Function1;
-	public final fun getBaseUrl ()Ljava/lang/String;
-	public final fun getBindingGeneration-pVg5ArA ()I
-	public final fun getDeviceId ()Ljava/lang/String;
-	public final fun getEnvironment ()Ljava/lang/String;
-	public final fun getOrganizationId ()Ljava/lang/String;
-	public final fun getProjectId ()Ljava/lang/String;
-	public final fun getScopeKey ()Ljava/lang/String;
-	public final fun getStateDirectory ()Ljava/io/File;
-	public final fun getValidateScope ()Lkotlin/jvm/functions/Function1;
-	public fun hashCode ()I
-	public fun toString ()Ljava/lang/String;
-}
-
-public final class dev/bota/sdk/ByoUploadResult {
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
-	public final fun component1 ()Ljava/lang/String;
-	public final fun component2 ()Ljava/lang/String;
-	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Ldev/bota/sdk/ByoUploadResult;
-	public static synthetic fun copy$default (Ldev/bota/sdk/ByoUploadResult;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ldev/bota/sdk/ByoUploadResult;
-	public fun equals (Ljava/lang/Object;)Z
-	public final fun getRecordingId ()Ljava/lang/String;
-	public final fun getUploadSessionId ()Ljava/lang/String;
-	public fun hashCode ()I
-	public fun toString ()Ljava/lang/String;
-}
-
 public final class dev/bota/sdk/ClientPresence {
 	public final fun nextReport (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
@@ -1292,15 +1231,12 @@ public final class dev/bota/sdk/RecordingManager {
 	public final fun cancelCurrentOperation (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun cancelEncryptedRecordingV2 (Ljava/util/UUID;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun confirmRecording (Ldev/bota/sdk/model/ConnectedDevice;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public final fun listByoRecordings (Ldev/bota/sdk/model/ConnectedDevice;Ldev/bota/sdk/ByoStorageOptions;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun listEncryptedUploadV2Recordings (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun listPendingRecordings (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun listRecordings (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun observeUploadOwnership (Ldev/bota/sdk/model/ConnectedDevice;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lkotlinx/coroutines/flow/Flow;
-	public final fun streamByoRecording (Ldev/bota/sdk/model/ConnectedDevice;Ldev/bota/sdk/ByoRecording;Ldev/bota/sdk/ByoStorageOptions;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun streamRecording-c9L97WU (Ldev/bota/sdk/model/ConnectedDevice;Ljava/lang/String;Ljava/lang/String;IJLdev/bota/sdk/model/StreamingChunkDestinationProvider;Ldev/bota/sdk/model/StreamingFinalizeHandler;)Lkotlinx/coroutines/flow/Flow;
 	public static synthetic fun streamRecording-c9L97WU$default (Ldev/bota/sdk/RecordingManager;Ldev/bota/sdk/model/ConnectedDevice;Ljava/lang/String;Ljava/lang/String;IJLdev/bota/sdk/model/StreamingChunkDestinationProvider;Ldev/bota/sdk/model/StreamingFinalizeHandler;ILjava/lang/Object;)Lkotlinx/coroutines/flow/Flow;
-	public final fun syncByoRecording (Ldev/bota/sdk/model/ConnectedDevice;Ldev/bota/sdk/ByoRecording;Ldev/bota/sdk/ByoStorageOptions;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun syncEncryptedRecordingV2 (Ldev/bota/sdk/model/ConnectedDevice;Ldev/bota/sdk/EncryptedUploadV2Recording;Ldev/bota/sdk/EncryptedUploadV2ProfileProvider;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun syncEncryptedRecordingV2 (Ldev/bota/sdk/model/ConnectedDevice;Ldev/bota/sdk/EncryptedUploadV2Recording;Ljava/util/UUID;Ldev/bota/sdk/EncryptedUploadV2ProfileProvider;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun syncRecording (Ldev/bota/sdk/model/ConnectedDevice;Ldev/bota/sdk/model/DeviceRecording;Ljava/lang/String;Z)Lkotlinx/coroutines/flow/Flow;
@@ -2587,6 +2523,131 @@ public final class dev/bota/sdk/model/WireValue$Unknown : dev/bota/sdk/model/Wir
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class dev/bota/sdk/speech/RecordingCaptureGap {
+	public fun <init> (II)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun copy (II)Ldev/bota/sdk/speech/RecordingCaptureGap;
+	public static synthetic fun copy$default (Ldev/bota/sdk/speech/RecordingCaptureGap;IIILjava/lang/Object;)Ldev/bota/sdk/speech/RecordingCaptureGap;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getOffset ()I
+	public final fun getSamples ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/speech/RecordingCaptureMapping {
+	public fun <init> (Ljava/lang/String;JJIIJZLjava/util/List;)V
+	public synthetic fun <init> (Ljava/lang/String;JJIIJZLjava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()J
+	public final fun component3 ()J
+	public final fun component4 ()I
+	public final fun component5 ()I
+	public final fun component6 ()J
+	public final fun component7 ()Z
+	public final fun component8 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;JJIIJZLjava/util/List;)Ldev/bota/sdk/speech/RecordingCaptureMapping;
+	public static synthetic fun copy$default (Ldev/bota/sdk/speech/RecordingCaptureMapping;Ljava/lang/String;JJIIJZLjava/util/List;ILjava/lang/Object;)Ldev/bota/sdk/speech/RecordingCaptureMapping;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDiscontinuity ()Z
+	public final fun getFirstSample ()J
+	public final fun getGaps ()Ljava/util/List;
+	public final fun getRevision ()J
+	public final fun getSampleRate ()I
+	public final fun getSamples ()I
+	public final fun getSourceClockId ()Ljava/lang/String;
+	public final fun getSourceEpoch ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/speech/RecordingSpeechAudioPlayback : dev/bota/sdk/speech/RecordingSpeechPlayback, java/lang/AutoCloseable {
+	public fun <init> (Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;)V
+	public synthetic fun <init> (Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun clear (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun close ()V
+	public fun drain (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun play ([BLjava/lang/String;J)Z
+	public final fun qualifyHeadphones ()Z
+}
+
+public final class dev/bota/sdk/speech/RecordingSpeechCleanupFailure : java/lang/Exception {
+	public fun <init> ()V
+}
+
+public abstract interface class dev/bota/sdk/speech/RecordingSpeechConnection {
+	public abstract fun changeTarget (Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun close (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun finish (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun qualifyHeadphones (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public abstract interface class dev/bota/sdk/speech/RecordingSpeechMessage {
+}
+
+public final class dev/bota/sdk/speech/RecordingSpeechMessage$Audio : dev/bota/sdk/speech/RecordingSpeechMessage {
+	public fun <init> ([B)V
+	public final fun getBytes ()[B
+}
+
+public final class dev/bota/sdk/speech/RecordingSpeechMessage$Control : dev/bota/sdk/speech/RecordingSpeechMessage {
+	public fun <init> ([B)V
+	public final fun getBytes ()[B
+}
+
+public final class dev/bota/sdk/speech/RecordingSpeechMicrophoneSession : dev/bota/sdk/speech/RecordingSpeechConnection {
+	public static final field Companion Ldev/bota/sdk/speech/RecordingSpeechMicrophoneSession$Companion;
+	public synthetic fun <init> (Ldev/bota/sdk/speech/RecordingSpeechSession;Ldev/bota/sdk/speech/SpeechMicrophoneCapture;Ldev/bota/sdk/speech/RecordingSpeechAudioPlayback;Lkotlinx/coroutines/CoroutineScope;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun changeTarget (Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun close (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun finish (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun getLive ()Ldev/bota/sdk/speech/RecordingSpeechSession;
+	public final fun getMicrophone ()Ldev/bota/sdk/speech/SpeechMicrophoneCapture;
+	public fun qualifyHeadphones (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class dev/bota/sdk/speech/RecordingSpeechMicrophoneSession$Companion {
+	public final fun start (Landroid/content/Context;[B[BLjava/lang/String;Ljava/time/Instant;Ldev/bota/sdk/speech/SpeechCaptureArchive;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun start$default (Ldev/bota/sdk/speech/RecordingSpeechMicrophoneSession$Companion;Landroid/content/Context;[B[BLjava/lang/String;Ljava/time/Instant;Ldev/bota/sdk/speech/SpeechCaptureArchive;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+}
+
+public abstract interface class dev/bota/sdk/speech/RecordingSpeechPlayback {
+	public abstract fun clear (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun drain (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun play ([BLjava/lang/String;J)Z
+}
+
+public final class dev/bota/sdk/speech/RecordingSpeechPolicy {
+	public static final field INSTANCE Ldev/bota/sdk/speech/RecordingSpeechPolicy;
+	public final fun evaluate ([B)[B
+}
+
+public final class dev/bota/sdk/speech/RecordingSpeechSession {
+	public fun <init> ([B[BLdev/bota/sdk/speech/RecordingSpeechPlayback;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;)V
+	public synthetic fun <init> ([B[BLdev/bota/sdk/speech/RecordingSpeechPlayback;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun bindMicrophone (Ljava/lang/String;)V
+	public final fun changeTarget (Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun close (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun finish (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun offer (IJ[B)Z
+	public final fun ready (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun setRoute (ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public abstract interface class dev/bota/sdk/speech/RecordingSpeechTransport {
+	public abstract fun close (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun receive (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun send (Ldev/bota/sdk/speech/RecordingSpeechMessage;)V
+}
+
+public final class dev/bota/sdk/speech/RecordingSpeechWebSocket : dev/bota/sdk/speech/RecordingSpeechTransport {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public fun close (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun receive (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun send (Ldev/bota/sdk/speech/RecordingSpeechMessage;)V
+}
+
 public final class dev/bota/sdk/speech/SpeechCaption {
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;ZILjava/lang/String;Ljava/lang/String;JLjava/lang/String;ILjava/lang/String;JJDDLjava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
 	public final fun component1 ()Ljava/lang/String;
@@ -2675,7 +2736,8 @@ public final class dev/bota/sdk/speech/SpeechCaptionRequest {
 public final class dev/bota/sdk/speech/SpeechCaptureArchive {
 	public static final field Companion Ldev/bota/sdk/speech/SpeechCaptureArchive$Companion;
 	public synthetic fun <init> (Ldev/bota/sdk/speech/SpeechCaptureStorage;Ldev/bota/sdk/speech/SpeechCaptureKeys;Ljavax/crypto/SecretKey;Lorg/json/JSONObject;Ljava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun append (J[BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun append (J[BLjava/util/List;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun append$default (Ldev/bota/sdk/speech/SpeechCaptureArchive;J[BLjava/util/List;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public final fun beginClock (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun close (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun endClock (JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -2750,7 +2812,9 @@ public final class dev/bota/sdk/speech/SpeechCapturePump {
 }
 
 public final class dev/bota/sdk/speech/SpeechCapturePump$Companion {
+	public final fun start (Ldev/bota/sdk/speech/SpeechCaptureArchive;Ljava/lang/String;Lkotlin/jvm/functions/Function0;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun start (Ldev/bota/sdk/speech/SpeechCaptureArchive;Lkotlin/jvm/functions/Function0;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun start$default (Ldev/bota/sdk/speech/SpeechCapturePump$Companion;Ldev/bota/sdk/speech/SpeechCaptureArchive;Ljava/lang/String;Lkotlin/jvm/functions/Function0;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public static synthetic fun start$default (Ldev/bota/sdk/speech/SpeechCapturePump$Companion;Ldev/bota/sdk/speech/SpeechCaptureArchive;Lkotlin/jvm/functions/Function0;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 }
 
@@ -2988,15 +3052,17 @@ public final class dev/bota/sdk/speech/SpeechMediaPort$DefaultImpls {
 
 public final class dev/bota/sdk/speech/SpeechMicrophoneCapture {
 	public static final field Companion Ldev/bota/sdk/speech/SpeechMicrophoneCapture$Companion;
-	public synthetic fun <init> (Ldev/bota/sdk/speech/SpeechMicrophoneSource;Ldev/bota/sdk/speech/SpeechCapturePump;JLkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ldev/bota/sdk/speech/SpeechMicrophoneSource;Ldev/bota/sdk/speech/SpeechCapturePump;JLkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Ljava/lang/String;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getClockId ()Ljava/lang/String;
+	public final fun getNextLiveSample ()J
 	public final fun interruptAndStop (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun renew (Ljava/time/Instant;)V
 	public final fun stop (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class dev/bota/sdk/speech/SpeechMicrophoneCapture$Companion {
-	public final fun start (Landroid/content/Context;Ldev/bota/sdk/speech/SpeechCaptureArchive;Ljava/time/Instant;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public static synthetic fun start$default (Ldev/bota/sdk/speech/SpeechMicrophoneCapture$Companion;Landroid/content/Context;Ldev/bota/sdk/speech/SpeechCaptureArchive;Ljava/time/Instant;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun start (Landroid/content/Context;Ldev/bota/sdk/speech/SpeechCaptureArchive;Ljava/time/Instant;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Ljava/lang/String;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun start$default (Ldev/bota/sdk/speech/SpeechMicrophoneCapture$Companion;Landroid/content/Context;Ldev/bota/sdk/speech/SpeechCaptureArchive;Ljava/time/Instant;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Ljava/lang/String;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 }
 
 public abstract interface class dev/bota/sdk/speech/SpeechObserver {

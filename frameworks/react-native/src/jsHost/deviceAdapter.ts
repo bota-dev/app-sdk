@@ -8,6 +8,7 @@ import type { BotaDeviceAdapter } from '../runtimeAdapter';
 import type { BotaJsHostPorts, GattAddress, JsHostContext, JsHostSubscription, JsValue, RawJsCoreFactory } from './contracts';
 import { BotaJsHostExecutor, BotaJsHostError } from './executor';
 import { JsDeviceControls } from './deviceControls';
+import { readUploadCapabilities } from './capabilityReader';
 import type { JsControlConnection, ResolveBoundDeviceModel } from './deviceControls';
 import { JsFileEffects } from './fileEffects';
 import { JsEncryptedUploadV2Catalog, JsEncryptedUploadV2Host, JsUploadContextExchange } from './encryptedUploadV2';
@@ -237,6 +238,10 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
   const address = (device: NativeConnectedDevice, service: string, characteristic: string): GattAddress => ({
     peripheralId: device.id, serviceUuid: text(metadata[service]), characteristicUuid: text(metadata[characteristic]),
   });
+  const uploadCapabilities = (device: NativeConnectedDevice, context: JsHostContext) => readUploadCapabilities(
+    endpoint => executor.gatt(context, () => ports.ble.read(endpoint, context)),
+    address(device, 'SERVICE_BOTA_STORAGE', 'CHAR_STORAGE_TRANSFER_CAPABILITIES_V2'),
+    address(device, 'SERVICE_BOTA_UPLOAD_EXTENSIONS', 'CHAR_STORAGE_TRANSFER_CAPABILITIES_EXT'));
   const closeControls = async (context: JsHostContext) => {
     await deviceControls.close(context);
     deviceControls = new JsDeviceControls({ ports, core, connection: () => connection,
@@ -548,7 +553,7 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
       const legacy = core.codec('decodeRecordingList', { bytes: Array.from(legacyValue) });
       const capabilityAddress = address(device, 'SERVICE_BOTA_STORAGE', 'CHAR_STORAGE_TRANSFER_CAPABILITIES_V2');
       let value;
-      try { value = await executor.gatt(context, () => ports.ble.read(capabilityAddress, context)); }
+      try { value = await uploadCapabilities(device, context); }
       catch (error) {
         const failure = error && typeof error === 'object' ? error as Record<string, unknown> : {};
         if (failure.code === 'characteristic_not_found' && failure.characteristicUuid === capabilityAddress.characteristicUuid &&
@@ -699,8 +704,7 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
                 scope: lease.scope, serialNumber: device.serialNumber, recording: recording as unknown as JsValue,
               }));
               journalKey = text(localIdentity.journalKey);
-              const capability = await executor.gatt(context, () => ports.ble.read(
-                address(device, 'SERVICE_BOTA_STORAGE', 'CHAR_STORAGE_TRANSFER_CAPABILITIES_V2'), context));
+              const capability = await uploadCapabilities(device, context);
               if (!(capability instanceof Uint8Array)) throw new BotaJsHostError('invalid_capability_value', context.operation);
               const nativeCapability = { ...object(core.codec('nativeEncryptedUploadV2Capability', { bytes: Array.from(capability) })) };
               let localCapability: Uint8Array | undefined;

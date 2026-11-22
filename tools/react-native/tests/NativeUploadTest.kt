@@ -750,6 +750,11 @@ class NativeUploadTest {
         h.response = { if (it.path.endsWith("/recordings")) JSONObject().put("id", "rec_a") else session() }
         h.adapter(now).prepare(supplied.toString())
         assertEquals(listOf("$prefix/recordings", "$prefix/recordings/rec_a/encrypted-upload-v2/sessions"), h.requests.map { it.path })
+        val capture = supplied.getJSONObject("recording")
+        val created = h.requests.first().body!!
+        assertEquals(capture.getString("uuid"), created.getString("recording_uuid"))
+        assertEquals(capture.getLong("generation"), created.getLong("recording_generation"))
+        assertFalse(created.has("recorded_at"))
       } finally { h.directory.deleteRecursively() }
     }
     for (prefix in listOf("/", "//evil.example", "v1", "/v1/", "/v1//nested", "/v1/../nested", "/v1?x=1", "/v1#x", "/v%31")) {
@@ -880,6 +885,26 @@ class NativeUploadTest {
           h.requests.clear()
           material.submitManifest(manifest, evidence())
           assertEquals(if (state in setOf("staging", "staged")) 1 else 0, h.requests.size)
+        }
+      } finally { h.directory.deleteRecursively() }
+    }
+  }
+
+  @Test fun genericTargetHeadersRequireCapabilityAndRejectFramingAndDuplicates() = runBlocking {
+    for (generic in listOf(false, true)) {
+      val h = harness()
+      try {
+        h.response = { session("staging") }
+        val value = resumed()
+        if (generic) value.getJSONObject("capability").put("flags", value.getJSONObject("capability").getLong("flags") or 0x400L)
+        val result = h.adapter(now).prepare(value.toString())
+        val material = BotaDeviceSDKEncryptedUploadV2Materials.remove(result["materialRegistrationId"] as String)!!
+        for (headers in listOf(JSONObject().put("Authorization", "Bearer target-only").put("x-ms-blob-type", "BlockBlob"),
+          JSONObject().put("Host", "other.example"), JSONObject().put("X-Test", "a").put("x-test", "b"),
+          JSONObject().put("X-Test", "a".repeat(2048)))) {
+          h.response = { JSONObject().put("method", "PUT").put("url", "https://target.example/object").put("headers", headers) }
+          if (generic && headers.has("Authorization")) assertEquals("Bearer target-only", material.stagingRequest(evidence()).header("Authorization"))
+          else expectFailure("BOTA_UPLOAD_INVALID_DOCUMENT") { material.stagingRequest(evidence()) }
         }
       } finally { h.directory.deleteRecursively() }
     }

@@ -7,6 +7,17 @@ storage at recording creation and supplies its HTTPS target and recipient key.
 No Bota/BYO mode is sent to the firmware. Original ordinary clients retain their
 existing protocol and verification guarantees.
 
+The original storage capability (`B07A0004-0006`) retains its old flag set.
+New Apple, Android and JS hosts first read the optional
+`B07A000D-0000-1000-8000-00805F9B34FB` service's
+`B07A000D-0001-1000-8000-00805F9B34FB` characteristic. It contains the complete
+24-byte ordinary snapshot plus extension flags. Only explicit discovery absence
+falls back to the old characteristic; transport errors, cancellation and malformed
+values do not. BLE transport errors preserve the captured peripheral, service
+and characteristic so absence is matched to that exact endpoint. Shared Rust
+validates and hashes the selected exact bytes. Existing
+Apps never see the new bit through their old read, preserving Bota uploads.
+
 The capability manifest allocates `0x0400` (`generic_target_v1`). Authorization
 flag `0x0010` binds an immutable generic target; the ordinary 580-byte manifest
 and HPKE rules remain unchanged. A result-2 receipt is admitted only with the
@@ -79,9 +90,11 @@ authenticated EndUser after an owned-device read. Its existing 23 tests and
 three supplementary actual-handler fixtures pass (exact forwarding, unchanged
 409 and foreign-device refusal); this is source verification, not deployed
 proxy attestation. The compatibility Android `NativeUpload.kt` and Apple
-`UploadOperation.swift` recording-create HTTP bodies are separate handwritten
-paths and still omit these fields; this Rust planner change does not claim
-their correction. Installed OS ports and native contracts remain unchanged.
+`UploadOperation.swift` recording-create HTTP bodies also preserve the capture
+UUID and generation, allowing the ordinary backend to arbitrate the identity
+and reserve the selected destination before session creation. The optional
+`recorded_at` remains omitted by these clients; metadata timestamps do not make
+it a required replay field. Installed OS ports remain unchanged.
 
 At isolated source `11afdedd`, formatting passes and the new generated-host
 fixture is red against the preceding committed core. Offline MSVC compilation
@@ -109,8 +122,9 @@ nine added identity checks bring the new canonical run below to 777 checks.
 Reviewed against Upload Management §1.1: exact create identity and safe conflict
 refusal match source/host regressions. Canonical-branch runtime execution passes
 below; actual Apple pin reproduction, complete exact-main CI/License/49-file
-preservation, publication and physical acceptance remain separate pending gates. Native
-compatibility HTTP bodies described above are outside this planner correction.
+preservation, publication and physical acceptance remain separate pending gates.
+That historical run did not qualify native compatibility creation; its current
+contract is specified above.
 
 ### Apple checksum and manifest preparation
 

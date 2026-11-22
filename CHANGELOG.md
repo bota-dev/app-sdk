@@ -19,6 +19,13 @@ tracked separately.
 
 ## Unreleased
 
+- Unify encrypted uploads on the ordinary managed-upload protocol with generic
+  target authorization and completion receipts. Add optional capability discovery
+  while preserving legacy ordinary firmware fallback. Remove the unpublished
+  BYO factories and independent upload workflows; storage selection and customer
+  protocol adaptation belong to the backend. Publication and customer/device
+  qualification remain separate.
+
 - Use the native recording owner in the internal React Native App. Remove the
   unpublished room/session JS entries, their generated-core RPC handlers and
   old LiveKit consumer dependencies. Retain caption/target/stop/close controls,
