@@ -15,8 +15,6 @@ import type { JsEncryptedUploadV2Material } from './encryptedUploadV2';
 import { JsMaterialEffects } from './materialEffects';
 import { JsStreamingEffects } from './streamingEffects';
 import { validateJsHostPorts } from './ports';
-import { JsByoBleLink } from './byoEffects';
-import type { JsByoDeviceLink } from './byoEffects';
 import { JsRecordingUploads } from './recordingUploads';
 import type { JsRecordingUploadTarget } from './recordingUploads';
 import type { JsV2Fetch } from './uploadBackendV2';
@@ -41,8 +39,6 @@ export type JsDeviceAdapter = BotaDeviceAdapter & {
   profileContext(operationId: string, signal?: AbortSignal): JsHostContext;
   checkOperation(operationId: string): void;
   markCleanupFailed(error: unknown): void;
-  withByoDevice<T>(device: JsValue, operationId: string, live: boolean, signal: AbortSignal,
-    body: (context: JsHostContext, link: JsByoDeviceLink) => Promise<T>): Promise<T>;
 };
 interface OperationLease {
   device: NativeConnectedDevice;
@@ -120,7 +116,6 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
   const materials = new Map<string, { operationId: string; material: JsEncryptedUploadV2Material }>();
   const v2Hosts = new Map<string, JsEncryptedUploadV2Host>();
   const retiredPhysicalGenerations = new Set<string>();
-  let byoReservation: { operationId: string; selectedLive: boolean } | undefined;
   let recordingUploads: JsRecordingUploads | undefined;
   let recordingContext: ((operation: string, operationId: string) => Promise<JsHostContext>) | undefined;
   const emit = (event: string, value: unknown) => {
@@ -360,51 +355,6 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
   };
   const adapter: JsDeviceAdapter = {
     markCleanupFailed(error) { executor.markCleanupFailed(error); },
-    async withByoDevice(value, operationId, live, signal, body) {
-      const device = captured(value as unknown as NativeConnectedDevice);
-      if (operationLeases.has(operationId)) throw new BotaJsHostError('operation_in_progress', 'ByoUpload');
-      const lease: OperationLease = { device, physicalGeneration: connection!.generation,
-        scope: ports.persistence.namespace, cancelled: false };
-      operationLeases.set(operationId, lease);
-      try {
-        return await executor.direct('ByoUpload', async context => {
-          lease.context = context;
-          const check = (candidate: JsHostContext) => {
-            executor.check(candidate);
-            if (candidate.signal === context.signal) checkLease(lease, candidate.operation);
-            else if (connection?.generation !== lease.physicalGeneration || connection.device.id !== device.id ||
-                connection.device.serialNumber !== device.serialNumber) throw new BotaJsHostError('identity_mismatch', candidate.operation);
-          };
-          check(context);
-          await deviceControls.execute('readIdentity', [device], context);
-          check(context);
-          const policy = object(core.codec('byoHostPolicy', { mode: live ? 'stream' : 'sync', selectedLive: live }));
-          const exchange = new JsUploadContextExchange({ core, ports,
-            peripheralId: device.id, maximumWriteBytes: device.mtu - 3, maximumSignedBlobBytes: safeNumber(policy.maximumSignedBlobBytes),
-            gatt: (ctx, work) => executor.gatt(ctx, work), checkOwner: check,
-            onCleanupFailure: error => executor.markCleanupFailed(error) });
-          const link = new JsByoBleLink({ core, ble: ports.ble, peripheralId: device.id, maximumWriteBytes: device.mtu - 3,
-            context, checkOwner: check, gatt: (ctx, work) => executor.gatt(ctx, work),
-            refresh: (provider, ctx) => exchange.refresh(provider, ctx),
-            onCleanupFailure: error => executor.markCleanupFailed(error),
-            setLive: selectedLive => { if (byoReservation?.operationId === operationId) byoReservation.selectedLive = selectedLive; } });
-          byoReservation = { operationId, selectedLive: live };
-          let started = false;
-          try { await link.start(); started = true; check(context); return await body(context, link); }
-          finally {
-            const cleanup = { ...context, signal: new AbortController().signal };
-            let failure: unknown;
-            try {
-              if (started && !retiredPhysicalGenerations.has(lease.physicalGeneration)) await link.release(cleanup);
-              else await link.close();
-            } catch (error) { failure = error; executor.markCleanupFailed(error); }
-            try { await exchange.close(); } catch (error) { failure ??= error; executor.markCleanupFailed(error); }
-            if (byoReservation?.operationId === operationId) byoReservation = undefined;
-            if (failure) throw failure;
-          }
-        }, { operationId, signal });
-      } finally { operationLeases.delete(operationId); }
-    },
     checkOperation(operationId) {
       const lease = operationLeases.get(operationId);
       if (!lease) throw new BotaJsHostError('stale_material_request', 'TransferRecording');
@@ -585,12 +535,6 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
     };
   }
   for (const name of controls) (adapter as Record<string, unknown>)[name] = (...args: unknown[]) => {
-    const reservation = byoReservation;
-    if (reservation) {
-      const policy = object(core.codec('byoHostPolicy', { mode: 'sync', selectedLive: reservation.selectedLive, control: name }));
-      if (policy.allowControl === true) return executor.borrowDirect(reservation.operationId,
-        context => deviceControls.execute(name, args, context));
-    }
     return queueControl(name, args);
   };
 

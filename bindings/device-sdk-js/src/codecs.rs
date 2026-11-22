@@ -272,9 +272,6 @@ impl CodecState {
         if crate::recording_upload::supports(name) {
             return crate::recording_upload::call(name, value);
         }
-        if crate::byo::supports(name) {
-            return crate::byo::execute(name, value);
-        }
         if crate::planners::supports(name) {
             return crate::planners::execute(name, value);
         }

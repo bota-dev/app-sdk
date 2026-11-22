@@ -4,7 +4,6 @@ pub use ble_link_security::*;
 pub use find_device::*;
 mod country_config;
 pub use country_config::*;
-mod byo_ble;
 mod cursor;
 mod diagnostics;
 mod encode;
@@ -22,7 +21,6 @@ mod settings;
 mod status;
 mod transfer;
 
-pub use byo_ble::*;
 pub use diagnostics::*;
 pub use encode::*;
 pub use encrypted_upload_v2::*;

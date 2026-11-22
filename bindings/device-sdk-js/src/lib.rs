@@ -4,7 +4,6 @@
 //! calls RPC with engine/buffer handles, copies the output, then frees both buffers.
 //! No platform IO, wasm-bindgen, imported JS objects, or exported i64/u64 values.
 
-mod byo;
 mod codecs;
 mod dto;
 mod engine;

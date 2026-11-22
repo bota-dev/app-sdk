@@ -9,16 +9,17 @@
     "Local WiFi compatibility: command_from_packet adds only local_wifi: false to the existing encrypted-v2 request. The C ABI remains BLE-only; allowed fields, PacketFields validation and every reviewed unsafe boundary are unchanged.",
     "Secure WiFi v2 review (2026-11-03): protocol.rs changes only the owned encode regression to require UnsupportedOperation/Provision for legacy WiFi credentials. Packet ownership, the encode call, input validation and all annotated unsafe boundaries are unchanged. All 85 existing dispositions remain applicable.",
     "Speech integration review (2026-11-04): lib.rs only adds the speech module and public exports; all existing annotated ownership and unsafe boundaries are unchanged. test-emulator-lane.test.mjs adds fixed-argv speech admission cases against its temporary fixture; the existing annotated shell-free spawn helper is unchanged. All 85 existing dispositions remain applicable.",
-    "Recording-owner compatibility review (2026-11-16): lib.rs changes only Rustfmt re-export layout/order; the entire body from command capability exports onward, including every annotated unsafe boundary, is unchanged. The launcher exception follows RecordingActivity, which ignores Intent URI/extras, requires explicit Start and microphone permission, keeps the operator code out of saved state and clears it on departure. recordingLauncherIgnoresIntentAuthority exercises the current public launcher; no rule or scan scope is removed."
+    "Recording-owner compatibility review (2026-11-16): lib.rs changes only Rustfmt re-export layout/order; the entire body from command capability exports onward, including every annotated unsafe boundary, is unchanged. The launcher exception follows RecordingActivity, which ignores Intent URI/extras, requires explicit Start and microphone permission, keeps the operator code out of saved state and clears it on departure. recordingLauncherIgnoresIntentAuthority exercises the current public launcher; no rule or scan scope is removed.",
+    "Unified-upload retirement review (2026-11-22): command.rs removes only the unused BYO bounded-copy wrapper; remaining PacketFields shape, ownership and bounds checks are unchanged. protocol.rs removes the four unpublished BYO dispatches and their unsafe calls; remaining dispatch validation and unsafe boundaries are unchanged. packet.rs reserves the retired numeric slots without reassignment. Deleted BYO source dispositions remain historical; no active suppression or scan scope is added."
   ],
   "original_source_revision": "dc51e35dd5f968ad2b2847d0a08742757cf9fdbb",
   "reviewed_files": {
-    "bindings/device-sdk-ffi/src/command.rs": "65765651344563798de0b4fa023f85baaea6a063820da8c4a41b9ee3cb16b458",
+    "bindings/device-sdk-ffi/src/command.rs": "cb78a4101c4168bfcd80d384a4f6855db90e1de1b6eda0441c859d3c43ff2bb5",
     "bindings/device-sdk-ffi/src/event.rs": "ef75367e23d5c50e3688a76b6e02b6b669a808eb194e47a7691aed56e14183e1",
     "bindings/device-sdk-ffi/src/lib.rs": "03483156ac6c5d8a4f8403a950d94ae615c5edbd907cb40bb6212100d698a9d1",
     "bindings/device-sdk-ffi/src/output.rs": "937ec7839d7d3cee8627b7f2b4ddaf79d99e4598184a9645eadbef35ad8f5f46",
-    "bindings/device-sdk-ffi/src/packet.rs": "cad11458b11c6ddefe8205b43e75a6df8ec1d0a58598086677440272af3cf69d",
-    "bindings/device-sdk-ffi/src/protocol.rs": "efbad6653b3fc1d0ff64491d3f3ae71e130a8326b6907c6a89006fb3f05938fa",
+    "bindings/device-sdk-ffi/src/packet.rs": "8965c151066431ed3e5c5d2d7a1791a7aa711eee119c129ec8d4aed0e12b4ecb",
+    "bindings/device-sdk-ffi/src/protocol.rs": "475e404221f9a8ed98fe259e75a7d4e1b5b30ec75ab3d1ebc00fbab613474eb8",
     "bindings/device-sdk-ffi/src/protocol/byo_ble.rs": "dab32cf60949b109d512a62e70e21736021d9b4044cb9310aa9b94b0f32a6a81",
     "bindings/device-sdk-ffi/src/protocol/byo_recovery.rs": "7fe1df556cce2f5812f9068ab26f990133b957c53dfe5cb33f26e1dbd1fb79d2",
     "bindings/device-sdk-ffi/src/protocol/v2_demo.rs": "469f2ad2bfeab53015e99529e9014f20e294b672a2dd6e658f43cbc774e17b0c",

@@ -20,7 +20,7 @@ fn unknown_capability_vector_uses_a_bit_outside_the_current_known_mask() {
         "the unknown-capability fixture must not advertise only known bits"
     );
     let flags = u32::from_le_bytes(bytes[4..8].try_into().unwrap());
-    assert_eq!(flags & !0x3ff, 0x400);
+    assert_eq!(flags & !0x7ff, 0x800);
     assert_eq!(case["expectedError"], "noncanonical_encoding");
 }
 

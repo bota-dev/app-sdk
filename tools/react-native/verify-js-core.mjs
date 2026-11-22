@@ -4,7 +4,6 @@ import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runByoConformance } from './byo-conformance.mjs';
 import { runManagedRouteConformance } from './managed-route-conformance.mjs';
 import { runBoundModelConformance } from './bound-model-conformance.mjs';
 
@@ -61,11 +60,6 @@ codec('encodeFirmwareData', { sequence: 513, payload: [0, 128, 255] });
 codec('decodeText', { bytes: [0xe4, 0xb8, 0xad], required: true });
 codec('decodeEncryptedUploadV2Capabilities', { bytes: [1, 2, 24, 0, 127, 0, 0, 0, 0, 4, 0, 4, 244, 0, 16, 0, 8, 0, 0, 0, 16, 0, 0, 0] });
 const v2Capabilities = expected.at(-1).result;
-runByoConformance(codec, (response, label) => {
-  assert.equal(response.ok, true, `${label}: ${JSON.stringify(response)}`); return response.result;
-}, (condition, message) => assert.ok(condition, message),
-(actual, expected, message) => assert.deepEqual(actual, expected, message),
-text => Uint8Array.from(Buffer.from(text, 'utf8')));
 const localCapabilities = [2, 2, 16, 0, 31, 0, 0, 0, 3, 0, 185, 0, 182, 0, 182, 0];
 
 const countryVector = JSON.parse(readFileSync(resolve(root, 'protocol/vectors/country-config-v1.json'), 'utf8'));
@@ -164,4 +158,4 @@ assert.equal(result.status, 0, result.stderr);
 const actual = result.stdout.trim().split(/\r?\n/).map(line => JSON.parse(line));
 assert.equal(actual.length, expected.length);
 for (let index = 0; index < actual.length; index++) assert.deepEqual(actual[index], expected[index], `Native Rust / generated JS divergence at request ${index}`);
-console.log(`Native Rust and generated JavaScript agree on ${actual.length} RPCs across all ${commands.length} core commands and the complete BYO batch action trace.`);
+console.log(`Native Rust and generated JavaScript agree on ${actual.length} RPCs across all ${commands.length} core commands.`);

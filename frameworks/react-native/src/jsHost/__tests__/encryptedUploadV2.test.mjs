@@ -524,7 +524,7 @@ test('catalog cleanup failure invokes shared owner retention and blocks a second
   assert.equal(f.calls.length, before);
 });
 
-test('managed and BYO reuse one context exchanger over only BLE/random ports with exact generation fencing', async () => {
+test('ordinary uploads reuse one context exchanger over only BLE/random ports with exact generation fencing', async () => {
   const f = protectedFixture();
   const exchanger = new JsUploadContextExchange({ core: f.core, ports: { ble: f.ports.ble, randomBytes: f.ports.randomBytes },
     peripheralId: 'physical', maximumWriteBytes: 244, maximumSignedBlobBytes: 1024,

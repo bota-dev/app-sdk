@@ -26,6 +26,7 @@ private final class FakeHTTP: UploadHTTP {
 @main
 private struct AppleUploadTests {
   @MainActor static func main() async throws {
+    try await genericTargetHeaders()
     try await protectedStreamingStatus()
     try await journalAndCredentials()
     try await prepareAndResume()
@@ -47,7 +48,7 @@ private struct AppleUploadTests {
     try await markedAdmissionRecovery()
     try await markedSuccessorCompletionFences()
     try await markedPostManifestAdmissionFences()
-    print("PASS Apple upload: 21 suites including protected streaming status and marked recovery fences")
+    print("PASS Apple upload: 22 suites including protected streaming status and marked recovery fences")
   }
 
   @MainActor private static func protectedStreamingStatus() async throws {
@@ -843,6 +844,29 @@ private struct AppleUploadTests {
     private var current = Date(timeIntervalSince1970: 1_700_000_000)
     func now() -> Date { lock.withLock { current } }
     func expire() { lock.withLock { current = Date(timeIntervalSince1970: 4_100_000_000) } }
+  }
+
+  @MainActor private static func genericTargetHeaders() async throws {
+    for generic in [false, true] {
+      let (ordinary, journal, root, http, credentials) = try fixture()
+      defer { try? FileManager.default.removeItem(at: root) }
+      var input = ordinary
+      if generic { input.capability.flags |= 0x400 }
+      try journal.save(input, entry: .init(recordingId: "rec_one", sessionId: sessionID, ownerRevision: 1))
+      http.handler = { _ in try json(session()) }
+      let op = operation(input, journal, http, credentials)
+      _ = try await op.prepare()
+      let evidence = UploadEvidence(ciphertextLength: 512, ciphertextSHA256: Data(repeating: 0xaa, count: 32),
+        manifestLength: 580, manifestSHA256: Data(repeating: 0, count: 32))
+      for headers in [["Authorization": "Bearer target-only", "x-ms-blob-type": "BlockBlob"],
+        ["Host": "other.example"], ["X-Test": "a", "x-test": "b"], ["X-Test": String(repeating: "a", count: 2048)]] {
+        http.handler = { _ in try json(["url": "https://target.example/object", "method": "PUT", "headers": headers]) }
+        if generic && headers["Authorization"] != nil {
+          let request = try await op.stagingRequest(evidence)
+          try expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer target-only", "Only target grant authorization")
+        } else { try await rejects(.invalidDocument) { _ = try await op.stagingRequest(evidence) } }
+      }
+    }
   }
 
   @MainActor private static func stagingAndDurability() async throws {

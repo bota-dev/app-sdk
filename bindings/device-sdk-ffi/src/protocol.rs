@@ -2,8 +2,6 @@ use crate::{
     ABI_VERSION, BotaDeviceSdkPacketV1, BotaDeviceSdkPacketViewV1, command::PacketFields, field_id,
     packet_kind,
 };
-mod byo_ble;
-mod byo_recovery;
 mod v2_demo;
 use bota_device_sdk_core::{
     error::{DeviceSdkError, ErrorCode, Operation},
@@ -148,11 +146,6 @@ pub(crate) unsafe fn decode(
     log_decoder: &mut DeviceLogDecoder,
 ) -> Result<BotaDeviceSdkPacketV1, DeviceSdkError> {
     validate_packet(packet)?;
-    if packet.kind == packet_kind::PROTOCOL_DECODE_BYO_BLE {
-        // The live typed C packet passes header validation and the BYO helper checks field bounds.
-        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
-        return unsafe { byo_ble::process(packet, true) };
-    }
     if matches!(
         packet.kind,
         packet_kind::PROTOCOL_DECODE_UPLOAD_CONTEXT_SNAPSHOT
@@ -463,24 +456,6 @@ pub(crate) unsafe fn encode(
     // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     let fields = unsafe { PacketFields::new(packet.fields, packet.field_count)? };
     let bytes = match packet.kind {
-        packet_kind::PROTOCOL_BYO_CUSTOMER => {
-            fields.validate_allowed(&[field_id::COMMAND, field_id::VALUE])?;
-            let command = fields.required_u64(field_id::COMMAND)?;
-            let input = fields.required_bytes_bounded(field_id::VALUE, 32768)?;
-            let bytes = bota_device_sdk_core::model::byo_customer::adapter(command, &input)
-                .map_err(|_| invalid("invalid BYO customer adapter input"))?;
-            return Ok(BotaDeviceSdkPacketV1::new(packet.kind).with_bytes(field_id::VALUE, bytes));
-        }
-        packet_kind::PROTOCOL_ENCODE_BYO_BLE => {
-            // The validated live C packet is forwarded to the BYO helper, which bounds fields to 512 bytes.
-            // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
-            return unsafe { byo_ble::process(packet, false) };
-        }
-        packet_kind::PROTOCOL_REDUCE_BYO_RECOVERY => {
-            // The validated live C packet is forwarded to the bounded BYO recovery field decoder.
-            // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
-            return unsafe { byo_recovery::reduce(packet) };
-        }
         packet_kind::PROTOCOL_ENCODE_UPLOAD_CONTEXT_BEGIN => {
             fields.validate_allowed(&[field_id::CONTEXT_ATTEMPT_ID])?;
             bota_device_sdk_core::protocol::encode_upload_context_begin(to_u32(

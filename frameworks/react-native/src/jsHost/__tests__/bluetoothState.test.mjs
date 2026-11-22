@@ -165,17 +165,19 @@ test('a generated host without state primitives stays unknown rather than inferr
 test('a late source-factory failure tears down every constructed resource before disposing its core', async () => {
   const coreModule = loadSource('core.ts');
   const original = coreModule.createGeneratedJsCore;
-  const failure = new Error('BYO policy construction failed');
+  const clientModule = loadSource('../client.ts');
+  const originalClient = clientModule.createBotaDeviceSDK;
+  const failure = new Error('Client construction failed');
   const disposed = deferred();
   let disposals = 0;
   coreModule.createGeneratedJsCore = () => {
     const core = original();
     return { ...core,
-      codec(name, value) { if (name === 'byoLimits') throw failure; return core.codec(name, value); },
       dispose() { disposals++; core.dispose(); disposed.resolve(); },
     };
   };
   const f = fixture();
+  clientModule.createBotaDeviceSDK = () => { throw failure; };
   const signal = f.scope.signal;
   const active = new Set();
   const add = signal.addEventListener.bind(signal), remove = signal.removeEventListener.bind(signal);
@@ -197,6 +199,7 @@ test('a late source-factory failure tears down every constructed resource before
     assert.equal(active.size, 0); assert.equal(disposals, 1);
   } finally {
     coreModule.createGeneratedJsCore = original;
+    clientModule.createBotaDeviceSDK = originalClient;
     await f.source.dispose(); f.core.dispose();
   }
 });

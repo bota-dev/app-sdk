@@ -62,7 +62,7 @@ fn reserved_bytes_and_unknown_critical_bits_are_rejected() {
     assert_noncanonical(decode_encrypted_upload_v2_capabilities(&capability));
 
     let mut capability = valid_capability();
-    capability[4..8].copy_from_slice(&0x400_u32.to_le_bytes());
+    capability[4..8].copy_from_slice(&0x800_u32.to_le_bytes());
     assert_noncanonical(decode_encrypted_upload_v2_capabilities(&capability));
 
     let mut abort = valid_transfer(16, 0x24);
@@ -578,4 +578,13 @@ fn decoded_variable_variants_expose_borrowed_payloads() {
         decode_encrypted_upload_v2_signed_blob(&blob).unwrap(),
         EncryptedUploadV2SignedBlob::Data { data: b"xyz", .. }
     ));
+}
+
+#[test]
+fn generic_target_capability_preserves_ordinary_bounds() {
+    let mut packet = valid_capability();
+    packet[4..8].copy_from_slice(&0x77f_u32.to_le_bytes());
+    let cap = decode_encrypted_upload_v2_capabilities(&packet).unwrap();
+    assert_eq!(cap.flags, 0x77f);
+    assert_eq!(cap.maximum_manifest_bytes, 1024);
 }

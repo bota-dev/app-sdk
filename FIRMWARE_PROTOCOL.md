@@ -449,105 +449,29 @@ HTTP-to-WS return are forbidden; URL renewal is not HTTP range resume. Restore
 persisted source/identity after reboot, fence late writers and keep modem
 close/quarantine ordering. Marked recordings retain their separate dual proofs.
 
-Bota storage and BYO share encrypt-once source/lifecycle rules; BYO still has its
-own grants, footer, customer verification and transport. See the
-[ordinary encrypted-upload reference](https://docs.bota.dev/api-reference/uploads/coordinated-encryption)
-and [streaming flow](https://docs.bota.dev/guides/streaming-upload#encrypted-ordinary-websocket-source-preview).
-Those source-preview pages and this reference do not establish published support.
-
 ## BYO Customer Storage
 
-Customer-hooks-v2 source keeps the BLE v3 framing and original ciphertext READ
-bytes unchanged. The SDK packages finalized context/authorization/manifest after
-BOTAENC2, using a uint32BE metadata length and `BOTABYO1` trailer. A transfer ACK
-may release relay RAM but never authorize source cleanup; final signed receipt
-verification/readback remains mandatory. Capability admission and contract pinning,
-16 KiB segments, metadata reserve and recovery are specified in
-[the uploader contract](docs/parity/byo-storage.md#customer-hooks-v2-source-implementation).
-The native SDK ABI adds encode packet `0x0530`: COMMAND (field 97) is 1 for the
-canonical trailer, 2 for exact transfer-proof validation, or 3 for PUT headers;
-VALUE (field 30) contains bounded JSON (at most 32 KiB), and returns bytes. This
-is a host ABI allocation, not a firmware opcode or a change to BLE v3.
+Storage selection is cloud-owned. Both destinations use ordinary encrypted-v2
+sessions, BOTAENC2, the 408-byte authorization, 580-byte manifest and 336-byte
+receipt. No customer JSON, BOTABYO1 footer or independent BLE v3 RPC is emitted.
+The unpublished BYO RPC and native/public SDK workflow are retired; their
+allocated ABI identifiers stay reserved.
 
-BYO uses independent version-3 RPC frames on STORAGE CONTROL_V2 (`0008`) and
-TRANSFER_V2 (`0009`). It shares the characteristics, not the ordinary v2 command
-namespace. Serialize ownership and subscribe before writing.
+`CAPABILITIES_V2.flags & 0x0400` advertises `generic_target_v1`. Only those
+clients may receive authorization flag `0x0010`, whose staging digest binds a
+provider-independent immutable target. Manifest HPKE info/AAD and wire size stay
+unchanged. Receipt result `2` confirms durable target ciphertext verification and
+material delivery; it is not Bota plaintext/audio verification (old result `1`).
+Result `2` requires the accepted generic authorization and the completion digest
+SHA256(`bota/enc-v2/target-completion/v1` || target_digest[32] ||
+manifest_sha256[32] || ciphertext_sha256[32]). A downgrade to result `1` for that
+owner is rejected. Persist and reread the signed receipt before cleanup.
 
-| Offset | Field | Encoding |
-| --- | --- | --- |
-| 0 | Kind | `70` request, `71` response, `72` pull (hex) |
-| 1 | Version | `03` |
-| 2 | Operation | 1..13 below |
-| 3 | Status | Requests/pulls: 0; response: 0..3 |
-| 4..7 | Request ID | Nonzero u32LE |
-| 8..9 | Fragment offset | u16LE |
-| 10..11 | Total document length | u16LE |
-| 12.. | Payload | Opaque bytes |
-
-Frames are at most 512 bytes and must also fit actual ATT capacity; documents
-are bounded to 8192 bytes. A pull carries no payload and total=0. Non-pull
-offset plus payload length cannot exceed total. Non-success responses have no
-payload. Correlate request ID/operation and reject conflicting fragments.
-
-| Operation | Name | Operation | Name |
-| --- | --- | --- | --- |
-| 1 | CAPABILITIES | 8 | LIST |
-| 2 | INSPECT | 9 | LIVE_SNAPSHOT |
-| 3 | OPEN | 10 | LIVE_READ |
-| 4 | READ | 11 | LIVE_ACK |
-| 5 | RECEIPT | 12 | LIVE_CONTEXT |
-| 6 | CONFIRM | 13 | LIVE_SUCCESSOR |
-| 7 | ABORT | | |
-
-The customer-hooks-v2 App relay flow is:
-
-```mermaid
-sequenceDiagram
-    participant D as Device
-    participant S as App SDK
-    participant B as Bota
-    participant C as Customer service
-    participant O as Customer storage
-    S->>B: Prepare exact recording and physical context
-    B->>C: getUploadUrl hook
-    C-->>B: Upload URL and authenticated customer public-key material
-    B-->>S: Upload instructions and signed device authorization
-    S->>D: Relay authorization with pinned recipient
-    D->>D: Seal recording data key to customer public key
-    D-->>S: Original ciphertext and customer envelope/manifest
-    S->>S: Persist canonical ciphertext-plus-metadata package
-    S->>O: PUT package or immutable segments
-    S->>B: Complete with manifest and upload_package facts
-    B->>C: upload-complete with final ciphertext size/hash/count
-    C->>O: Merge parts and verify actual stored ciphertext
-    C-->>B: uploaded and persisted verification result
-    B-->>S: Signed completion receipt
-    S->>D: Receipt, then exact confirmation
-    D->>D: Verify and persist completion before source cleanup
-    Note over C,O: Private-key decryption is independent of complete
-```
-
-The diagram shows the App relay path; device-direct radio ownership is not
-transferred to BLE by this flow. App/backend HTTP calls use the authorized proxy
-boundary described in [BYO integration](docs/parity/byo-storage.md).
-
-Content encryption uses fixed BOTAENC2 ChaCha20-Poly1305 with a per-recording
-data key. HPKE X25519/HKDF-SHA256/ChaCha20-Poly1305 seals that data key to the
-authorized customer's public key before customer-storage upload. The customer
-uses its private key to open the envelope; it never requests a decryption key
-from Bota. The SDK relays original ciphertext and documents, without decrypting
-or creating a second encrypted file. TLS/BLE transport protection is a separate
-layer. This is not a selectable encryption-algorithm plug-in interface.
-
-Persist selected intent, authorization and original manifest for retries. URL
-renewal cannot rotate the pinned recipient. Once selection is durable, customer
-outage is not permission to fall back to Bota storage. Source cleanup requires
-verified, durably persisted completion and the exact receipt confirmation;
-completion-response loss is not permission to repeat PUT. Live HTTP/WS and
-whole-file successor recovery retain their own fencing and receipt gates.
-See [customer-envelope responsibilities](docs/parity/byo-upload-encryption.md),
-[BLE codec](core/device-sdk-core/src/protocol/byo_ble.rs) and
-[recovery/integration](docs/parity/byo-storage.md).
+The target grant supports bounded HTTPS PUT and provider headers, including
+its own Authorization token. Do not forward the Bota control token to the
+target. Whole-file PUT retry does not establish target range-resume support.
+See [ordinary integration](docs/parity/v2-managed-backend.md#generic-target-extension-unreleased)
+for release and verification boundaries.
 
 ## Authenticated Factory Reset
 

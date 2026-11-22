@@ -1,5 +1,38 @@
 # Managed encrypted-v2 backend adapter
 
+## Generic target extension (unreleased)
+
+The ordinary managed backend is the only App upload entry. The server pins
+storage at recording creation and supplies its HTTPS target and recipient key.
+No Bota/BYO mode is sent to the firmware. Original ordinary clients retain their
+existing protocol and verification guarantees.
+
+The capability manifest allocates `0x0400` (`generic_target_v1`). Authorization
+flag `0x0010` binds an immutable generic target; the ordinary 580-byte manifest
+and HPKE rules remain unchanged. A result-2 receipt is admitted only with the
+exact generic authorization and manifest: its publication digest is SHA256 of
+`bota/enc-v2/target-completion/v1`, the 32-byte target digest, manifest digest and
+ciphertext digest concatenated in that order. It records target ciphertext
+verification and material delivery, not Bota plaintext/audio verification.
+Old ordinary owners continue to require result 1. Firmware verifies signatures
+and durable receipt readback before any cleanup.
+
+Target headers allow at most 32 unique case-insensitive names, 128 bytes per
+name and 2048 total wire bytes including CRLF and the terminating byte. Values
+are printable ASCII. Generic capability permits the target's Authorization;
+control credentials never flow to target requests. Host, framing, proxy,
+cookie and `sec-*` headers are forbidden. Content-Type, when supplied, is
+`application/octet-stream`. The cloud matches the firmware's URL/header budget.
+
+Independent unpublished BYO factories, RPCs, package footer and recovery machine
+are removed. Recording/session journals and ordinary cancellation, identity,
+nonce recovery and receipt-only cleanup remain. No local BYO journal is migrated
+or deleted by this change. Actual target segmentation requires storage-authority
+progress; whole-file retry and BLE read resumption do not imply that capability.
+Canonical generated-JS adoption, native packages and device qualification are
+separate release checks; source changes alone do not establish installed support.
+
+
 The unpublished [managed completion handoff](managed-completion-retirement.md)
 separates normal terminal owner retirement from cancellation after the final
 validated receipt/CONFIRM callback. Explicit cancellation, scope/disposal and

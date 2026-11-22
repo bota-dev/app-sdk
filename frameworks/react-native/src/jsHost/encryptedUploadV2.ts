@@ -198,7 +198,7 @@ export interface JsUploadContextExchangeOptions {
   readonly onCleanupFailure?: (error: unknown, context?: JsHostContext) => void;
 }
 
-/** The same bounded Rust context/signed-document mechanics serve managed and BYO flows. */
+/** Bounded Rust context and signed-document mechanics for ordinary managed upload. */
 export class JsUploadContextExchange {
   private readonly metadata: Record<string, JsValue>;
   private owner: { operationId: string; generation: string; cancellationId: string } | null = null;
@@ -467,6 +467,7 @@ export class JsEncryptedUploadV2Host {
   private evidence: JsValue | null = null;
   private markers: JsEncryptedUploadV2MarkerDocument[] = [];
   private markersRequired = false;
+  private authorization: Uint8Array | null = null;
   private authorizationSha256: JsValue | null = null;
   private receipt: { bytes: Uint8Array; sha256: JsValue; blobKind: number } | null = null;
   private transferAttempted = false;
@@ -518,6 +519,8 @@ export class JsEncryptedUploadV2Host {
       this.receipt = null;
       this.manifest?.fill(0);
       this.manifest = null;
+      this.authorization?.fill(0);
+      this.authorization = null;
       if (this.hasherId) { this.codec('hasherFree', { decoderId: this.hasherId }); this.hasherId = null; }
     });
     return this.closePromise;
@@ -688,6 +691,8 @@ export class JsEncryptedUploadV2Host {
       this.markersRequired = admitted.markersRequired === true;
       if (this.markersRequired && !this.options.material!.submitMarkers) throw new BotaJsHostError('missing_primitive:markers', context.operation);
       this.authorizationSha256 = admitted.sha256 ?? null;
+      this.authorization?.fill(0);
+      this.authorization = authorization.slice();
       await this.sendSignedBlob(number(admitted.blobKind), authorization, context);
       return event('SessionPrepared', { authorization_sha256: this.authorizationSha256 });
     } finally { authorization.fill(0); }
@@ -992,7 +997,9 @@ export class JsEncryptedUploadV2Host {
     const bytes = await this.step(context, () => this.options.material!.completionReceipt(fields.evidence!, context));
     try {
       const admitted = object(this.codec('validateEncryptedUploadV2Receipt', { request: this.request,
-        markersRequired: this.markersRequired, bytes: publicMetadataBytes(bytes) }));
+        markersRequired: this.markersRequired, bytes: publicMetadataBytes(bytes),
+        authorization: publicMetadataBytes(this.authorization ?? new Uint8Array()),
+        manifest: publicMetadataBytes(this.manifest ?? new Uint8Array()) }));
       this.receipt = { bytes, sha256: admitted.sha256!, blobKind: number(admitted.blobKind) };
       return event('CompletionReceiptAccepted', { receipt_sha256: admitted.sha256! });
     } catch (error) { bytes.fill(0); throw error; }
