@@ -122,6 +122,28 @@ test('firmware metadata prevents reads beyond the exact verified blob', async ()
   assert.equal(fixture.calls.length, 0);
 });
 
+test('firmware diagnostics distinguish an empty retry file from a read exception without extra IO', async () => {
+  const f = filesFixture(), rows = [];
+  const effects = new JsFileEffects(f.files, scope, undefined, row => rows.push(row));
+  const handle = await f.files.open('firmware/2', 'firmware');
+  effects.registerFirmware('2', handle);
+  const ota = { ...context, operation: 'UpdateFirmware' };
+  const effect = { ReadChunk: { download_id: '2', offset: '0', max_length: 506 } };
+  f.files.read = async () => new Uint8Array();
+  const result = await effects.firmwareBlob(effect, ota);
+  assert.deepEqual(result.FirmwareChunkRead.bytes, []);
+  assert.equal(rows.find(row => row.stage === 'blob_metadata').fileSize, '0');
+  assert.equal(rows.find(row => row.stage === 'blob_read').returnedBytes, 0);
+  assert.equal(rows.find(row => row.stage === 'blob_read').downloadId, '2');
+  const original = Object.assign(new Error('/private/firmware'), { code: 'EIO' });
+  f.files.read = async () => { throw original; };
+  await assert.rejects(effects.firmwareBlob(effect, ota), error => error === original);
+  assert.equal(rows.at(-1).stage, 'blob_read');
+  assert.equal(rows.at(-1).phase, 'failed');
+  assert.equal(rows.at(-1).errorCode, 'EIO');
+  assert(!JSON.stringify(rows).includes('/private'));
+});
+
 test('registered file handle identity cannot be repointed by later caller mutation', async () => {
   const fixture = filesFixture();
   const effects = new JsFileEffects(fixture.files, scope);

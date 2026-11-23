@@ -50,6 +50,48 @@ function fixture(first, dispatch, cancel) {
 const options = { operation: 'Reconnect', operationId: 'exact-operation' };
 const read = { Ble: { Read: { service_uuid: '180A', characteristic_uuid: '2A25' } } };
 
+test('OTA records the original blob exception before reducing it to a platform code', async () => {
+  const rows = [];
+  const original = Object.assign(new Error('/private/firmware'), { code: 'ENOENT', platformCode: -1 });
+  const f = fixture([{ FirmwareBlob: { ReadChunk: { download_id: '1', offset: '0', max_length: 506 } } }], input => {
+    assert.deepEqual(input.event.kind, { FirmwareBlobFailed: { platform_code: '-1' } });
+    return { effects: [f.envelope({ Notify: { Failed: { error: { code: 'persistence_failed', operation: 'update_firmware',
+      retryable: true, detail: 'firmware blob read failed with code Some(-1)' } } } })], status: { Failed: { operation: 'UpdateFirmware' } } };
+  });
+  f.ports.onFirmwareDiagnostic = row => rows.push(row);
+  const executor = new BotaJsHostExecutor(f.factory, f.ports);
+  executor.registerHandler('FirmwareBlob', async () => { throw original; });
+  await assert.rejects(executor.run({}, { operation: 'UpdateFirmware', operationId: 'firmware' }), { code: 'persistence_failed' });
+  assert.equal(rows[0].stage, 'effect');
+  assert.equal(rows[0].effectFamily, 'FirmwareBlob');
+  assert.equal(rows[0].errorCode, 'ENOENT');
+  assert.equal(rows[1].failureReason, 'blob_read');
+  assert.equal(rows[0].attemptId, rows[1].attemptId);
+  assert(!JSON.stringify(rows).includes('/private'));
+  await executor.destroy();
+});
+
+test('OTA records checkpoint load state and distinguishes checkpoint errors from blob errors', async () => {
+  for (const failed of [false, true]) {
+    const rows = [], checkpoint = { phase: 'Transferring', completed_units: '0', firmware_version: '1.0.27', device: 'private-device' };
+    const f = fixture([{ Persistence: 'LoadCheckpoint' }], input => {
+      assert.deepEqual(input.event.kind, failed ? { PersistenceFailed: { platform_code: null } } : { CheckpointLoaded: { checkpoint } });
+    });
+    f.ports.persistence.load = async () => {
+      if (failed) throw Object.assign(new Error('private-checkpoint'), { code: 'EIO' });
+      return checkpoint;
+    };
+    f.ports.onFirmwareDiagnostic = row => rows.push(row);
+    const executor = new BotaJsHostExecutor(f.factory, f.ports);
+    await executor.run({}, { operation: 'UpdateFirmware', operationId: 'firmware' });
+    assert.equal(rows[0].stage, failed ? 'effect' : 'checkpoint_load');
+    if (failed) assert.equal(rows[0].errorCode, 'EIO');
+    else { assert.equal(rows[0].checkpointFound, true); assert.equal(rows[0].checkpointPhase, 'Transferring'); }
+    assert(!JSON.stringify(rows).includes('private-'));
+    await executor.destroy();
+  }
+});
+
 test('an exact OS disconnect is dispatched through the live Subscribe request and ignores old link callbacks', async () => {
   const subscribed = deferred();
   const start = { Ble: { Connect: { peripheral_id: 'owned-link' } } };

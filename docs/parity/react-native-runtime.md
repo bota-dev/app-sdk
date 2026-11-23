@@ -313,6 +313,26 @@ That legacy path does not substitute for the generated path's OS-port contract.
 
 ## Installed OS ports, API version 1
 
+Hosts may provide optional `ports.onFirmwareDiagnostic(event)` without changing
+the version-1 IO contract. The callback receives bounded firmware evidence before
+exceptions are reduced to numeric core events: original allowlisted error/cause
+types and codes, effect family/kind, checkpoint presence/phase, and the first
+blob's size, offset, requested and returned lengths. Workflow failure categories
+distinguish invalid chunks, blob reads, checkpoint IO and device START rejection;
+protocol status remains numeric, without assigning device-specific meanings.
+
+`attemptId` combines the owner generation and cancellation identity; `requestId`
+identifies the effect. Registration runs under a separate direct owner, so join
+registration/read evidence through `downloadId` and, where the host uses a
+64-character hexadecimal file identity, `fileId`. No file contents, paths,
+scope identities, signed material, URLs, raw messages or stacks are emitted.
+Unknown error names/codes become `unknown`; observer throws and rejected promises
+are isolated. Successful saves are sampled once per phase and successful blob
+metadata/reads at offset zero; failures retain their exact effect boundary.
+No additional IO, retries, checkpoint reset, download or cleanup is authorized
+by diagnostics. This is unpublished SDK source and requires normal consumer
+adoption; it does not establish an installed APK or physical OTA result.
+
 ```ts
 import {
   createBlePlxPort,

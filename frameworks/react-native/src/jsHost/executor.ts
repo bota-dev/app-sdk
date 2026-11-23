@@ -3,6 +3,7 @@ import type {
   JsHostContext, JsHostSubscription, JsValue, JsWorkflowOptions, JsWorkflowResult,
   RawCoreEffect, RawCoreRequest, RawCoreResult, RawJsCoreEngine, RawJsCoreFactory,
 } from './contracts';
+import { checkpointDiagnostic, firmwareEffectKind, reportFirmwareDiagnostic } from './firmwareDiagnostics';
 
 export class BotaJsHostError extends Error {
   readonly code: string;
@@ -57,6 +58,7 @@ interface Owner {
   cleanupBarrier?: Promise<void>;
   cancelPromise?: Promise<void>;
   removeExternalAbort?: () => void;
+  firmwareCheckpointPhase?: string;
 }
 
 const record = (value: JsValue): { readonly [key: string]: JsValue } => {
@@ -489,6 +491,8 @@ export class BotaJsHostExecutor {
         const event = await handler(value, context);
         if (event !== null) await this.emit(owner, effect, event);
       } catch (error) {
+        reportFirmwareDiagnostic(this.ports, context, { stage: 'effect', phase: 'failed',
+          effectFamily: family, effectKind: firmwareEffectKind(value) }, error);
         if (context.signal.aborted) return;
         if (['Completed', 'Cancelled', 'Failed'].includes(tag(owner.status)[0])) throw error;
         const failures: Record<string, string> = {
@@ -509,7 +513,16 @@ export class BotaJsHostExecutor {
         owner.options.onNotification?.(value);
         const [notification, payload] = tag(value);
         if (notification === 'Failed') {
-          const error = record(this.core.codec('normalizeWorkflowError', { error: record(payload).error! }));
+          const original = record(record(payload).error!);
+          const detail = typeof original.detail === 'string' ? original.detail : '';
+          reportFirmwareDiagnostic(this.ports, context, { stage: 'workflow', phase: 'failed',
+            protocolStatus: typeof original.protocol_status === 'number' ? original.protocol_status : undefined,
+            failureReason: detail === 'firmware blob returned an invalid chunk' ? 'invalid_chunk' :
+              detail.startsWith('firmware blob read failed with code ') ? 'blob_read' :
+              detail.startsWith('firmware checkpoint failed with code ') ? 'checkpoint' :
+              detail === 'device rejected firmware upload or failed storage write' ? 'start_rejected' : 'other',
+          }, original);
+          const error = record(this.core.codec('normalizeWorkflowError', { error: original }));
           owner.failure = new BotaJsHostError(string(error.code), string(error.operation), error.retryable === true,
             typeof error.protocolStatus === 'number' ? error.protocolStatus : undefined,
             typeof error.reason === 'string' ? error.reason : undefined);
@@ -537,6 +550,8 @@ export class BotaJsHostExecutor {
       case 'Persistence':
         try { await this.persistence(owner, effect, value, context); }
         catch (error) {
+          reportFirmwareDiagnostic(this.ports, context, { stage: 'effect', phase: 'failed',
+            effectFamily: 'Persistence', effectKind: firmwareEffectKind(value) }, error);
           if (context.signal.aborted) return;
           if (['Completed', 'Cancelled', 'Failed'].includes(tag(owner.status)[0])) throw error;
           if (error instanceof BotaJsHostError) throw error;
@@ -707,12 +722,24 @@ export class BotaJsHostExecutor {
     switch (kind) {
       case 'LoadCheckpoint': {
         const checkpoint = await this.ports.persistence.load(key, context);
+        reportFirmwareDiagnostic(this.ports, context,
+          { stage: 'checkpoint_load', phase: 'completed', ...checkpointDiagnostic(checkpoint) });
         await this.emit(owner, effect, { CheckpointLoaded: { checkpoint } }); return;
       }
       case 'SaveCheckpoint':
         await this.ports.persistence.save(key, fields.checkpoint!, context);
+        {
+          const evidence = checkpointDiagnostic(fields.checkpoint);
+          const phase = evidence.checkpointPhase ?? 'unknown';
+          if (owner.firmwareCheckpointPhase !== phase) {
+            reportFirmwareDiagnostic(this.ports, context, { stage: 'checkpoint_save', phase: 'completed', ...evidence });
+            owner.firmwareCheckpointPhase = phase;
+          }
+        }
         await this.emit(owner, effect, 'CheckpointSaved'); return;
-      case 'DeleteCheckpoint': await this.ports.persistence.remove(key, context); return;
+      case 'DeleteCheckpoint':
+        await this.ports.persistence.remove(key, context);
+        reportFirmwareDiagnostic(this.ports, context, { stage: 'checkpoint_remove', phase: 'completed' }); return;
       case 'SaveConnectionIdentity':
         await this.ports.persistence.save(`connection/${string(fields.device)}`, payload, context);
         await this.emit(owner, effect, 'ConnectionIdentitySaved'); return;

@@ -49,6 +49,7 @@ export type { JsEncryptedUploadV2Material } from './jsHost/encryptedUploadV2';
 export type { JsRecordingUploadTarget } from './jsHost/recordingUploads';
 export type { JsLocalWifiPort, JsLocalWifiMaterial, JsLocalWifiLease, JsLocalWifiReader } from './jsHost/localWifi';
 export { BOTA_JS_HOST_PORT_API_VERSION };
+export type { JsFirmwareDiagnostic } from './jsHost/firmwareDiagnostics';
 export type { BotaJsHostPorts, JsBlePort, JsFilePort, JsHostContext, JsPersistencePort,
   JsNetworkPort, JsLifecyclePort, OpaqueHostHandle } from './jsHost/contracts';
 

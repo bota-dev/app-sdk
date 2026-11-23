@@ -19,6 +19,10 @@ tracked separately.
 
 ## Unreleased
 
+- Add optional generated-RN firmware IO diagnostics before host error conversion,
+  including checkpoint state and first-chunk size evidence. Error codes, retry
+  policy and file recovery behavior are unchanged.
+
 - Document the new firmware-only ordinary encrypted WS contract, including
   ciphertext replay, byte-zero full HTTP fallback and signed receipt cleanup.
   This reference update adds no SDK runtime API or released package capability.

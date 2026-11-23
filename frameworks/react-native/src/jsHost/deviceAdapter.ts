@@ -131,7 +131,7 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
     emit, gatt: (context, body) => executor.gatt(context, body),
     onCleanupFailure: error => executor.markCleanupFailed(error) });
   const fileEffects = ports.files ? new JsFileEffects(ports.files, ports.persistence.namespace,
-    handle => recordingUploads?.acquireWritable(handle) ?? (() => {})) : undefined;
+    handle => recordingUploads?.acquireWritable(handle) ?? (() => {}), ports.onFirmwareDiagnostic) : undefined;
   const checkLease = (lease: OperationLease, operation: string) => {
     if (connection?.generation !== lease.physicalGeneration || connection.device.id !== lease.device.id ||
         connection.device.serialNumber !== lease.device.serialNumber || ports.persistence.namespace !== lease.scope ||

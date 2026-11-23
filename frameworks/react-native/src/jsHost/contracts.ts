@@ -1,4 +1,5 @@
 import type { JsLocalWifiPort } from './localWifi';
+import type { JsFirmwareDiagnostic } from './firmwareDiagnostics';
 /** Primitive host contracts. Implementations supply OS effects, never Bota workflows. */
 export type JsValue = null | boolean | number | string | readonly JsValue[] |
   { readonly [key: string]: JsValue };
@@ -163,6 +164,8 @@ export interface BotaJsHostPorts {
   readonly localWifi?: JsLocalWifiPort;
   readonly material?: JsHostMaterialPort;
   readonly lifecycle?: JsLifecyclePort;
+  /** Optional bounded firmware evidence. Observer failures never affect the workflow. */
+  readonly onFirmwareDiagnostic?: (event: Readonly<JsFirmwareDiagnostic>) => void | Promise<void>;
 }
 
 export interface JsWorkflowOptions {

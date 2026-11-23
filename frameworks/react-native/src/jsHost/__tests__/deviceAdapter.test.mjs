@@ -1092,6 +1092,32 @@ const firmwareDataWrites = f => f.calls.filter(call => Array.isArray(call) && ca
   && call[1].serviceUuid === f.metadata.SERVICE_BOTA_STORAGE
   && call[1].characteristicUuid === f.metadata.CHAR_RECORDING_TRANSFER && call[2][0] === f.data);
 
+test('actual generated firmware diagnostics distinguish an empty first blob and preserve the failure outcome', async t => {
+  const f = otaFixture(), rows = [];
+  f.ports.onFirmwareDiagnostic = row => rows.push(row);
+  f.ports.files.metadata = async () => ({ durableUnits: '0' });
+  f.ports.files.read = async () => new Uint8Array();
+  const { createBotaReactNativeJsRuntime } = loadSource('../runtime.ts');
+  const runtime = createBotaReactNativeJsRuntime(f.ports);
+  t.after(async () => { await runtime.client.destroy(); await f.adapter.destroy(); f.core.dispose(); });
+  await runtime.client.configure({ logLevel: 'none', backgroundSyncEnabled: false });
+  const device = await runtime.client.devices.connect({ id: 'original', rssi: -50, discoveredAt: new Date(0) });
+  const grant = Buffer.alloc(207, 1); grant[0] = 4;
+  await assert.rejects(runtime.client.ota.performUpdate(device, {
+    version: f.image.version, size: f.image.sizeUnits, url: f.image.url,
+  }, grant.toString('base64')), { code: 'persistence_failed' });
+  assert.equal(rows.find(row => row.stage === 'checkpoint_load').checkpointFound, false);
+  assert.equal(rows.find(row => row.stage === 'checkpoint_save').checkpointPhase, 'Transferring');
+  assert.equal(rows.find(row => row.stage === 'blob_metadata').fileSize, '0');
+  assert.equal(rows.find(row => row.stage === 'blob_read').returnedBytes, 0);
+  assert.equal(rows.find(row => row.stage === 'workflow').failureReason, 'invalid_chunk');
+  assert.equal(new Set(rows.map(row => row.attemptId)).size, 1);
+  assert.equal(firmwareDataWrites(f).length, 0);
+  assert.equal(f.unregisters.length, 1);
+  assert.equal(f.calls.filter(call => Array.isArray(call) && call[0] === 'remove-status').length, 1);
+  assert(!JSON.stringify(rows).includes('firmware.example'));
+});
+
 test('public generated OTA maps every core phase through the client and manager before START and verified completion',
   { timeout: 15000 }, async t => {
     const f = otaFixture();

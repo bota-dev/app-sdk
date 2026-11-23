@@ -2,6 +2,7 @@ import type {
   JsEffectContext, JsEffectHandler, JsFilePort, JsHostContext, JsValue, OpaqueHostHandle,
 } from './contracts';
 import { BotaJsHostError } from './executor';
+import { reportFirmwareDiagnostic, type JsFirmwareDiagnostic } from './firmwareDiagnostics';
 
 interface SinkState {
   handle: OpaqueHostHandle;
@@ -16,12 +17,15 @@ export class JsFileEffects {
   private readonly sinks = new Map<string, SinkState>();
   private readonly firmware = new Map<string, OpaqueHostHandle>();
   private readonly acquireWritable?: (handle: OpaqueHostHandle) => () => void;
+  private readonly onFirmwareDiagnostic?: (event: Readonly<JsFirmwareDiagnostic>) => void | Promise<void>;
 
-  constructor(files: JsFilePort, namespace: string, acquireWritable?: (handle: OpaqueHostHandle) => () => void) {
+  constructor(files: JsFilePort, namespace: string, acquireWritable?: (handle: OpaqueHostHandle) => () => void,
+    onFirmwareDiagnostic?: (event: Readonly<JsFirmwareDiagnostic>) => void | Promise<void>) {
     if (!namespace.trim()) throw new BotaJsHostError('invalid_scope', 'FileEffects');
     this.files = files;
     this.namespace = namespace;
     this.acquireWritable = acquireWritable;
+    this.onFirmwareDiagnostic = onFirmwareDiagnostic;
   }
 
   registerFirmware(downloadId: string, handle: OpaqueHostHandle): void {
@@ -104,15 +108,30 @@ export class JsFileEffects {
       this.validateHandle(handle, 'firmware');
       this.firmware.set(id, handle);
     }
-    const metadata = await this.files.metadata(handle, context);
-    const size = uint64(metadata.durableUnits);
-    if (BigInt(offset) > BigInt(size)) throw new BotaJsHostError('invalid_firmware_read_bound', context.operation);
-    const value = await this.files.read(handle, offset, maximum, context);
-    if (!(value instanceof Uint8Array)) throw new BotaJsHostError('missing_primitive:opaque_firmware_chunk', context.operation);
-    if (value.length > maximum || BigInt(offset) + BigInt(value.length) > BigInt(size)) {
-      throw new BotaJsHostError('invalid_firmware_read_bound', context.operation);
+    const evidence = { downloadId: id, offset, requestedBytes: maximum,
+      fileId: /^[0-9a-f]{64}$/.test(handle.id) ? handle.id : undefined };
+    let stage: 'blob_metadata' | 'blob_read' = 'blob_metadata';
+    let size: string | undefined;
+    try {
+      const metadata = await this.files.metadata(handle, context);
+      size = uint64(metadata.durableUnits);
+      if (offset === '0') reportFirmwareDiagnostic({ onFirmwareDiagnostic: this.onFirmwareDiagnostic }, context,
+        { ...evidence, stage, phase: 'completed', fileSize: size });
+      if (BigInt(offset) > BigInt(size)) throw new BotaJsHostError('invalid_firmware_read_bound', context.operation);
+      stage = 'blob_read';
+      const value = await this.files.read(handle, offset, maximum, context);
+      if (!(value instanceof Uint8Array)) throw new BotaJsHostError('missing_primitive:opaque_firmware_chunk', context.operation);
+      // Record empty/oversized first chunks before the core/host rejects them.
+      if (offset === '0') reportFirmwareDiagnostic({ onFirmwareDiagnostic: this.onFirmwareDiagnostic }, context,
+        { ...evidence, stage, phase: 'completed', fileSize: size, returnedBytes: value.length });
+      if (value.length > maximum || BigInt(offset) + BigInt(value.length) > BigInt(size)) {
+        throw new BotaJsHostError('invalid_firmware_read_bound', context.operation);
+      }
+      return { FirmwareChunkRead: { download_id: id, offset, bytes: Array.from(value) } };
+    } catch (error) {
+      reportFirmwareDiagnostic({ onFirmwareDiagnostic: this.onFirmwareDiagnostic }, context, { ...evidence, stage, phase: 'failed', fileSize: size }, error);
+      throw error;
     }
-    return { FirmwareChunkRead: { download_id: id, offset, bytes: Array.from(value) } };
   };
 
   async result(sinkId: string, context: JsHostContext): Promise<{
