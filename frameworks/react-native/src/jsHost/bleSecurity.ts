@@ -30,7 +30,7 @@ export function createSecureBlePlxPort(manager: BlePlxManager, options: BleLinkS
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 120_000) {
     throw new Error('BLE security timeout must be between 1 and 120000 milliseconds');
   }
-  type Link = { ready: boolean; cancelled: AbortController; observer?: JsHostSubscription };
+  type Link = { ready: boolean; cancelled: AbortController; listeners: Set<(error?: string) => void>; observer?: JsHostSubscription };
   const links = new Map<string, Link>();
   const current = (id: string | undefined, expected?: Link): Link => {
     const link = id ? links.get(id) : undefined;
@@ -51,6 +51,7 @@ export function createSecureBlePlxPort(manager: BlePlxManager, options: BleLinkS
     if (!link) return;
     link.ready = false;
     link.cancelled.abort();
+    link.listeners.clear();
     await link.observer?.remove();
     if (links.get(id) === link) links.delete(id);
   };
@@ -63,13 +64,16 @@ export function createSecureBlePlxPort(manager: BlePlxManager, options: BleLinkS
       }
       await retire(id);
       await base.connect(id, context);
-      const link: Link = { ready: false, cancelled: new AbortController() };
+      const link: Link = { ready: false, cancelled: new AbortController(), listeners: new Set() };
       links.set(id, link);
       try {
-        link.observer = await base.observeDisconnect!(id, () => {
+        link.observer = await base.observeDisconnect!(id, error => {
           if (links.get(id) !== link) return;
           link.ready = false;
           link.cancelled.abort();
+          const listeners = Array.from(link.listeners);
+          link.listeners.clear();
+          for (const notify of listeners) notify(error);
         }, context);
         check(context, id, link);
       } catch (error) {
@@ -78,9 +82,15 @@ export function createSecureBlePlxPort(manager: BlePlxManager, options: BleLinkS
         throw error;
       }
     },
+    async observeDisconnect(id, notify, context) {
+      const link = current(id);
+      check(context, id, link);
+      link.listeners.add(notify);
+      return { async remove() { link.listeners.delete(notify); } };
+    },
     async disconnect(id, context) {
-      try { await retire(id); }
-      finally { await base.disconnect(id, context); }
+      await base.disconnect(id, context);
+      await retire(id);
     },
     async ensureSecure(id, context) {
       const link = current(id);

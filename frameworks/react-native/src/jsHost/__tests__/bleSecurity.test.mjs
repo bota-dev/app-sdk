@@ -144,3 +144,41 @@ test('missing Android native bridge permits discovery but refuses connection bef
   await assert.rejects(port.connect('device', context()), { code: 'ble_security_unavailable' });
   assert.deepEqual(f.calls, ['scan', 'stop-scan']);
 });
+
+for (const platform of ['android', 'ios']) {
+  test(platform + ' waits for native disconnect and preserves the observer when the link stays up', async () => {
+    const f = fixture(platform), ctx = context(), events = [];
+    await f.port.connect('device', ctx);
+    await f.port.ensureSecure('device', ctx);
+    await f.port.observeDisconnect('device', reason => events.push(reason), ctx);
+    f.manager.isDeviceConnected = async () => true;
+    await assert.rejects(f.port.disconnect('device', ctx), { code: 'connection_failed' });
+    assert.deepEqual(events, []);
+    f.losses[0](new Error('link lost after failed disconnect'), null);
+    assert.deepEqual(events, ['link lost after failed disconnect']);
+    await f.port.connect('device', ctx);
+    let checks = 0;
+    f.manager.isDeviceConnected = async () => ++checks < 2;
+    await f.port.disconnect('device', ctx);
+    assert.equal(checks, 2);
+  });
+
+  test(platform + ' reports a peripheral reboot, ignores the old callback after reconnection, and disconnects on request', async () => {
+    const f = fixture(platform), ctx = context(), events = [];
+    await f.port.connect('device', ctx);
+    await f.port.ensureSecure('device', ctx);
+    await f.port.observeDisconnect('device', reason => events.push(reason), ctx);
+    assert.equal(f.losses.length, 1);
+    f.losses[0](new Error('peripheral reboot'), null);
+    assert.deepEqual(events, ['peripheral reboot']);
+    await assert.rejects(f.port.write(f.address, Uint8Array.of(5), true, ctx));
+    await f.port.connect('device', ctx);
+    await f.port.ensureSecure('device', ctx);
+    const subscription = await f.port.observeDisconnect('device', reason => events.push(reason), ctx);
+    f.losses[0](new Error('late callback'), null);
+    assert.deepEqual(events, ['peripheral reboot']);
+    await subscription.remove();
+    await f.port.disconnect('device', ctx);
+    assert.ok(f.calls.includes('disconnect'));
+  });
+}

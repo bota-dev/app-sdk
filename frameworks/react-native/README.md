@@ -9,6 +9,10 @@ Device acceptance and application delivery remain separate.
 
 ## Generated JavaScript runtime and app OTA updates
 
+Use `deviceDisconnected` to update connection state after a peripheral reboot.
+Await `devices.disconnect(device)` before displaying a manual disconnect as
+complete. See [secure BLE disconnect and reconnect](../../docs/parity/ble-link-security.md#disconnect-and-reconnect).
+
 The unpublished [system-connection discovery correction](../../docs/parity/apple-connection-ownership.md#react-native-generated-runtime-system-retrieval)
 lets `createBlePlxPort` query an installed manager's optional `connectedDevices`
 API during scanning. Retrieved candidates still require a normal local connect

@@ -101,6 +101,7 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
   let destroyed = false;
   let closing = false;
   let disconnecting = false;
+  let closingLink: { generation: string; lost: boolean } | undefined;
   let controlEpoch = 0;
   const controlQueue: QueuedControl[] = [];
   let activeControl: { operationId?: string; workflow?: boolean; settled: Promise<void> } | undefined;
@@ -251,14 +252,23 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
   };
   const clearConnection = async (context: JsHostContext) => {
     await closeControls(context);
+    const link = connection;
+    const device = link?.device;
+    if (link && device) {
+      const attempt = { generation: link.generation, lost: false };
+      closingLink = attempt;
+      try {
+        await executor.gatt(context, () => ports.ble.disconnect(device.id, context));
+      } catch (error) {
+        if (!attempt.lost) throw error;
+      } finally {
+        closingLink = undefined;
+      }
+      retiredPhysicalGenerations.add(link.generation);
+      if (connection === link) executor.didDisconnect(device.id);
+    }
     try { await disconnectObserver?.remove(); } catch (error) { executor.markCleanupFailed(error); throw error; }
     disconnectObserver = undefined;
-    const device = connection?.device;
-    if (device) {
-      await executor.gatt(context, () => ports.ble.disconnect(device.id, context));
-      retiredPhysicalGenerations.add(connection!.generation);
-      executor.didDisconnect(device.id);
-    }
     connection = null;
     presenceSession = '';
     connectionGeneration++;
@@ -310,6 +320,10 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
         const session = Array.from(random, byte => byte.toString(16).padStart(2, '0')).join('');
         if (ports.ble.observeDisconnect) disconnectObserver = await ports.ble.observeDisconnect(device.id, error => {
           if (connection?.generation !== generation) return;
+          if (closingLink?.generation === generation) {
+            closingLink.lost = true;
+            return;
+          }
           cancelQueuedControls();
           retiredPhysicalGenerations.add(generation);
           connection = null;

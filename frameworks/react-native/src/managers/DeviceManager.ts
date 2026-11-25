@@ -243,15 +243,20 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     this.userDisconnected = true;
     this.stopAutoReconnectLoop();
     this.emit('connectionStateChanged', device.id, 'disconnecting');
-    await this.removeOwned(this.statusSubscriptions, device.id);
-    this.statusCallbacks.delete(device.id);
-    await this.removeOwned(this.wifiStatusSubscriptions, device.id);
-    await this.removeOwned(this.logSubscriptions, device.id);
-    await this.removeOwned(this.recordingStateSubscriptions, device.id);
-    if (this.requireConnected(device.id, device.serialNumber) !== connected) {
-      throw DeviceError.notConnected(device.id);
+    try {
+      await this.removeOwned(this.statusSubscriptions, device.id);
+      this.statusCallbacks.delete(device.id);
+      await this.removeOwned(this.wifiStatusSubscriptions, device.id);
+      await this.removeOwned(this.logSubscriptions, device.id);
+      await this.removeOwned(this.recordingStateSubscriptions, device.id);
+      if (this.requireConnected(device.id, device.serialNumber) !== connected) {
+        throw DeviceError.notConnected(device.id);
+      }
+      await this.client.devices.disconnect();
+    } catch (error) {
+      this.userDisconnected = false;
+      throw error;
     }
-    await this.client.devices.disconnect();
     this.connectedDevices.delete(device.id);
     this.recordingStateCache.delete(device.id);
     this.recordingStatePending.delete(device.id);
