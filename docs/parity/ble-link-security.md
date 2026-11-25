@@ -97,6 +97,19 @@ characteristic reports `ble_security_firmware_required` with firmware-upgrade
 guidance; transport/read failures remain security failures, not proof of old firmware. The failed adoption disconnects. A new
 connection always needs a new proof, including when its peripheral ID is reused.
 
+## Disconnect and reconnect
+
+The secure BLE port installs one native disconnect observer per connection.
+On link loss it invalidates the protected-read proof, then notifies the device
+workflow. The workflow removes the peripheral and emits `deviceDisconnected`.
+Callbacks from an earlier connection to the same peripheral cannot retire the
+current connection.
+
+An explicit disconnect keeps the observer active while the OS processes
+cancellation. When the BLE manager exposes `isDeviceConnected`, the SDK checks
+the link and briefly retries while the OS still reports it connected. If it
+stays connected, the caller receives `connection_failed` and can retry.
+
 ## Discovery and required security
 
 There is one required-security policy, with no legacy binding mode, firmware
