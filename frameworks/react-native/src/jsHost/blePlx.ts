@@ -24,6 +24,7 @@ export interface BlePlxManager {
   connectedDevices?(serviceUUIDs: string[]): Promise<Peripheral[]>;
   servicesForDevice?(deviceIdentifier: string): Promise<readonly { uuid: string }[]>;
   connectToDevice(id: string, options?: { requestMTU?: number }): Promise<Peripheral>;
+  isDeviceConnected?(id: string): Promise<boolean>;
   cancelDeviceConnection(id: string): Promise<Peripheral>;
   requestMTUForDevice(id: string, mtu: number, transactionId?: string): Promise<Peripheral>;
   readCharacteristicForDevice(id: string, service: string, characteristic: string,
@@ -281,6 +282,15 @@ export function createBlePlxPort(manager: BlePlxManager): JsBlePort {
     async disconnect(peripheralId) {
       if (!connected.has(peripheralId) && !uncertainConnections.has(peripheralId)) return;
       await manager.cancelDeviceConnection(peripheralId);
+      // PLX can acknowledge cancellation before the native connection state changes.
+      if (manager.isDeviceConnected) {
+        for (let retry = 0; await manager.isDeviceConnected(peripheralId); retry++) {
+          if (retry === 10) {
+            throw Object.assign(new Error('Bluetooth connection is still active'), { code: 'connection_failed' });
+          }
+          await new Promise<void>(resolve => setTimeout(resolve, 100));
+        }
+      }
       connected.delete(peripheralId);
       connectionGenerations.delete(peripheralId);
       uncertainConnections.delete(peripheralId);
