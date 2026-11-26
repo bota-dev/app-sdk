@@ -386,3 +386,191 @@ test('failed material unregistration still removes every captured abort observer
      assert.ok(!JSON.stringify([...f.journal]).includes(grant.control_key_base64));
    } finally {await f.backend.dispose();f.core.dispose?.();}
  });
+
+function dashboardInput(id) {
+  const value = input(id);
+  value.scope.apiBasePath = '/dashboard/projects/' + value.scope.projectId;
+  return value;
+}
+function reconciliationPointer(sessionId, ownerRevision) {
+  return { profile: 'encrypted_upload_v2', recording_id: 'rec_1', session_id: sessionId, owner_revision: ownerRevision };
+}
+
+test('dashboard restore separates confirmed deletion from an unavailable recording and retains the device evidence', async () => {
+  let confirmed = false;
+  const f = fixture((url, request) => {
+    if (url.endsWith(SESSION)) return response(url, 404, {});
+    if (url.endsWith('/reconcile?include_deleted=true')) {
+      assert.equal(request.method, 'POST');
+      assert.deepEqual(JSON.parse(request.body), { binding_generation: 2, recording_uuid: UUID, recording_generation: 3,
+        storage_format: 'bota_enc_v2', channel: 'ble', capabilities_base64: Buffer.alloc(24).toString('base64'),
+        ciphertext_length: 900, ciphertext_sha256: ciphertextHash });
+      return confirmed ? response(url, 410, { error: { code: 'encrypted_upload_v2_recording_deleted' } }) : response(url, 200, null);
+    }
+    return baseHandler(url, request);
+  });
+  try {
+    await f.backend.prepare(JSON.stringify(dashboardInput('first')));
+    await f.backend.cancel('first');
+    await assert.rejects(f.backend.prepare(JSON.stringify(dashboardInput('absent'))), { code: 'BOTA_UPLOAD_RECORDING_UNAVAILABLE' });
+    assert.equal([...f.journal.values()][0].entry.sessionId, SESSION);
+    confirmed = true;
+    await assert.rejects(f.backend.prepare(JSON.stringify(dashboardInput('deleted'))), { code: 'BOTA_UPLOAD_RECORDING_DELETED' });
+    assert.equal(f.calls.filter(c => c.url.endsWith(SESSION)).length, 1);
+    const calls = f.calls.length;
+    await assert.rejects(f.backend.prepare(JSON.stringify(dashboardInput('again'))), { code: 'BOTA_UPLOAD_RECORDING_DELETED' });
+    assert.equal(f.calls.length, calls);
+    assert.equal(f.cleanup.removals, 0);
+    assert.equal(f.uploads.length, 0);
+  } finally { await f.backend.dispose(); f.core.dispose?.(); }
+});
+
+test('dashboard restore creates only a session for the same confirmed pending recording using a fresh nonce', async () => {
+  let created = 0;
+  const f = fixture((url, request) => {
+    if (url.endsWith(SESSION)) return response(url, 404, {});
+    if (url.endsWith('/reconcile?include_deleted=true')) return response(url, 200, reconciliationPointer(null, null));
+    if (url.endsWith('/sessions') && ++created > 1) {
+      assert.equal(JSON.parse(request.body).auth_nonce_base64, Buffer.alloc(16, 4).toString('base64'));
+      return response(url, 201, session({ session_id: SUCCESSOR, owner_revision: 1 }));
+    }
+    return baseHandler(url, request);
+  });
+  try {
+    await f.backend.prepare(JSON.stringify(dashboardInput('first'))); await f.backend.cancel('first');
+    f.nonceState.value = '04'.repeat(16);
+    const selected = JSON.parse(await f.backend.prepare(JSON.stringify(dashboardInput('resume'))));
+    assert.equal(selected.uploadSessionId, SUCCESSOR);
+    assert.equal(f.calls.filter(c => c.url.endsWith('/recordings')).length, 1);
+    assert.equal([...f.journal.values()][0].authorizationNonceSha256, hex(Buffer.alloc(16, 4)));
+  } finally { await f.backend.dispose(); f.core.dispose?.(); }
+});
+
+test('dashboard restore validates the authoritative successor and resumes using its own authorization nonce', async () => {
+  const f = fixture((url, request) => {
+    if (url.endsWith(SESSION)) return response(url, 404, {});
+    if (url.endsWith('/reconcile?include_deleted=true')) return response(url, 200, reconciliationPointer(SUCCESSOR, 3));
+    if (url.endsWith(SUCCESSOR)) return response(url, 200, session({ session_id: SUCCESSOR, owner_revision: 3 }));
+    return baseHandler(url, request);
+  });
+  try {
+    await f.backend.prepare(JSON.stringify(dashboardInput('first'))); await f.backend.cancel('first');
+    f.nonceState.value = '07'.repeat(16);
+    assert.equal(JSON.parse(await f.backend.prepare(JSON.stringify(dashboardInput('resume')))).uploadSessionId, SUCCESSOR);
+    assert.equal([...f.journal.values()][0].authorizationNonceSha256, hex(Buffer.alloc(16, 7)));
+    assert.equal(f.calls.filter(c => c.url.endsWith('/sessions')).length, 1);
+    assert.equal(f.calls.filter(c => c.url.endsWith(SUCCESSOR)).length, 1);
+  } finally { await f.backend.dispose(); f.core.dispose?.(); }
+});
+
+test('restore rejects unverifiable responses without replacing a prior owner', async () => {
+  for (const [status, value, code] of [
+    [410, { error: { code: 'another_error' } }, 'BOTA_UPLOAD_HTTP_410'],
+    [403, {}, 'BOTA_UPLOAD_HTTP_403'],
+    [404, {}, 'BOTA_UPLOAD_HTTP_404'],
+    [200, { profile: 'encrypted_upload_v2', recording_id: 'rec_1' }, 'BOTA_UPLOAD_INVALID_DOCUMENT'],
+    [200, { ...reconciliationPointer(null, null), recording_id: 'rec_other' }, 'BOTA_UPLOAD_IDENTITY_CONFLICT'],
+    [200, reconciliationPointer(SUCCESSOR, 2), 'BOTA_UPLOAD_IDENTITY_CONFLICT'],
+  ]) {
+    const f = fixture((url, request) => url.endsWith(SESSION) ? response(url, 404, {}) :
+      url.endsWith('/reconcile?include_deleted=true') ? response(url, status, value) : baseHandler(url, request));
+    try {
+      await f.backend.prepare(JSON.stringify(dashboardInput('first'))); await f.backend.cancel('first');
+      const before = [...f.journal.values()][0];
+      await assert.rejects(f.backend.prepare(JSON.stringify(dashboardInput('again'))), err => (err.code || err.message) === code);
+      assert.deepEqual([...f.journal.values()][0], before);
+      assert.equal(f.calls.length, 4);
+    } finally { await f.backend.dispose(); f.core.dispose?.(); }
+  }
+});
+
+test('a dangling Dashboard pointer cannot restart cloud creation or repeat the stale initial GET', async () => {
+  const f = fixture((url, request) => url.endsWith(SESSION) ? response(url, 404, {}) :
+    url.endsWith('/reconcile?include_deleted=true') ? response(url, 200, reconciliationPointer(SESSION, 2)) : baseHandler(url, request));
+  try {
+    await f.backend.prepare(JSON.stringify(dashboardInput('first'))); await f.backend.cancel('first');
+    for (const attempt of ['second', 'third']) {
+      await assert.rejects(f.backend.prepare(JSON.stringify(dashboardInput(attempt))), { code: 'BOTA_UPLOAD_RECORDING_UNAVAILABLE' });
+    }
+    assert.equal(f.calls.filter(c => c.url.endsWith('/sessions')).length, 1);
+    assert.equal(f.calls.filter(c => c.url.endsWith(SESSION)).length, 3);
+  } finally { await f.backend.dispose(); f.core.dispose?.(); }
+});
+
+test('dashboard cannot move a BLE checkpoint to another owner or a sessionless recording', async () => {
+  for (const pointer of [reconciliationPointer(null, null), reconciliationPointer(SUCCESSOR, 3)]) {
+    const f = fixture((url, request) => url.endsWith(SESSION) ? response(url, 404, {}) :
+      url.endsWith('/reconcile?include_deleted=true') ? response(url, 200, pointer) : baseHandler(url, request));
+    try {
+      await f.backend.prepare(JSON.stringify(dashboardInput('first'))); await f.backend.cancel('first');
+      const value = dashboardInput('again');
+      value.checkpoint = { version: 1, uploadSessionId: SESSION, ownerRevision: 2, revision: 1,
+        nextCiphertextOffset: '100', prefixSha256: 'aa'.repeat(32), highestContiguousSequence: 1,
+        transportSessionId: '1', sinkRegistrationId: 'sink', windowPackets: 16, dataPayloadBytes: 100 };
+      await assert.rejects(f.backend.prepare(JSON.stringify(value)), { code: 'BOTA_UPLOAD_IDENTITY_CONFLICT' });
+      assert.equal([...f.journal.values()][0].entry.sessionId, SESSION);
+      assert.equal(f.calls.length, 4);
+    } finally { await f.backend.dispose(); f.core.dispose?.(); }
+  }
+});
+
+test('unscoped customer proxies do not acquire the Dashboard reconciliation contract', async () => {
+  const f = fixture((url, request) => url.endsWith(SESSION) ? response(url, 404, {}) : baseHandler(url, request));
+  try {
+    await f.backend.prepare(JSON.stringify(input('first'))); await f.backend.cancel('first');
+    await assert.rejects(f.backend.prepare(JSON.stringify(input('again'))), /BOTA_UPLOAD_HTTP_404/);
+    assert.equal(f.calls.length, 3);
+    assert.equal([...f.journal.values()][0].phase, 'ready');
+  } finally { await f.backend.dispose(); f.core.dispose?.(); }
+});
+
+test('a reconciled successor with mismatched capture bytes cannot change the journal', async () => {
+  const f = fixture((url, request) => {
+    if (url.endsWith(SESSION)) return response(url, 404, {});
+    if (url.endsWith('/reconcile?include_deleted=true')) return response(url, 200, reconciliationPointer(SUCCESSOR, 3));
+    if (url.endsWith(SUCCESSOR)) return response(url, 200, session({ session_id: SUCCESSOR, owner_revision: 3, ciphertext_length: 901 }));
+    return baseHandler(url, request);
+  });
+  try {
+    await f.backend.prepare(JSON.stringify(dashboardInput('first'))); await f.backend.cancel('first');
+    const saved = [...f.journal.values()][0];
+    await assert.rejects(f.backend.prepare(JSON.stringify(dashboardInput('again'))), { code: 'BOTA_UPLOAD_IDENTITY_CONFLICT' });
+    assert.deepEqual([...f.journal.values()][0], saved);
+    assert.equal(f.calls.filter(c => c.url.endsWith('/sessions')).length, 1);
+  } finally { await f.backend.dispose(); f.core.dispose?.(); }
+});
+
+test('cancellation before deletion confirmation cannot mark the journal deleted', async () => {
+  const started = deferred(), held = deferred();
+  const f = fixture((url, request) => {
+    if (url.endsWith(SESSION)) return response(url, 404, {});
+    if (url.endsWith('/reconcile?include_deleted=true')) { started.resolve(url); return held.promise; }
+    return baseHandler(url, request);
+  });
+  try {
+    await f.backend.prepare(JSON.stringify(dashboardInput('first'))); await f.backend.cancel('first');
+    const saved = [...f.journal.values()][0];
+    const attempt = f.backend.prepare(JSON.stringify(dashboardInput('again')));
+    const rejected = assert.rejects(attempt, { code: 'BOTA_UPLOAD_CANCELLED' });
+    const url = await started.promise;
+    const cancelled = f.backend.cancel('again');
+    held.resolve(response(url, 410, { error: { code: 'encrypted_upload_v2_recording_deleted' } }));
+    await cancelled; await rejected;
+    assert.deepEqual([...f.journal.values()][0], saved);
+  } finally { await f.backend.dispose(); f.core.dispose?.(); }
+});
+
+test('a 404 from nonce recovery never triggers the missing-status fallback', async () => {
+  const f = fixture((url, request) => {
+    if (url.endsWith(SESSION)) return response(url, 200, session());
+    if (url.endsWith('/recover')) return response(url, 404, {});
+    return baseHandler(url, request);
+  });
+  try {
+    await f.backend.prepare(JSON.stringify(dashboardInput('first'))); await f.backend.cancel('first');
+    f.nonceState.value = '02'.repeat(16);
+    await assert.rejects(f.backend.prepare(JSON.stringify(dashboardInput('retry'))), /BOTA_UPLOAD_HTTP_404/);
+    assert.equal(f.calls.filter(c => c.url.includes('/reconcile')).length, 0);
+    assert.equal([...f.journal.values()][0].entry.sessionId, SESSION);
+  } finally { await f.backend.dispose(); f.core.dispose?.(); }
+});
