@@ -79,7 +79,7 @@ for sdk in iphoneos iphonesimulator; do
   build "$tmp/sdk" BotaAppSDK "$sdk" "$archs" "$tmp/build-$sdk"
   framework="$tmp/build-$sdk/Build/Products/Release-$sdk/BotaAppSDK.framework"
   bin="$framework/BotaAppSDK"
-  xcrun lipo -verify_arch $archs "$bin"
+  xcrun lipo "$bin" -verify_arch $archs
   for arch in $archs; do
     if [[ "$sdk" == iphoneos ]]; then
       swift_archive="$bin"
@@ -139,7 +139,7 @@ for pair in iphoneos:arm64 iphonesimulator:arm64 iphonesimulator:x86_64; do
   arch="$(cut -d: -f2 <<< "$pair")"
   build "$tmp/consumer" BinaryConsumer "$sdk" "$arch" "$tmp/consumer-$sdk-$arch"
   app="$tmp/consumer-$sdk-$arch/Build/Products/Release-$sdk/BinaryConsumer.app/BinaryConsumer"
-  xcrun lipo -verify_arch "$arch" "$app"
+  xcrun lipo "$app" -verify_arch "$arch"
   xcrun otool -L "$app" > "$tmp/deps.txt"
   if grep -E 'BotaAppSDK|BotaDeviceSDKCore' "$tmp/deps.txt"; then
     echo 'Consumer depends on a dynamic Bota binary' >&2
