@@ -1117,7 +1117,7 @@ jobs:
       # official setup action here lets retries check occupied bytes first.
       - name: Configure official pub.dev OIDC authentication
         if: steps.public-version.outputs.needs-publish == 'true'
-        uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1
+        uses: dart-lang/setup-dart@2286a0c042b44434fe26d292bbce8d34f7ec662b # v1
 
       - name: Publish the preserved candidate files with pinned Flutter
         if: steps.public-version.outputs.needs-publish == 'true'
