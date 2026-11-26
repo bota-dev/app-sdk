@@ -79,6 +79,7 @@ See [sequence diagrams and joint acceptance](docs/parity/ble-link-security.md).
 - [Device status](#device-status)
 - [Recording list and legacy transfer](#recording-list-and-legacy-transfer)
 - [Encrypted upload v2](#encrypted-upload-v2)
+  - [BLE resume replies and durable checkpoints](#ble-resume-replies-and-durable-checkpoints)
 - [Ordinary direct WS encryption](#ordinary-direct-ws-encryption)
 - [BYO customer storage](#byo-customer-storage)
 - [Authenticated factory reset](#authenticated-factory-reset)
@@ -385,6 +386,43 @@ See [context/catalog contracts](docs/parity/v2-demo-protocol.md),
 [wire codecs](core/device-sdk-core/src/protocol/encrypted_upload_v2.rs), and
 [completion recovery](docs/parity/upload-recovery.md). Protected direct
 STREAMING below is a separate device HTTP contract, not an implicit BLE relay.
+
+### BLE resume replies and durable checkpoints
+
+The App sends `RESUME_REQUEST` (`0x22`) on CONTROL_V2. The device replies on
+TRANSFER_V2. Both replies carry the request's transport session ID. Each starts
+with a 12-byte header containing the opcode at byte 0, version `0x02` at byte 1,
+zero flags at bytes 2–3 and the transport session ID at bytes 4–11. Integers
+are little-endian. UUIDs use RFC byte order. The offset counts the ciphertext
+bytes in the durable prefix. Its digest is
+`SHA256(ciphertext[0:next_ciphertext_offset])`, with the end offset excluded.
+
+| Reply | Offset | Field | Value supplied by the device |
+|---|---:|---|---|
+| `RESUME_ACCEPT` (`0x45`, 96 bytes) | 12, 28, 44 | Upload session UUID (16 bytes), recording UUID (16 bytes), recording generation (u32) | The admitted upload and recording from the request |
+| | 48, 52, 60 | Checkpoint revision (u32), next ciphertext offset (u64), prefix SHA-256 (32 bytes) | The requested checkpoint, after matching it against the device's durable checkpoint and verifying the prefix |
+| | 92, 94 | Window packets (u16), DATA payload bytes (u16) | The requested values after validating both against the device limits |
+| `RESUME_REJECT` (`0x46`, 60 bytes) | 12, 14 | Reason (u16), reserved (u16) | A nonzero rejection reason and two zero bytes. Use `0x000F` for checkpoint or prefix mismatch. |
+| | 16, 20, 28 | Checkpoint revision (u32), next ciphertext offset (u64), prefix SHA-256 (32 bytes) | The **device's last durable checkpoint**. With no saved checkpoint, send revision 0, offset 0 and `SHA256(empty)`. |
+
+**Lost WINDOW_ACK example.** The App has persisted revision 8 at offset 8192.
+The device still has revision 7 at offset 7168 when it receives the App's
+`0x22` for revision 8. It sends `0x46` with reason `0x000F`, revision 7,
+offset 7168 and `SHA256(ciphertext[0:7168])`.
+
+For automatic recovery, the native Android and Apple hosts require the same
+transport session ID, reason `0x000F`, and **both** a lower revision and a
+lower offset than the App has saved. Zero revision and zero offset must occur
+together. The App rehashes its retained ciphertext through the reported offset and compares the
+digest before persisting the reconciled checkpoint and truncating its local
+copy. It retries once in the same session with `RESUME_REQUEST` for a nonempty
+prefix, or `START` (`0x20`) for the empty prefix. A failed check or a second
+rejection ends automatic recovery. The device always reports its own checkpoint
+on rejection, including when the App cannot recover automatically.
+
+See the [wire layout](docs/superpowers/specs/2026-09-03-encrypted-upload-v2-protocol-contract-design.md)
+and the [Android](docs/parity/android-lost-ack-recovery.md) and
+[Apple](docs/parity/apple-lost-ack-recovery.md) recovery rules.
 
 ## Ordinary direct WS encryption
 
