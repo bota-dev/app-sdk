@@ -12,7 +12,7 @@ Pod::Spec.new do |spec|
   spec.source = { git: package.fetch("repository").fetch("url"), tag: "v#{spec.version}" }
   spec.platforms = { ios: "15.1" }
   spec.swift_version = "6.0"
-  spec.source_files = "generated/apple/*.{mm,swift}"
+  spec.source_files = "generated/apple/*.{mm,swift}", "apple/*.mm"
   spec.frameworks = "Network", "NetworkExtension", "Security", "CryptoKit"
   spec.pod_target_xcconfig = {
     "CLANG_CXX_LANGUAGE_STANDARD" => "c++20",

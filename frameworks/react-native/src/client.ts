@@ -522,7 +522,7 @@ const toNativeDiscoveredDevice = (
   discoveredAtMs: device.discoveredAt.getTime(),
 });
 
-const mapConnectedDevice = (
+export const mapConnectedDevice = (
   device: NativeConnectedDevice
 ): ConnectedDevice => ({
   ...device,

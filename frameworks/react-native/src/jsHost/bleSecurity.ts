@@ -57,13 +57,13 @@ export function createSecureBlePlxPort(manager: BlePlxManager, options: BleLinkS
   };
   return {
     ...base,
-    async connect(id, context) {
+    async connect(id, context, mode) {
       if (!['android', 'ios'].includes(options.platform) || options.platform === 'android' &&
           (typeof options.bonding?.ensureBond !== 'function' || typeof options.bonding?.cancelBond !== 'function')) {
         throw failure('ble_security_unavailable', 'Install an app build with Bluetooth security support.');
       }
       await retire(id);
-      await base.connect(id, context);
+      await base.connect(id, context, mode);
       const link: Link = { ready: false, cancelled: new AbortController(), listeners: new Set() };
       links.set(id, link);
       try {

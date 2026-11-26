@@ -1654,3 +1654,24 @@ for (const code of ['ble_pairing_rejected', 'ble_security_firmware_required']) {
     await f.adapter.destroy(); f.core.dispose();
   });
 }
+
+for (const matches of [true, false]) {
+  test(`bound background reconnect verifies serial before adoption (match=${matches})`, async () => {
+    const f = fixture();
+    const requests = [];
+    f.ports.ble.scan = () => assert.fail('known peripheral must not scan');
+    f.ports.ble.connect = async (id, _context, mode) => requests.push([id, mode]);
+    if (!matches) f.values.set(f.metadata.CHAR_SERIAL_NUMBER, Buffer.from('OTHER00001'));
+    await f.adapter.configure();
+    try {
+      const result = f.adapter.reconnectKnown('C8SU2XXWHI', 'bound-id', new AbortController().signal);
+      if (matches) assert.equal((await result).serialNumber, 'C8SU2XXWHI');
+      else {
+        await assert.rejects(result);
+        assert.ok(f.calls.some(call => call[0] === 'disconnect' && call[1] === 'bound-id'));
+        assert.equal(f.calls.some(call => call[0] === 'write'), false);
+      }
+      assert.deepEqual(requests, [['bound-id', 'known']]);
+    } finally { await f.adapter.destroy(); f.core.dispose(); }
+  });
+}

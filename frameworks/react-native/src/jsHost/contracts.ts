@@ -80,7 +80,7 @@ export interface JsBlePort {
     onError?: (error: unknown) => void): Promise<JsHostSubscription>;
   scan(allowDuplicates: boolean, onCandidate: (candidate: JsHostCandidate) => void,
     context: JsHostContext, onError?: (error: unknown) => void): Promise<JsHostSubscription>;
-  connect(peripheralId: string, context: JsHostContext): Promise<void>;
+  connect(peripheralId: string, context: JsHostContext, mode?: 'known'): Promise<void>;
   discoverServices(peripheralId: string, context: JsHostContext): Promise<void>;
   /** Establish and verify transport security before connection adoption or business IO. */
   ensureSecure?(peripheralId: string, context: JsHostContext): Promise<void>;
@@ -166,6 +166,8 @@ export interface BotaJsHostPorts {
 }
 
 export interface JsWorkflowOptions {
+  /** Exact bound peripheral waiting in the system connection queue. */
+  knownPeripheralId?: string;
   operation: string;
   operationId?: string;
   capabilities?: readonly CoreCapability[];

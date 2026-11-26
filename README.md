@@ -40,6 +40,8 @@ update flows in React Native, Swift, Kotlin, Flutter, or a web application.
 For App-owned audio editing, splitting and ordered recording merges, see the unreleased
 [recording edit save helper](docs/recording-editing.md).
 
+For mobile host configuration and the bound-device lifecycle, see [background BLE](docs/parity/background-bound-ble.md).
+
 ## Features
 
 - **Device connectivity:** discover nearby devices, connect, reconnect by serial
