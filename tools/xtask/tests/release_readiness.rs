@@ -942,7 +942,7 @@ fn future_flutter_publication_uses_official_oidc_and_preserved_inputs_without_se
     assert_eq!(publish["environment"].as_str(), Some("release"));
     assert_eq!(publish["permissions"]["id-token"].as_str(), Some("write"));
     let steps = serde_yaml_ng::to_string(&publish["steps"]).unwrap();
-    assert!(steps.contains("dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d"));
+    assert!(steps.contains("dart-lang/setup-dart@2286a0c042b44434fe26d292bbce8d34f7ec662b"));
     assert!(steps.contains("prepare-publication.mjs"));
     assert!(steps.contains("tools/flutter/publish-preserved.sh --publish"));
     let staging = fs::read_to_string(root().join("tools/flutter/publish-preserved.sh")).unwrap();
