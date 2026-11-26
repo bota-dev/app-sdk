@@ -23,6 +23,8 @@ import type { OpaqueHostHandle } from './contracts';
 declare const performance: { now(): number };
 
 export interface JsDeviceAdapterOptions {
+  backgroundReconnect?: () => boolean;
+  onStatusInterrupted?: (id: string, error: unknown) => void;
   resolveBoundDeviceModel?: ResolveBoundDeviceModel;
   fetch?: JsV2Fetch;
   uploadFile?(target: JsRecordingUploadTarget, file: OpaqueHostHandle, context: JsHostContext,
@@ -34,6 +36,7 @@ export interface JsDeviceAdapterOptions {
   drainMaterial?(operationId: string, context: JsHostContext): Promise<void>;
 }
 export type JsDeviceAdapter = BotaDeviceAdapter & {
+  reconnectKnown(serial: string, id: string, signal: AbortSignal): Promise<NativeConnectedDevice>;
   readNonce(operationId: string): Promise<string>;
   registerMaterial(operationId: string, material: JsEncryptedUploadV2Material): string;
   context(operationId: string, signal?: AbortSignal): JsHostContext;
@@ -101,6 +104,7 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
   let destroyed = false;
   let closing = false;
   let disconnecting = false;
+  let lostLinkCleanup: Promise<void> | undefined;
   let closingLink: { generation: string; lost: boolean } | undefined;
   let controlEpoch = 0;
   const controlQueue: QueuedControl[] = [];
@@ -124,7 +128,7 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
     for (const listener of listeners.get(event) ?? []) listener(value);
   };
   let deviceControls = new JsDeviceControls({ ports, core, connection: () => connection,
-    resolveBoundDeviceModel: options.resolveBoundDeviceModel,
+    onStatusInterrupted: options.onStatusInterrupted, resolveBoundDeviceModel: options.resolveBoundDeviceModel,
     emit, gatt: (context, body) => executor.gatt(context, body),
     onCleanupFailure: error => executor.markCleanupFailed(error) });
   const fileEffects = ports.files ? new JsFileEffects(ports.files, ports.persistence.namespace,
@@ -206,6 +210,9 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
   const queueControl = async (name: string, args: readonly unknown[],
     body?: (context: JsHostContext) => Promise<unknown>): Promise<unknown> => {
     ready();
+    if (!connection && lostLinkCleanup && [
+      'stopStatusUpdates', 'stopRecordingStateUpdates', 'stopWiFiStatusUpdates', 'stopDeviceLogs',
+    ].includes(name)) return lostLinkCleanup;
     if (disconnecting) throw new BotaJsHostError('operation_cancelled', name);
     executor.checkControlAdmission(name, activeControl?.operationId);
     if (controlQueue.length >= 32) throw new BotaJsHostError('operation_in_progress', name);
@@ -246,7 +253,7 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
   const closeControls = async (context: JsHostContext) => {
     await deviceControls.close(context);
     deviceControls = new JsDeviceControls({ ports, core, connection: () => connection,
-      resolveBoundDeviceModel: options.resolveBoundDeviceModel,
+      onStatusInterrupted: options.onStatusInterrupted, resolveBoundDeviceModel: options.resolveBoundDeviceModel,
       emit, gatt: (lease, body) => executor.gatt(lease, body),
       onCleanupFailure: error => executor.markCleanupFailed(error) });
   };
@@ -285,7 +292,7 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
         try { await disconnectObserver?.remove(); } catch (error) { executor.markCleanupFailed(error); throw error; }
         disconnectObserver = undefined;
         deviceControls = new JsDeviceControls({ ports, core, connection: () => connection,
-          resolveBoundDeviceModel: options.resolveBoundDeviceModel,
+          onStatusInterrupted: options.onStatusInterrupted, resolveBoundDeviceModel: options.resolveBoundDeviceModel,
           emit, gatt: (lease, body) => executor.gatt(lease, body),
           onCleanupFailure: error => executor.markCleanupFailed(error) });
         if (ports.ble.ensureSecure) {
@@ -329,8 +336,9 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
           connection = null;
           presenceSession = '';
           connectionGeneration++;
-          void deviceControls.close().catch(() => {});
-          void executor.peripheralDisconnected(device.id).catch(failure => executor.markCleanupFailed(failure));
+          lostLinkCleanup = Promise.all([deviceControls.close(), executor.peripheralDisconnected(device.id)])
+            .then(() => {});
+          void lostLinkCleanup.catch(failure => executor.markCleanupFailed(failure));
           emit('onDeviceDisconnected', error ? { error } : {});
         }, context);
         executor.check(context);
@@ -357,20 +365,28 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
         throw error;
       }
     }, { ...(signal ? { signal } : {}) });
-  const establish = async (command: JsValue, operation: 'Connect' | 'Reconnect'): Promise<NativeConnectedDevice> => {
+  const establish = async (command: JsValue, operation: 'Connect' | 'Reconnect',
+    known?: { knownPeripheralId: string; signal: AbortSignal }): Promise<NativeConnectedDevice> => {
     ready();
     if (connection) {
       const retired = await direct('Disconnect', clearConnection);
       if (retired) emit('onDeviceDisconnected', {});
     }
-    const result = await executor.run(command, { operation });
+    const result = await executor.run(command, { operation, ...known });
     const notification = result.notifications.map(value => object(value).ConnectionEstablished).find(value => value !== undefined);
     if (!notification) throw new BotaJsHostError('connection_not_verified', operation);
     const fields = object(notification);
     const candidate = object(fields.candidate!);
     const initial: NativeConnectedDevice = { id: text(candidate.peripheral_id), serialNumber: text(fields.device),
       deviceType: 'unknown', firmwareVersion: '', isProvisioned: false, connectionState: 'connected', mtu: 23 };
-    return adoptConnection(initial, 'ReadIdentity');
+    // Once Rust hands us the physical link, complete adoption or its cleanup
+    // even if the caller cancels between the two executor leases.
+    const device = await adoptConnection(initial, 'ReadIdentity');
+    if (known?.signal.aborted) {
+      await direct('Disconnect', clearConnection);
+      throw new BotaJsHostError('operation_cancelled', operation);
+    }
+    return device;
   };
   const adapter: JsDeviceAdapter = {
     markCleanupFailed(error) { executor.markCleanupFailed(error); },
@@ -409,7 +425,7 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
     async configure() { if (destroyed || closing) throw new BotaJsHostError('runtime_destroyed', 'Configure'); configured = true; },
     async getState() { return destroyed ? 'uninitialized' : configured ? 'ready' : 'uninitialized'; },
     async getCapabilities() { return { platform: ports.platform, bluetooth: true, nativeFileTransfer: false,
-      backgroundScan: false, backgroundReconnect: false }; },
+      backgroundScan: false, backgroundReconnect: options.backgroundReconnect?.() === true }; },
     async nextClientPresence(deviceId) {
       if (!connection || connection.device.id !== deviceId || !presenceSession) return null;
       return { schemaVersion: 1, sessionId: presenceSession, sequence: ++presenceSequence,
@@ -441,6 +457,14 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
     connectSelected(device: NativeDiscoveredDevice) {
       return establish({ ConnectSelected: { candidate: { peripheral_id: device.id, name: device.name ?? null,
         advertised_address: device.macAddress ?? null, rssi: device.rssi } } }, 'Connect');
+    },
+    async reconnectKnown(serialNumber, id, signal) {
+      await lostLinkCleanup;
+      ready();
+      if (signal.aborted || connection) throw new BotaJsHostError('operation_cancelled', 'Connect');
+      return establish({ Connect: { device: serialNumber, candidate: {
+        peripheral_id: id, name: null, advertised_address: null, rssi: -127,
+      } } }, 'Connect', { knownPeripheralId: id, signal });
     },
     async reconnect(serialNumber: string, options: NativeReconnectOptions) {
       ready();

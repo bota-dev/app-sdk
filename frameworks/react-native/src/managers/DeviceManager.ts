@@ -11,6 +11,8 @@ import type {
   BotaEventSubscription,
 } from '../client';
 import {
+  backgroundBleOwners,
+  statusInterruptions,
   getCompatibilityClient,
   subscribeToCompatibilityDisconnections,
 } from '../compatibility/runtime';
@@ -118,13 +120,29 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
   private autoReconnectSerial: string | null = null;
   private autoReconnectTimer: ReturnType<typeof setInterval> | null = null;
   private autoReconnectAttempting = false;
+  private knownReconnect?: { serial: string; controller: AbortController; work: Promise<ConnectedDevice> };
   private userDisconnected = false;
   private destroyed = false;
   private readonly disconnectionSubscription: Subscription;
+  private readonly statusRetries = new Map<string, AbortController>();
+  private readonly statusFailures = new WeakMap<ConnectedDevice, number>();
+  private readonly onStatusInterrupted = (id: string, error: unknown) => {
+    const device = this.connectedDevices.get(id);
+    if (!device) return;
+    const subscription = this.statusSubscriptions.get(id);
+    if (!subscription) return;
+    void this.removeExpected(this.statusSubscriptions, id, subscription).then(() => {
+      if (this.connectedDevices.get(id) === device && (this.statusCallbacks.has(id) ||
+          this.autoReconnectSerial === device.serialNumber)) this.ensureStatusWatchdog(device, error);
+    }).catch(() => undefined);
+  };
 
   constructor() {
     super();
     this.client = getCompatibilityClient();
+    const listeners = statusInterruptions.get(this.client) ?? new Set();
+    listeners.add(this.onStatusInterrupted);
+    statusInterruptions.set(this.client, listeners);
     this.disconnectionSubscription = subscribeToCompatibilityDisconnections(
       this.client,
       (error) => this.handleNativeDisconnection(error)
@@ -136,6 +154,11 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
   async startScan(options: ScanOptions = {}): Promise<void> {
     this.assertAlive();
     if (this.scanActive) return;
+    if (this.knownReconnect) {
+      this.disableAutoReconnect();
+      await this.reconnectChain;
+      this.assertAlive();
+    }
     this.emit('scanStarted');
     try {
       this.scanSubscription = await this.client.devices.startScan(
@@ -181,6 +204,10 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
   ): Promise<ConnectedDevice> {
     void priority;
     this.assertAlive();
+    if (this.knownReconnect) {
+      this.disableAutoReconnect();
+      await this.reconnectChain;
+    }
     this.userDisconnected = false;
     this.emit('connectionStateChanged', device.id, 'connecting');
     this.connectionAttempts++;
@@ -204,6 +231,12 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     options?: ReconnectOptions
   ): Promise<ConnectedDevice> {
     this.assertAlive();
+    const pending = this.knownReconnect;
+    if (pending && !pending.controller.signal.aborted) {
+      if (pending.serial === serialNumber) return pending.work;
+      this.disableAutoReconnect();
+      await this.reconnectChain;
+    }
     const existing = this.findConnectedBySerial(serialNumber);
     if (existing) return existing;
     this.userDisconnected = false;
@@ -239,9 +272,14 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
 
   async disconnect(device: ConnectedDevice): Promise<void> {
     this.assertAlive();
+    const pending = this.knownReconnect;
+    if (pending?.serial === device.serialNumber && this.knownBleIds.get(device.serialNumber) === device.id) {
+      await this.pauseAutoReconnect();
+      if (!this.connectedDevices.has(device.id)) return;
+    }
     const connected = this.requireConnected(device.id, device.serialNumber);
+    this.disableAutoReconnect();
     this.userDisconnected = true;
-    this.stopAutoReconnectLoop();
     this.emit('connectionStateChanged', device.id, 'disconnecting');
     try {
       await this.removeOwned(this.statusSubscriptions, device.id);
@@ -592,14 +630,14 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     device: ConnectedDevice,
     callback: (status: DeviceStatus) => void
   ): () => void {
-    this.requireConnected(device.id);
+    const current = this.requireConnected(device.id, device.serialNumber);
     const callbacks = this.statusCallbacks.get(device.id) ?? new Set();
     callbacks.add(callback);
     this.statusCallbacks.set(device.id, callbacks);
-    this.ensureStatusWatchdog(device);
+    this.ensureStatusWatchdog(current);
     return idempotentRemoval(() => {
       callbacks.delete(callback);
-      if (callbacks.size === 0) {
+      if (callbacks.size === 0 && this.statusCallbacks.get(device.id) === callbacks) {
         this.statusCallbacks.delete(device.id);
         if (!this.autoReconnectEnabled) {
           void this.removeOwned(this.statusSubscriptions, device.id)
@@ -742,11 +780,13 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
 
   enableAutoReconnect(serialNumber: string): void {
     this.assertAlive();
+    if (this.autoReconnectSerial && this.autoReconnectSerial !== serialNumber) this.disableAutoReconnect();
     this.autoReconnectSerial = serialNumber;
     this.autoReconnectEnabled = true;
     this.userDisconnected = false;
     const connected = this.findConnectedBySerial(serialNumber);
     if (connected) {
+      backgroundBleOwners.get(this.client)?.setActive(true);
       this.ensureStatusWatchdog(connected);
     } else {
       this.startAutoReconnectLoop();
@@ -755,10 +795,16 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
 
   disableAutoReconnect(): void {
     const serialNumber = this.autoReconnectSerial;
+    this.knownReconnect?.controller.abort();
+    backgroundBleOwners.get(this.client)?.setActive(false);
     this.autoReconnectEnabled = false;
     this.autoReconnectSerial = null;
     this.userDisconnected = false;
     this.stopAutoReconnectLoop();
+    if (serialNumber && !this.findConnectedBySerial(serialNumber)) {
+      const id = this.knownBleIds.get(serialNumber);
+      if (id) this.statusCallbacks.delete(id);
+    }
     const connected = serialNumber
       ? this.findConnectedBySerial(serialNumber)
       : null;
@@ -790,6 +836,7 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     if (this.destroyed) return;
     this.destroyed = true;
     this.disconnectionSubscription.remove();
+    statusInterruptions.get(this.client)?.delete(this.onStatusInterrupted);
     this.disableAutoReconnect();
     this.stopScan();
     for (const [deviceId] of this.statusSubscriptions) {
@@ -816,24 +863,47 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
   private rememberConnected(device: ConnectedDevice): void {
     this.connectedDevices.set(device.id, device);
     this.knownBleIds.set(device.serialNumber, device.id);
+    if (this.autoReconnectEnabled && this.autoReconnectSerial === device.serialNumber) {
+      backgroundBleOwners.get(this.client)?.setActive(true);
+    }
   }
 
-  private ensureStatusWatchdog(device: ConnectedDevice): void {
-    if (this.statusSubscriptions.has(device.id)) return;
-    const subscription = this.trackSubscriptionWork(
-      this.client.devices.subscribeToStatus((status) => {
-        for (const callback of this.statusCallbacks.get(device.id) ?? []) {
-          callback(status);
-        }
-        this.emit('deviceStatusUpdated', device.id, status);
-      })
-    );
+  private ensureStatusWatchdog(device: ConnectedDevice, interruption?: unknown): Promise<BotaAsyncEventSubscription> {
+    const existing = this.statusSubscriptions.get(device.id);
+    if (existing) return existing;
+    const controller = new AbortController();
+    this.statusRetries.set(device.id, controller);
+    const retry = backgroundBleOwners.get(this.client)?.waitForRetry;
+    const wait = async (error: unknown) => {
+      if (!retry || !this.autoReconnectEnabled || this.autoReconnectSerial !== device.serialNumber ||
+          this.connectedDevices.get(device.id) !== device || controller.signal.aborted) throw error;
+      const attempt = (this.statusFailures.get(device) ?? 0) + 1;
+      this.statusFailures.set(device, attempt);
+      await retry(error, attempt, controller.signal, true);
+      if (!this.autoReconnectEnabled || this.autoReconnectSerial !== device.serialNumber) throw error;
+    };
+    const register = async () => {
+      if (interruption !== undefined) await wait(interruption);
+      while (!controller.signal.aborted && this.connectedDevices.get(device.id) === device) {
+        try {
+          return await this.client.devices.subscribeToStatus(status => {
+            if (this.connectedDevices.get(device.id) !== device || controller.signal.aborted) return;
+            this.statusFailures.delete(device);
+            for (const callback of this.statusCallbacks.get(device.id) ?? []) callback(status);
+            this.emit('deviceStatusUpdated', device.id, status);
+          });
+        } catch (error) { await wait(error); }
+      }
+      throw DeviceError.notConnected(device.id);
+    };
+    const subscription = this.trackSubscriptionWork(register());
     this.statusSubscriptions.set(device.id, subscription);
     void subscription.catch(() => {
-      if (this.statusSubscriptions.get(device.id) === subscription) {
-        this.statusSubscriptions.delete(device.id);
-      }
+      if (this.statusSubscriptions.get(device.id) === subscription) this.statusSubscriptions.delete(device.id);
+    }).finally(() => {
+      if (this.statusRetries.get(device.id) === controller) this.statusRetries.delete(device.id);
     });
+    return subscription;
   }
 
   private handleNativeDisconnection(error?: Error): void {
@@ -842,7 +912,9 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
       this.connectedDevices.delete(device.id);
       this.recordingStateCache.delete(device.id);
       this.recordingStatePending.delete(device.id);
-      this.statusCallbacks.delete(device.id);
+      const background = this.autoReconnectEnabled && this.autoReconnectSerial === device.serialNumber
+        ? backgroundBleOwners.get(this.client) : undefined;
+      if (!background) this.statusCallbacks.delete(device.id);
       void this.removeOwned(this.statusSubscriptions, device.id)
         .catch(() => undefined);
       void this.removeOwned(this.wifiStatusSubscriptions, device.id)
@@ -850,11 +922,16 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
       this.observeLogRemoval(this.removeOwned(this.logSubscriptions, device.id));
       void this.removeOwned(this.recordingStateSubscriptions, device.id)
         .catch(() => undefined);
+      // Reserve before notifying the app. A focused screen may call reconnect
+      // synchronously from the disconnect event and must join the same request.
+      if (background && background.canRecover?.() !== false && this.connectionAttempts === 0) {
+        this.startKnownReconnect(device);
+      }
       this.emit('connectionStateChanged', device.id, 'disconnected');
       this.emit('deviceDisconnected', device.id, error);
       if (
         this.autoReconnectEnabled &&
-        this.connectionAttempts === 0 &&
+        !background && this.connectionAttempts === 0 &&
         this.autoReconnectSerial === device.serialNumber
       ) {
         this.startAutoReconnectLoop();
@@ -862,7 +939,45 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     }
   }
 
+  private startKnownReconnect(device: ConnectedDevice): void {
+    const owner = backgroundBleOwners.get(this.client);
+    if (!owner) return;
+    this.stopAutoReconnectLoop();
+    this.knownReconnect?.controller.abort();
+    const controller = new AbortController();
+    const serial = device.serialNumber;
+    const work = this.reconnectChain.then(async () => {
+      await this.drainSubscriptionWork(true);
+      if (controller.signal.aborted) throw DeviceError.notConnected(device.id);
+      const connected = await owner.connect(serial, device.id, controller.signal);
+      if (controller.signal.aborted || this.destroyed || connected.serialNumber !== serial || connected.id !== device.id) {
+        await this.client.devices.disconnect();
+        throw DeviceError.notConnected(device.id);
+      }
+      this.rememberConnected(connected);
+      try {
+        await this.ensureStatusWatchdog(connected);
+        if (controller.signal.aborted || this.connectedDevices.get(device.id) !== connected) throw DeviceError.notConnected(device.id);
+      } catch (error) {
+        if (this.connectedDevices.get(device.id) === connected) {
+          this.connectedDevices.delete(device.id);
+          await this.removeOwned(this.statusSubscriptions, device.id);
+          await this.client.devices.disconnect();
+        }
+        throw error;
+      }
+      this.emit('connectionStateChanged', connected.id, 'connected');
+      this.emit('deviceConnected', connected);
+      return connected;
+    });
+    this.knownReconnect = { serial, controller, work };
+    this.reconnectChain = work.catch(() => undefined).finally(() => {
+      if (this.knownReconnect?.controller === controller) this.knownReconnect = undefined;
+    });
+  }
+
   private startAutoReconnectLoop(): void {
+    if (this.knownReconnect && !this.knownReconnect.controller.signal.aborted) return;
     if (this.autoReconnectTimer || !this.autoReconnectSerial) return;
     const attempt = async (): Promise<void> => {
       const serialNumber = this.autoReconnectSerial;
@@ -1004,12 +1119,15 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     const subscription = owner.get(deviceId);
     if (!subscription) return Promise.resolve();
     owner.delete(deviceId);
+    if (owner === this.statusSubscriptions) this.statusRetries.get(deviceId)?.abort();
     return this.removeSubscription(subscription);
   }
 
   private removeSubscription(subscription: Promise<BotaAsyncEventSubscription>): Promise<void> {
     return this.trackSubscriptionWork((async () => {
-      const owned = await subscription;
+      // A failed registration produced no subscription to release.
+      const owned = await subscription.catch(() => undefined);
+      if (!owned) return;
       try {
         await owned.remove();
       } catch (error) {
@@ -1029,7 +1147,7 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     return work;
   }
 
-  private async drainSubscriptionWork(): Promise<void> {
+  private async drainSubscriptionWork(linkLost = false): Promise<void> {
     let failure: { error: unknown } | undefined;
     while (this.subscriptionWork.size) {
       const settled = await Promise.allSettled([...this.subscriptionWork]);
@@ -1039,7 +1157,7 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     }
     // Join every submitted lifecycle before reporting a failure to the caller.
     if (this.subscriptionCleanupFailure) throw this.subscriptionCleanupFailure.error;
-    if (failure) throw failure.error;
+    if (failure && !linkLost) throw failure.error;
   }
 
   private observeLogRemoval(removal: Promise<void>): void {

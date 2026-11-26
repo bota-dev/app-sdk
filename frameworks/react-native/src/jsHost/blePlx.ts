@@ -23,7 +23,7 @@ export interface BlePlxManager {
   stopDeviceScan(): void | Promise<void>;
   connectedDevices?(serviceUUIDs: string[]): Promise<Peripheral[]>;
   servicesForDevice?(deviceIdentifier: string): Promise<readonly { uuid: string }[]>;
-  connectToDevice(id: string, options?: { requestMTU?: number }): Promise<Peripheral>;
+  connectToDevice(id: string, options?: { requestMTU?: number; autoConnect?: boolean }): Promise<Peripheral>;
   isDeviceConnected?(id: string): Promise<boolean>;
   cancelDeviceConnection(id: string): Promise<Peripheral>;
   requestMTUForDevice(id: string, mtu: number, transactionId?: string): Promise<Peripheral>;
@@ -204,7 +204,7 @@ export function createBlePlxPort(manager: BlePlxManager): JsBlePort {
         return subscription;
       } catch (error) { await subscription.remove(); throw error; }
     },
-    async connect(peripheralId, context) {
+    async connect(peripheralId, context, mode) {
       check(context);
       if (uncertainConnections.has(peripheralId)) throw cleanupFailure('Connection cleanup pending');
       let cancellation: Promise<void> | undefined;
@@ -228,7 +228,8 @@ export function createBlePlxPort(manager: BlePlxManager): JsBlePort {
       try {
         let device: Peripheral | undefined;
         let connectionError: unknown;
-        try { device = await manager.connectToDevice(peripheralId, { requestMTU: policy.MAX_MTU }); }
+        try { device = await manager.connectToDevice(peripheralId, { requestMTU: policy.MAX_MTU,
+          ...(mode === 'known' ? { autoConnect: true } : {}) }); }
         catch (error) { connectionError = error; }
         if (device) {
           connected.set(peripheralId, device);
@@ -281,7 +282,12 @@ export function createBlePlxPort(manager: BlePlxManager): JsBlePort {
     } } : {}),
     async disconnect(peripheralId) {
       if (!connected.has(peripheralId) && !uncertainConnections.has(peripheralId)) return;
-      await manager.cancelDeviceConnection(peripheralId);
+      try { await manager.cancelDeviceConnection(peripheralId); }
+      catch (error) {
+        // PLX may already have removed a link lost during identity reads.
+        const code = (error as { errorCode?: number } | null)?.errorCode;
+        if ((code !== 201 && code !== 205) || !manager.isDeviceConnected || await manager.isDeviceConnected(peripheralId)) throw error;
+      }
       // PLX can acknowledge cancellation before the native connection state changes.
       if (manager.isDeviceConnected) {
         for (let retry = 0; await manager.isDeviceConnected(peripheralId); retry++) {

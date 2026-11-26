@@ -29,6 +29,7 @@ export interface JsDeviceControlsOptions {
   /** The executor's ordered GATT lane, shared with active workflows. */
   readonly gatt: <T>(context: JsHostContext, body: () => Promise<T>) => Promise<T>;
   /** Retains the shared owner when a submitted STOP or unsubscribe cannot be confirmed. */
+  readonly onStatusInterrupted?: (id: string, error: unknown) => void;
   readonly onCleanupFailure?: (error: unknown, context?: JsHostContext) => void;
   /** The host verifies authenticated account/project/current-binding authority and scope. */
   readonly resolveBoundDeviceModel?: ResolveBoundDeviceModel;
@@ -513,6 +514,7 @@ export class JsDeviceControls {
     const prior = this.observers.get(key);
     if (prior) await this.closeObserver(key, prior, context);
     let owner: Observer | null = null;
+    let earlyFailure: { error: unknown } | undefined;
     this.requireOwner(connection, context);
     const subscription = await this.options.gatt(context, () => this.options.ports.ble.subscribe(this.address(service, characteristic, connection), value => {
       if (!owner || owner.closing || this.closed) return;
@@ -522,11 +524,17 @@ export class JsDeviceControls {
         if (decoded !== null) this.options.emit(event, decoded);
       } catch { void this.closeObserver(key, owner).catch(() => undefined); }
     }, context, error => {
-      this.markCleanupFailure(error, context);
-      if (owner) void this.closeObserver(key, owner).catch(() => undefined);
+      if (!owner) { earlyFailure = { error }; return; }
+      if (owner.closing || this.closed) return;
+      void this.closeObserver(key, owner).then(() => {
+        if (key === 'status' && !this.closed && this.options.connection()?.generation === connection.generation) {
+          this.options.onStatusInterrupted?.(connection.device.id, error);
+        }
+      }).catch(() => undefined);
     }));
     owner = { connection, context, subscription, closing: false, cleanup: null, releaseSignal: () => undefined, cleanupFailed: false };
     try {
+      if (earlyFailure) throw earlyFailure.error;
       this.requireOwner(connection, context);
       this.observers.set(key, owner);
       const captured = owner;
@@ -555,8 +563,7 @@ export class JsDeviceControls {
     };
     this.requireOwner(connection, context);
     const subscription = await this.options.gatt(context, () => this.options.ports.ble.subscribe(
-      this.address('SERVICE_BOTA_DIAGNOSTICS', 'CHAR_DEVICE_LOG_DATA', connection), deliver, context, error => {
-        this.markCleanupFailure(error, context);
+      this.address('SERVICE_BOTA_DIAGNOSTICS', 'CHAR_DEVICE_LOG_DATA', connection), deliver, context, () => {
         if (owner) void this.closeObserver('logs', owner).catch(() => undefined);
       }));
     owner = { connection, context, subscription, decoderId, closing: false, cleanup: null, releaseSignal: () => undefined, cleanupFailed: false };

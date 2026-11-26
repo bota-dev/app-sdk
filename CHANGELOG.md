@@ -19,6 +19,11 @@ tracked separately.
 
 ## Unreleased
 
+- React Native hosts can keep a bound BLE connection and request same-device
+  recovery during ordinary background and lock-screen use. The SDK verifies
+  the serial, retries transient link and status setup failures, and cancels
+  pending recovery when the user disconnects or unbinds.
+
 - Unify encrypted uploads on the ordinary managed-upload protocol with generic
   target authorization and completion receipts. Add optional capability discovery
   while preserving legacy ordinary firmware fallback. Remove the unpublished

@@ -24,6 +24,14 @@ struct Retry {
     retryable: bool,
 }
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct BoundRetry {
+    attempt: u32,
+    code: String,
+    retryable: bool,
+    platform: String,
+}
+#[derive(Deserialize)]
 struct Failure {
     error: DeviceSdkError,
 }
@@ -48,6 +56,7 @@ pub(crate) fn supports(name: &str) -> bool {
         name,
         "normalizeForegroundReconnect"
             | "planForegroundReconnect"
+            | "planBoundReconnect"
             | "normalizeWorkflowError"
             | "planConnectionAdoption"
             | "normalizeBluetoothState"
@@ -56,6 +65,27 @@ pub(crate) fn supports(name: &str) -> bool {
 #[inline(never)]
 pub(crate) fn call(name: &str, value: Value) -> Result<Vec<u8>, DeviceSdkError> {
     match name {
+        "planBoundReconnect" => {
+            let request: BoundRetry = input(value)?;
+            if request.attempt == 0 || !matches!(request.platform.as_str(), "ios" | "android") {
+                return Err(invalid("invalid bound reconnect request"));
+            }
+            let retry = request.retryable
+                && matches!(
+                    request.code.as_str(),
+                    "connection_failed"
+                        | "timeout"
+                        | "not_connected"
+                        | "status_subscription_failed"
+                        | "operation_in_progress"
+                );
+            let delay = match (request.platform.as_str(), request.attempt) {
+                ("ios", 1) => 0,
+                ("ios", attempt) => (2000u32 << (attempt - 2).min(2)).min(8000),
+                (_, attempt) => (2000u32 << (attempt - 1).min(4)).min(30000),
+            };
+            public_output(json!({"retryMs": retry.then_some(delay)}))
+        }
         "normalizeBluetoothState" => {
             let request: BluetoothState = input(value)?;
             let state = match request.state.as_str() {
@@ -104,6 +134,32 @@ mod tests {
     use super::*;
     fn run(name: &str, value: Value) -> Value {
         serde_json::from_slice(&call(name, value).unwrap()).unwrap()
+    }
+    #[test]
+    fn bound_retry_keeps_only_transient_failures_and_caps_the_delay() {
+        let plan = |code, retryable, platform, attempt| {
+            run(
+                "planBoundReconnect",
+                json!({"code":code,"retryable":retryable,"platform":platform,"attempt":attempt}),
+            )
+        };
+        assert_eq!(
+            plan("connection_failed", true, "ios", 1),
+            json!({"retryMs":0})
+        );
+        assert_eq!(plan("timeout", true, "android", 1), json!({"retryMs":2000}));
+        assert_eq!(
+            plan("status_subscription_failed", true, "android", 100),
+            json!({"retryMs":30000})
+        );
+        assert_eq!(
+            plan("identity_mismatch", true, "ios", 2),
+            json!({"retryMs":null})
+        );
+        assert_eq!(
+            plan("connection_failed", false, "android", 2),
+            json!({"retryMs":null})
+        );
     }
     #[test]
     fn defaults_and_terminal_failures() {

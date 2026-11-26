@@ -1,4 +1,16 @@
+import type { ConnectedDevice } from '../models/Device';
 import type { BotaDeviceSDKClient } from '../client';
+
+/** The generated mobile runtime alone supplies same-manager system reconnection. */
+export interface BackgroundBleOwner {
+  connect(serial: string, id: string, signal: AbortSignal): Promise<ConnectedDevice>;
+  setActive(active: boolean): void;
+  canRecover?(): boolean;
+  waitForRetry?(error: unknown, attempt: number, signal: AbortSignal, status?: boolean): Promise<void>;
+}
+export const backgroundBleOwners = new WeakMap<BotaDeviceSDKClient, BackgroundBleOwner>();
+
+export const statusInterruptions = new WeakMap<BotaDeviceSDKClient, Set<(id: string, error: unknown) => void>>();
 
 let defaultClient: BotaDeviceSDKClient | null = null;
 let testClient: BotaDeviceSDKClient | null = null;

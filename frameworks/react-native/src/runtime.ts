@@ -1,6 +1,8 @@
+import { BotaJsHostError } from './jsHost/executor';
 export type { RegulatoryCapabilities, RegulatoryDelivery, RegulatoryReceipt } from './regulatory';
 export type { CountryConfigurationDelivery, CountryConfigurationResult } from './countryConfiguration';
-import { createBotaDeviceSDK } from './client';
+import { backgroundBleOwners, statusInterruptions } from './compatibility/runtime';
+import { createBotaDeviceSDK, mapConnectedDevice } from './client';
 import type { BotaDeviceSDKClient } from './client';
 import { createBotaClient } from './BotaClient';
 import { createManagedEncryptedUploadV2Backend } from './encryptedUploadV2Backend';
@@ -28,6 +30,7 @@ import { createUploadRecoveryProvider } from './uploadRecovery';
 import { createJsBluetoothState } from './jsHost/bluetoothState';
 import { setCompatibilityBluetoothState } from './compatibility/bluetoothState';
 
+export { createBackgroundBleSession } from './backgroundBleSession';
 export { createBlePlxPort } from './jsHost/blePlx';
 export { createSecureBlePlxPort } from './jsHost/bleSecurity';
 export type { BleBondingBridge, BleLinkSecurityOptions } from './jsHost/bleSecurity';
@@ -67,6 +70,15 @@ export interface BotaReactNativeRuntime {
 }
 
 export interface BotaReactNativeJsRuntimeOptions {
+  /** Host provides bluetooth-central or a connectedDevice service for the bound session. */
+  backgroundBle?: {
+    setActive(active: boolean): void;
+    /** Optional native backoff after a terminal, retryable connection error.
+     * setActive(false) must release a pending delay. */
+    waitToRetry?(delayMs: number, signal?: AbortSignal): Promise<void>;
+    isAvailable?(): boolean;
+    canRecover?(): boolean;
+  };
   /** Exact authenticated binding metadata; only BOTA_DEV may fall back to this Rust-validated model. */
   resolveBoundDeviceModel?: JsDeviceAdapterOptions['resolveBoundDeviceModel'];
   reconnect?: BotaReconnectPolicy;
@@ -107,6 +119,10 @@ export function createBotaReactNativeJsRuntime(
     if (scalarBackend) constructionCleanups.push(() => scalarBackend.dispose());
     let managedBackend: JsEncryptedUploadV2Backend | undefined;
     const device = createJsDeviceAdapter(core, ports, { upload: options.upload,
+      backgroundReconnect: () => options.backgroundBle?.isAvailable?.() ?? !!options.backgroundBle,
+      onStatusInterrupted(id, error) {
+        if (runtime) for (const notify of statusInterruptions.get(runtime.sdk) ?? []) notify(id, error);
+      },
       resolveBoundDeviceModel: options.resolveBoundDeviceModel,
       fetch: backendOptions?.fetch, uploadFile: options.uploadFile,
       firmwareRecoveryTimeoutMs: options.firmwareRecovery?.timeoutMs,
@@ -147,6 +163,31 @@ export function createBotaReactNativeJsRuntime(
         } } });
     setCompatibilityUploadPolicy(runtime.sdk.recordings, codecPolicy);
     setCompatibilityBluetoothState(runtime.sdk, bluetoothState);
+    const background = options.backgroundBle;
+    if (background) {
+      const waitForRetry = async (error: unknown, attempt: number, signal: AbortSignal, status = false) => {
+        if (signal.aborted) throw error;
+        const cause = error as { code?: string; errorCode?: number; retryable?: boolean } | null;
+        // Map link errors reported by BLE PLX during post-link GATT operations.
+        const radio = [3, 200, 201, 205].includes(cause?.errorCode ?? -1);
+        const code = cause?.code ?? (radio ? 'connection_failed' : status ? 'status_subscription_failed' : 'unknown');
+        const retryable = cause?.retryable ?? (radio || code === 'status_subscription_failed' || code === 'operation_in_progress');
+        const { retryMs } = codecPolicy('planBoundReconnect', { code, retryable, attempt, platform: ports.platform });
+        if (typeof retryMs !== 'number' || (retryMs > 0 && !background.waitToRetry)) throw error;
+        if (retryMs > 0) await background.waitToRetry!(retryMs, signal);
+        if (signal.aborted) throw error;
+      };
+      backgroundBleOwners.set(runtime.sdk, {
+        setActive: background.setActive, canRecover: background.canRecover, waitForRetry,
+        async connect(serial, id, signal) {
+          for (let attempt = 1; !signal.aborted; attempt++) {
+            try { return mapConnectedDevice(await device.reconnectKnown(serial, id, signal)); }
+            catch (error) { await waitForRetry(error, attempt, signal); }
+          }
+          throw new BotaJsHostError('operation_cancelled', 'Connect');
+        },
+      });
+    }
     return { ...runtime,
       readEncryptedUploadV2AuthNonce: operationId => device.readNonce(operationId),
       registerEncryptedUploadV2Material: (operationId, material) => device.registerMaterial(operationId, material),

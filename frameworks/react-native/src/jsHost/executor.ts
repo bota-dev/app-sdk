@@ -34,6 +34,8 @@ interface Owner {
   queue: RawCoreEffect[];
   subscriptions: Map<string, JsHostSubscription>;
   scanStartup?: Promise<void>;
+  startKnownLinkDeadline?: () => void;
+  knownLinkReady?: boolean;
   bleSubscriptions: Map<string, { effect: RawCoreEffect; peripheralId?: string }>;
   timers: Map<string, ReturnType<typeof setTimeout>>;
   cleanups: Array<() => Promise<void>>;
@@ -573,13 +575,17 @@ export class BotaJsHostExecutor {
     if (kind !== 'Schedule') throw new BotaJsHostError('invalid_core_effect', owner.operation);
     const delay = Number(decimal(timer.delay_ms));
     if (!Number.isSafeInteger(delay) || delay > 2147483647) throw new BotaJsHostError('invalid_core_deadline', owner.operation);
-    owner.timers.set(id, setTimeout(() => {
+    const schedule = () => owner.timers.set(id, setTimeout(() => {
       owner.timers.delete(id);
       void this.emit(owner, effect, { TimerFired: { timer_id: id } }).catch(error => {
         owner.failure ??= error;
         void this.cancel(owner.operationId).catch(() => {});
       });
     }, delay));
+    // The system request may legitimately wait out of range for hours. The
+    // core deadline still bounds discovery and serial verification once linked.
+    if (owner.options.knownPeripheralId && !owner.knownLinkReady) owner.startKnownLinkDeadline = schedule;
+    else schedule();
   }
 
   private async ble(owner: Owner, effect: RawCoreEffect, value: JsValue, context: JsHostContext): Promise<void> {
@@ -623,7 +629,22 @@ export class BotaJsHostExecutor {
       }
       case 'Connect': {
         const id = string(fields.peripheral_id);
-        await this.gatt(context, () => this.ports.ble.connect(id, context));
+        const known = owner.options.knownPeripheralId;
+        if (known && known !== id) throw new BotaJsHostError('identity_mismatch', owner.operation);
+        try { await this.gatt(context, () => this.ports.ble.connect(id, context, known ? 'known' : undefined)); }
+        catch (error) {
+          // Preserve explicit admission refusals. A generic radio failure goes through Rust.
+          const code = (error as { code?: unknown } | null)?.code;
+          if (known && typeof code === 'string' && /^(ble_security_|ble_pairing_|ble_permission_)/.test(code)) {
+            throw new BotaJsHostError(code, owner.operation);
+          }
+          throw error;
+        }
+        if (known && !owner.controller.signal.aborted) {
+          owner.knownLinkReady = true;
+          owner.startKnownLinkDeadline?.();
+          owner.startKnownLinkDeadline = undefined;
+        }
         this.peripheralId = id;
         await event({ Connected: { peripheral_id: id } }); return;
       }

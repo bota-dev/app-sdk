@@ -5,6 +5,7 @@ import { afterEach, test } from 'node:test';
 const require = createRequire(import.meta.url);
 const { DeviceManager } = require('../lib/commonjs/managers/DeviceManager.js');
 const {
+  backgroundBleOwners,
   reportCompatibilityDisconnection,
   setCompatibilityClientForTesting,
 } = require(
@@ -761,3 +762,52 @@ test('invalid plaintext provisioning rejects without dispatching a provider or B
   assert.deepEqual(fake.provisioningCalls, []);
   manager.destroy();
 });
+
+for (const cancel of [false, true]) {
+  test(`bound session joins a screen retry and fences notifications (cancel=${cancel})`, async () => {
+    const fake = createFakeClient();
+    const pending = deferred();
+    const requests = [], monitors = [], statuses = [];
+    fake.client.devices.subscribeToStatus = async callback => {
+      monitors.push(callback);
+      return { async remove() {} };
+    };
+    backgroundBleOwners.set(fake.client, {
+      setActive() {},
+      connect(serial, id, signal) {
+        requests.push([serial, id]);
+        signal.addEventListener('abort', () => pending.reject(new Error('cancelled')), { once: true });
+        return pending.promise;
+      },
+    });
+    setCompatibilityClientForTesting(fake.client);
+    const manager = new DeviceManager();
+    try {
+      const original = await manager.connect(discoveredDevice);
+      manager.enableAutoReconnect(original.serialNumber);
+      manager.subscribeToStatus(original, value => statuses.push(value));
+      monitors[0](deviceStatus);
+      let joined;
+      manager.on('deviceDisconnected', () => { joined = manager.reconnect(original.serialNumber); });
+      reportCompatibilityDisconnection(fake.client, new Error('out of range'));
+      await tick();
+      assert.deepEqual(requests, [[original.serialNumber, original.id]]);
+      assert.deepEqual(fake.reconnectCalls, []);
+      monitors[0]({ batteryLevel: 0 });
+      if (cancel) {
+        const stopped = assert.rejects(joined, /cancelled/);
+        await manager.pauseAutoReconnect();
+        await stopped;
+        assert.deepEqual(manager.getConnectedDevices(), []);
+        assert.equal(monitors.length, 1);
+      } else {
+        pending.resolve({ ...original });
+        await joined;
+        assert.equal(monitors.length, 2);
+        monitors[0]({ batteryLevel: 0 });
+        monitors[1]({ batteryLevel: 1 });
+      }
+      assert.deepEqual(statuses, cancel ? [deviceStatus] : [deviceStatus, { batteryLevel: 1 }]);
+    } finally { manager.destroy(); }
+  });
+}
