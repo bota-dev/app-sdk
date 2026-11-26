@@ -354,3 +354,9 @@ The frozen combined successor passes all 522 RN checks, normal module/CommonJS/
 declaration builds, strict types, Codegen, compiler-free core provenance, package
 metadata and the 33-package license gate. Exact main CI, preserved archives,
 publication and fresh normal-app acceptance remain separate gates.
+
+### Dashboard recovery after a status lookup returns 404
+
+The generated React Native managed backend rechecks the capture through the authenticated Dashboard device reconciliation endpoint when the first status lookup for a journaled session returns 404. It sends the binding generation, transfer channel, recording UUID and generation, ciphertext length and digest, and advertised capabilities. The Dashboard prefix must match the configured project. Customer-proxy paths retain their existing status lookup behavior.
+
+An explicit pending recording with no session permits a fresh session for that recording. An existing owner is read back and checked against the catalogue identity before it replaces the journal pointer. A different owner requires a newer owner revision and no active BLE checkpoint. A null result on older Dashboard versions yields `BOTA_UPLOAD_RECORDING_UNAVAILABLE`; a later retry repeats the scoped lookup. A 410 from that endpoint with the exact `encrypted_upload_v2_recording_deleted` code persists `BOTA_UPLOAD_RECORDING_DELETED` for this capture and prevents further HTTP retry. Both outcomes retain the local recording. Completion and device cleanup still require the verified receipt and confirmation flow.

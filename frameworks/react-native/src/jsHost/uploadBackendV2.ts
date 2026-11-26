@@ -65,6 +65,7 @@ interface Input {
 interface Entry { recordingId: string; sessionId?: string; ownerRevision?: number }
 interface Journal {
   entry?: Entry;
+  phase: string;
   authorizationNonceSha256?: string;
   recoveryNonceBase64?: string;
   [key: string]: unknown;
@@ -191,7 +192,7 @@ export function createJsEncryptedUploadV2Backend(options: JsEncryptedUploadV2Bac
         if (policy.authorizationRejected && authorizationRejected) {
           check(slot); await authorizationRejected();
         }
-        if (!policy.success) throw new HttpFailure(response.status, policy.stagingMissing);
+        if (!policy.success) throw new HttpFailure(response.status, policy.stagingMissing, policy.recordingDeleted);
         return text;
       } catch (error) {
         if (!drain) check(slot);
@@ -220,18 +221,76 @@ export function createJsEncryptedUploadV2Backend(options: JsEncryptedUploadV2Bac
     check(slot);
     return typeof result === 'string' ? new Uint8Array(Buffer.from(result, 'hex')) : result.slice();
   };
-  const sessionPath = (slot: Slot) => {
-    if (!slot.entry?.sessionId) throw failure('BOTA_UPLOAD_STATE');
-    return `${slot.input.scope.apiBasePath ?? '/v1'}/recordings/${slot.entry.recordingId}/encrypted-upload-v2/sessions/${slot.entry.sessionId}`;
+  const sessionPath = (slot: Slot, entry = slot.entry) => {
+    if (!entry?.sessionId) throw failure('BOTA_UPLOAD_STATE');
+    return `${slot.input.scope.apiBasePath ?? '/v1'}/recordings/${entry.recordingId}/encrypted-upload-v2/sessions/${entry.sessionId}`;
   };
-  const restore = async (slot: Slot): Promise<string> => {
+  const createSession = async (slot: Slot): Promise<string> => {
+    const bytes = await nonce(slot);
+    try {
+      const previous = { ...slot.entry! };
+      const plan = reduce(slot.input, { type: 'CreateSession', entry: previous, nonce: Array.from(bytes) });
+      const response = await http(slot, plan.path, plan.bodyJSON, true,
+        () => save(slot, previous, 'session_create_unknown'), () => rollback(slot, previous));
+      const committed = reduce(slot.input, { type: 'AcceptPointer', recordingId: previous.recordingId, responseJson: response }).entry;
+      const digest = reduce(slot.input, { type: 'NonceHash', nonce: Array.from(bytes) }).sha256;
+      await save(slot, committed, 'ready', { authorizationNonceSha256: digest });
+      return response;
+    } finally { bytes.fill(0); }
+  };
+  const readExisting = async (slot: Slot): Promise<string | undefined> => {
+    const previous = slot.entry!;
+    const plan = reduce(slot.input, { type: 'ReconcilePlan' });
+    if (slot.journal?.phase !== 'reconcile_required' || !plan.path) {
+      try { return await retry(slot, () => http(slot, sessionPath(slot))); }
+      catch (error) {
+        if (!(error instanceof HttpFailure && error.status === 404 && plan.path)) throw error;
+      }
+    }
+
+    // The device-scoped lookup is read-only. A legacy server can return null
+    // for either an absent or a hard-deleted row. Neither authorizes recreation.
+    let result: string;
+    try { result = await retry(slot, () => http(slot, plan.path, plan.bodyJSON)); }
+    catch (error) {
+      if (!(error instanceof HttpFailure && error.recordingDeleted)) throw error;
+      check(slot);
+      await save(slot, previous, 'recording_deleted');
+      throw failure('BOTA_UPLOAD_RECORDING_DELETED');
+    }
+    check(slot);
+    const entry: Entry | null = reduce(slot.input, { type: 'ReconcilePointer', previous, responseJson: result }).entry;
+    const unavailable = async (): Promise<never> => {
+      await save(slot, previous, 'reconcile_required', { recoveryNonceBase64: slot.journal?.recoveryNonceBase64 ?? null });
+      throw failure('BOTA_UPLOAD_RECORDING_UNAVAILABLE');
+    };
+    if (!entry) return unavailable();
+    if (!entry.sessionId) {
+      // A known pending recording with no session can use the original create
+      // flow, including its durable unknown-outcome guard and a new nonce.
+      await save(slot, entry);
+      return undefined;
+    }
+    let status: string;
+    try { status = await retry(slot, () => http(slot, sessionPath(slot, entry))); }
+    catch (error) {
+      if (error instanceof HttpFailure && error.status === 404) return unavailable();
+      throw error;
+    }
+    check(slot);
+    const proof = reduce(slot.input, { type: 'ReconciledAuthorization', entry, responseJson: status });
+    await save(slot, entry, 'ready', { authorizationNonceSha256: proof.nonceSha256,
+      recoveryNonceBase64: previous.sessionId === entry.sessionId ? slot.journal?.recoveryNonceBase64 ?? null : null });
+    return status;
+  };
+  const restore = async (slot: Slot, status: string): Promise<string> => {
     const visited: string[] = [];
     const limits = reduce(slot.input, { type: 'Limits' });
     for (let hop = 0; hop <= limits.maximumRecoveryHops; hop++) {
       if (!slot.entry?.sessionId) throw failure('BOTA_UPLOAD_STATE');
       const parent = { ...slot.entry };
       visited.push(parent.sessionId!);
-      const text = await retry(slot, () => http(slot, sessionPath(slot)));
+      const text = hop === 0 ? status : await retry(slot, () => http(slot, sessionPath(slot)));
       let next = reduce(slot.input, { type: 'RestoreDecision', entry: parent, responseJson: text,
         nowMs: String(now()), authorizationNonceSha256: slot.journal?.authorizationNonceSha256 ?? null,
         recoveryNonceBase64: slot.journal?.recoveryNonceBase64 ?? null, nonce: null, hop });
@@ -439,7 +498,8 @@ export function createJsEncryptedUploadV2Backend(options: JsEncryptedUploadV2Bac
       const inspection = reduce(slot.input, { type: 'Inspect', record: saved });
       slot.journal = saved === null ? null : inspection.record;
       slot.entry = inspection.entry ?? undefined;
-      if (slot.entry) await save(slot, slot.entry, 'ready', { recoveryNonceBase64: slot.journal?.recoveryNonceBase64 ?? null });
+      if (slot.entry) await save(slot, slot.entry, slot.journal?.phase ?? 'ready',
+        { recoveryNonceBase64: slot.journal?.recoveryNonceBase64 ?? null });
       if (!slot.entry) {
         const plan = reduce(slot.input, { type: 'CreateRecording' });
         const text = await http(slot, plan.path, plan.bodyJSON, true,
@@ -448,23 +508,12 @@ export function createJsEncryptedUploadV2Backend(options: JsEncryptedUploadV2Bac
         await save(slot, entry);
       }
       check(slot);
-      let response: string;
-      let restoring = false;
-      if (slot.entry!.sessionId) { restoring = true; response = await restore(slot); }
-      else {
-        const bytes = await nonce(slot);
-        try {
-          const plan = reduce(slot.input, { type: 'CreateSession', entry: slot.entry, nonce: Array.from(bytes) });
-          const previous = { ...slot.entry! };
-          response = await http(slot, plan.path, plan.bodyJSON, true,
-            () => save(slot, previous, 'session_create_unknown'), () => rollback(slot, previous));
-          const committed = reduce(slot.input, { type: 'AcceptPointer', recordingId: previous.recordingId, responseJson: response }).entry;
-          const digest = reduce(slot.input, { type: 'NonceHash', nonce: Array.from(bytes) }).sha256;
-          await save(slot, committed, 'ready', { authorizationNonceSha256: digest });
-        } finally { bytes.fill(0); }
-      }
+      let status: string | undefined;
+      if (slot.entry!.sessionId) status = await readExisting(slot);
+      const restoring = status !== undefined;
+      const response = status === undefined ? await createSession(slot) : await restore(slot, status);
       check(slot);
-      const selected = reduce(slot.input, { type: 'Session', entry: slot.entry, responseJson: response!, restore: restoring });
+      const selected = reduce(slot.input, { type: 'Session', entry: slot.entry, responseJson: response, restore: restoring });
       slot.session = selected.session; slot.uploadCiphertext = selected.uploadCiphertext; slot.needsManifest = selected.needsManifest;
       let marker: string | undefined;
       if (slot.input.recording.markersRequired) {
@@ -475,7 +524,7 @@ export function createJsEncryptedUploadV2Backend(options: JsEncryptedUploadV2Bac
           marker = await retry(slot, () => http(slot, plan.path, plan.bodyJSON));
         }
       }
-      slot.authorization = Uint8Array.from(reduce(slot.input, { type: 'Authorization', responseJson: response!, markerResponseJson: marker ?? null }).bytes);
+      slot.authorization = Uint8Array.from(reduce(slot.input, { type: 'Authorization', responseJson: response, markerResponseJson: marker ?? null }).bytes);
       check(slot);
       slot.registration = options.registerMaterial(slot.input.operationId, material(slot));
       check(slot);
@@ -548,7 +597,7 @@ export function createJsEncryptedUploadV2Backend(options: JsEncryptedUploadV2Bac
 }
 
 class HttpFailure extends Error {
-  constructor(readonly status: number, readonly stagingMissing: boolean) {
+  constructor(readonly status: number, readonly stagingMissing: boolean, readonly recordingDeleted: boolean) {
     super(`BOTA_UPLOAD_HTTP_${status}`);
   }
 }
