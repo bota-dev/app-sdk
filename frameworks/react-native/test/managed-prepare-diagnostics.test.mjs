@@ -59,10 +59,12 @@ test('real client provider redaction retains only recognized managed prepare dia
     Object.assign(new Error('private-body'), { code: 'BOTA_UPLOAD_IDENTITY_CONFLICT', detail: 'private-signed-blob' }),
     Object.assign(new Error('BOTA_UPLOAD_HTTP_409'), { status: 409, body: 'private-body' }),
     Object.assign(new Error('private-body'), { code: 'BOTA_UPLOAD_HTTP_403' }),
+    Object.assign(new Error('private-body'), { code: 'BOTA_UPLOAD_RECORDING_DELETED' }),
+    Object.assign(new Error('private-body'), { code: 'BOTA_UPLOAD_RECORDING_UNAVAILABLE' }),
   ]) {
     const f = fixture(); f.failure = failure;
     await assert.rejects(f.create().sync(device, recording, target), error => {
-      assert.match(error.code, /^BOTA_UPLOAD_(IDENTITY_CONFLICT|HTTP_40[39])$/);
+      assert.equal(error.code, failure.code ?? 'BOTA_UPLOAD_HTTP_409');
       assert.equal(error.operation, 'PrepareEncryptedUploadV2');
       assert(!JSON.stringify(error).includes('private')); assert(!String(error).includes('private'));
       assert.equal(error.cause, undefined); assert.equal(error.detail, undefined);
@@ -138,7 +140,7 @@ test('cancel and subscription cleanup failures retain precedence over prepare di
   }
 });
 
-test('actual generated HTTP conflict composes through client redaction without extra create/session/PUT', async () => {
+function runtimeFixture(respond) {
   const f = fixture(), core = createGeneratedJsCore(), journal = new Map(), http = [];
   const managed = createJsEncryptedUploadV2Backend({ core, files: {}, persistence: { namespace: 'account/project',
     async load(key) { return journal.get(key) ?? null; }, async save(key, value) { journal.set(key, structuredClone(value)); }, async remove(key) { journal.delete(key); } },
@@ -146,9 +148,15 @@ test('actual generated HTTP conflict composes through client redaction without e
     now: () => 1704067200000, requestCredentials: async () => 'private-token', readNonce: async () => '01'.repeat(16),
     registerMaterial() { throw new Error('Unexpected material'); }, unregisterMaterial() {},
     uploadFile() { throw new Error('Unexpected PUT'); },
-    fetch: async (url, request) => { http.push({ url, request }); return { url, status: 409, async text() { return '{"error":{"code":"private-backend-detail"}}'; } }; },
+    fetch: async (url, request) => { http.push({ url, request }); const [status, body] = respond(url, request);
+      return { url, status, async text() { return JSON.stringify(body); } }; },
   });
   f.native.prepare = value => managed.prepare(value); f.native.cancel = id => managed.cancel(id);
+  return { f, managed, core, journal, http };
+}
+
+test('actual generated HTTP conflict composes through client redaction without extra create/session/PUT', async () => {
+  const { f, managed, core, journal, http } = runtimeFixture(() => [409, { error: { code: 'private-backend-detail' } }]);
   try {
     await assert.rejects(f.create().sync(device, recording, target), { code: 'BOTA_UPLOAD_HTTP_409', status: 409, operation: 'PrepareEncryptedUploadV2' });
     assert.equal(http.length, 1); assert.equal(http[0].request.method, 'POST');
@@ -157,4 +165,23 @@ test('actual generated HTTP conflict composes through client redaction without e
     assert.equal([...journal.values()][0].phase, 'recording_create_unknown');
     assert.equal(f.subscriptions.size, 0);
   } finally { await managed.dispose(); core.dispose?.(); }
+});
+
+test('the public managed facade returns the Dashboard recording outcome for an imported prior session', async () => {
+  for (const confirmed of [false, true]) {
+    const { f, core, managed, journal, http } = runtimeFixture(url => {
+      if (!url.endsWith('/reconcile?include_deleted=true')) return [404, { error: { code: 'not_found' } }];
+      return confirmed ? [410, { error: { code: 'encrypted_upload_v2_recording_deleted' } }] : [200, null];
+    });
+    f.config.baseUrl = 'https://api.example.com/dashboard/projects/project';
+    const old = { recordingId: 'rec_1', sessionId: '11112233-4455-6677-8899-aabbccddeeff', ownerRevision: 2 };
+    try {
+      await assert.rejects(f.create().sync(device, recording, { ...target, priorUpload: old }), {
+        code: confirmed ? 'BOTA_UPLOAD_RECORDING_DELETED' : 'BOTA_UPLOAD_RECORDING_UNAVAILABLE', operation: 'PrepareEncryptedUploadV2',
+      });
+      assert.deepEqual(http.map(({ request }) => request.method), ['GET', 'POST']);
+      assert.equal([...journal.values()][0].phase, confirmed ? 'recording_deleted' : 'reconcile_required');
+      assert.equal(f.subscriptions.size, 0);
+    } finally { await managed.dispose(); core.dispose?.(); }
+  }
 });

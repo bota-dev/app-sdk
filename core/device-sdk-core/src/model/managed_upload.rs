@@ -16,6 +16,7 @@ pub enum ManagedUploadError {
     InvalidDocument,
     Pending,
     Expired,
+    RecordingDeleted,
     State,
 }
 impl ManagedUploadError {
@@ -27,6 +28,7 @@ impl ManagedUploadError {
             Self::InvalidDocument => "BOTA_UPLOAD_INVALID_DOCUMENT",
             Self::Pending => "BOTA_UPLOAD_PENDING",
             Self::Expired => "BOTA_UPLOAD_EXPIRED",
+            Self::RecordingDeleted => "BOTA_UPLOAD_RECORDING_DELETED",
             Self::State => "BOTA_UPLOAD_STATE",
         }
     }
@@ -188,6 +190,15 @@ pub enum ManagedUploadEvent {
         record: ManagedUploadJournal,
         expected: ManagedUploadEntry,
         receipt_delivered: bool,
+    },
+    ReconcilePlan,
+    ReconcilePointer {
+        previous: ManagedUploadEntry,
+        response_json: String,
+    },
+    ReconciledAuthorization {
+        entry: ManagedUploadEntry,
+        response_json: String,
     },
     CreateRecording,
     AcceptRecording {
@@ -397,6 +408,22 @@ impl ManagedUploadInput {
             entry.session_id.as_ref().ok_or(ManagedUploadError::State)?
         ))
     }
+    fn capture_body(&self) -> Result<Value> {
+        let mut body = json!({
+            "binding_generation": self.scope.binding_generation,
+            "recording_uuid": self.recording.uuid,
+            "recording_generation": self.recording.generation,
+            "storage_format": "bota_enc_v2",
+            "channel": self.channel(),
+            "capabilities_base64": base64(&unhex(&self.capability.raw_value_hex)?),
+            "ciphertext_length": decimal(&self.recording.ciphertext_length, SAFE)?,
+            "ciphertext_sha256": self.recording.ciphertext_sha256,
+        });
+        if let Some(local) = &self.capability.local_wifi_raw_value_hex {
+            body["local_wifi_capabilities_base64"] = json!(base64(&unhex(local)?));
+        }
+        Ok(body)
+    }
     fn validate(&self) -> Result<()> {
         let s = &self.scope;
         let r = &self.recording;
@@ -502,6 +529,8 @@ impl ManagedUploadInput {
             "ready",
             "recording_create_unknown",
             "session_create_unknown",
+            "reconcile_required",
+            "recording_deleted",
         ]
         .contains(&record.phase.as_str())
             || record
@@ -521,6 +550,17 @@ impl ManagedUploadInput {
         }
         if let Some(e) = &record.entry {
             e.validate()?;
+        }
+        if matches!(
+            record.phase.as_str(),
+            "reconcile_required" | "recording_deleted"
+        ) && record
+            .entry
+            .as_ref()
+            .and_then(|e| e.session_id.as_ref())
+            .is_none()
+        {
+            return Err(ManagedUploadError::Journal);
         }
         if !record.local_recovery_parents.is_empty() {
             let current = record.entry.as_ref().ok_or(ManagedUploadError::Journal)?;
@@ -550,7 +590,7 @@ impl ManagedUploadInput {
             }
         }
         if let Some(nonce) = &record.recovery_nonce_base64 {
-            if record.phase != "ready"
+            if !matches!(record.phase.as_str(), "ready" | "reconcile_required")
                 || record
                     .entry
                     .as_ref()
@@ -611,7 +651,10 @@ impl ManagedUploadRequest {
                 let mut migrated = record.clone();
                 if let Some(r) = &mut migrated {
                     input.validate_journal(r)?;
-                    if r.phase != "ready" {
+                    if matches!(
+                        r.phase.as_str(),
+                        "recording_create_unknown" | "session_create_unknown"
+                    ) {
                         return Err(ManagedUploadError::Pending);
                     }
                     let entry = r.entry.as_ref().ok_or(ManagedUploadError::Journal)?;
@@ -620,6 +663,9 @@ impl ManagedUploadRequest {
                         && r.imported_prior_sha256.as_ref() != Some(&hash_json(prior)?)
                     {
                         return Err(ManagedUploadError::IdentityConflict);
+                    }
+                    if r.phase == "recording_deleted" {
+                        return Err(ManagedUploadError::RecordingDeleted);
                     }
                     r.version = 2;
                     r.identity = input.identity(false)?;
@@ -771,6 +817,73 @@ impl ManagedUploadRequest {
                 }
                 json!({"remove":true})
             }
+            ManagedUploadEvent::ReconcilePlan => {
+                if input.base() == format!("/dashboard/projects/{}", input.scope.project_id) {
+                    plan(
+                        format!(
+                            "{}/devices/{}/encrypted-upload-v2/reconcile?include_deleted=true",
+                            input.base(),
+                            input.scope.device_id
+                        ),
+                        input.capture_body()?,
+                    )?
+                } else {
+                    json!({})
+                }
+            }
+            ManagedUploadEvent::ReconcilePointer {
+                previous,
+                response_json,
+            } => {
+                previous.validate()?;
+                let pointer: Value = decode(response_json)?;
+                if pointer.is_null() {
+                    json!({"entry":null})
+                } else {
+                    if pointer["profile"] != "encrypted_upload_v2"
+                        || pointer.get("session_id").is_none()
+                        || pointer.get("owner_revision").is_none()
+                    {
+                        return Err(ManagedUploadError::InvalidDocument);
+                    }
+                    #[derive(Deserialize)]
+                    struct Pointer {
+                        recording_id: String,
+                        session_id: Option<String>,
+                        owner_revision: Option<u32>,
+                    }
+                    let pointer: Pointer = serde_json::from_value(pointer)
+                        .map_err(|_| ManagedUploadError::InvalidDocument)?;
+                    let entry = ManagedUploadEntry {
+                        recording_id: pointer.recording_id,
+                        session_id: pointer.session_id,
+                        owner_revision: pointer.owner_revision,
+                    };
+                    entry.validate()?;
+                    if previous.session_id.is_none()
+                        || entry.recording_id != previous.recording_id
+                        || (previous != &entry
+                            && (input.checkpoint.is_some()
+                                || (entry.session_id.is_some()
+                                    && (entry.session_id == previous.session_id
+                                        || entry.owner_revision <= previous.owner_revision))))
+                    {
+                        return Err(ManagedUploadError::IdentityConflict);
+                    }
+                    json!({"entry":entry})
+                }
+            }
+            ManagedUploadEvent::ReconciledAuthorization {
+                entry,
+                response_json,
+            } => {
+                let s: ManagedUploadSession = decode(response_json)?;
+                s.identity(input, entry)?;
+                date(&s.expires_at)?;
+                let bytes = document(&s.authorization_base64, 408, Some(&s.authorization_sha256))?;
+                // UploadAuthorizationV2 auth_nonce occupies bytes 136..152.
+                json!({"nonceSha256":hash(&bytes[136..152])})
+            }
             ManagedUploadEvent::CreateRecording => {
                 let start = decimal(&input.recording.started_at_ms, DATE_MAX)?;
                 let end = start + decimal(&input.recording.duration_ms, DATE_MAX)?;
@@ -801,14 +914,9 @@ impl ManagedUploadRequest {
                 if entry.session_id.is_some() || nonce.len() != 16 {
                     return Err(ManagedUploadError::State);
                 }
-                let mut body = json!({"device_id":input.scope.device_id,"binding_generation":input.scope.binding_generation,
-                    "recording_uuid":input.recording.uuid,"recording_generation":input.recording.generation,
-                    "storage_format":"bota_enc_v2","channel":input.channel(),"capabilities_base64":base64(&unhex(&input.capability.raw_value_hex)?),
-                    "auth_nonce_base64":base64(nonce),"ciphertext_length":decimal(&input.recording.ciphertext_length,SAFE)?,
-                    "ciphertext_sha256":input.recording.ciphertext_sha256});
-                if let Some(local) = &input.capability.local_wifi_raw_value_hex {
-                    body["local_wifi_capabilities_base64"] = json!(base64(&unhex(local)?));
-                }
+                let mut body = input.capture_body()?;
+                body["device_id"] = json!(input.scope.device_id);
+                body["auth_nonce_base64"] = json!(base64(nonce));
                 plan(input.sessions(entry), body)?
             }
             ManagedUploadEvent::NonceHash { nonce } => {
@@ -1070,14 +1178,14 @@ impl ManagedUploadRequest {
                 response_json,
             } => {
                 let value = serde_json::from_str::<Value>(response_json).ok();
-                let missing = *status == 409
-                    && value
-                        .as_ref()
-                        .and_then(|v| v.get("error"))
-                        .and_then(|v| v.get("code"))
-                        .and_then(Value::as_str)
-                        == Some("encrypted_upload_v2_staging_missing");
-                json!({"success":(200..=299).contains(status),"authorizationRejected":([401,403].contains(status)),"stagingMissing":missing})
+                let code = value
+                    .as_ref()
+                    .and_then(|v| v.get("error"))
+                    .and_then(|v| v.get("code"))
+                    .and_then(Value::as_str);
+                json!({"success":(200..=299).contains(status),"authorizationRejected":([401,403].contains(status)),
+                    "stagingMissing":*status == 409 && code == Some("encrypted_upload_v2_staging_missing"),
+                    "recordingDeleted":*status == 410 && code == Some("encrypted_upload_v2_recording_deleted")})
             }
             ManagedUploadEvent::Finalize {
                 entry,
