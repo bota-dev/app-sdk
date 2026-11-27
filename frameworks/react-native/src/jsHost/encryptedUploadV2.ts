@@ -15,6 +15,8 @@ export interface JsEncryptedUploadV2Options {
   readonly sink: OpaqueHostHandle;
   /** Checks the executor owner and the exact captured physical connection. */
   readonly checkOwner: (context: JsHostContext) => void;
+  /** True only after the OS confirms loss of this transfer’s physical connection. */
+  readonly isLinkRetired?: () => boolean;
   readonly peripheralId?: string;
   readonly maximumWriteBytes?: number;
   readonly gatt?: <T>(context: JsHostContext, body: () => Promise<T>) => Promise<T>;
@@ -195,6 +197,7 @@ export interface JsUploadContextExchangeOptions {
   readonly maximumSignedBlobBytes: number;
   readonly gatt: <T>(context: JsHostContext, body: () => Promise<T>) => Promise<T>;
   readonly checkOwner: (context: JsHostContext) => void;
+  readonly isLinkRetired?: () => boolean;
   readonly onCleanupFailure?: (error: unknown, context?: JsHostContext) => void;
 }
 
@@ -330,7 +333,7 @@ export class JsUploadContextExchange {
     } catch (error) { failed = true; primary = error; }
     accepting = false;
     if (failed && began && !accepted) {
-      try { await this.cleanupWrite(wireBytes(plan.abortFrame!), 'CHAR_TRANSFER_SIGNED_BLOB_V2', context); }
+      try { await writeBleAbort(this.options, this.address('CHAR_TRANSFER_SIGNED_BLOB_V2'), wireBytes(plan.abortFrame!), context); }
       catch (error) { primary = error; this.markCleanupFailure(error, context); }
     }
     try { await this.removeSubscription(subscription, context); }
@@ -403,15 +406,6 @@ export class JsUploadContextExchange {
       if (typeof interval !== 'number' || !Number.isFinite(interval) || interval <= 0) throw new BotaJsHostError('invalid_core_deadline', context.operation);
       await delay(interval, context);
     }
-  }
-
-  private async cleanupWrite(value: Uint8Array, characteristic: string, context: JsHostContext): Promise<void> {
-    const cleanup = { ...context, signal: new AbortController().signal };
-    try {
-      this.options.checkOwner(cleanup);
-      await this.options.gatt!(cleanup, () => this.options.ports.ble!.write(this.address(characteristic), value, true, cleanup));
-      this.options.checkOwner(cleanup);
-    } finally { value.fill(0); }
   }
 
   private markCleanupFailure(error: unknown, context?: JsHostContext): void {
@@ -528,10 +522,10 @@ export class JsEncryptedUploadV2Host {
 
   private async execute(effect: JsValue, context: JsEffectContext): Promise<JsValue | null> {
     this.claim(context);
-    this.requireOwner(context);
+    const [kind, payload] = tagged(effect);
+    this.requireOwner(context, kind === 'AbortV2' && !this.localWifi);
     // Bota identities and checkpoint bounds remain validated in shared Rust.
     this.options.core.codec('validateEncryptedUploadV2HostIdentity', { request: this.request, effect });
-    const [kind, payload] = tagged(effect);
     switch (kind) {
       case 'LoadCheckpoint': {
         const journal = await this.step(context, () => this.options.ports.persistence.load(this.key, context));
@@ -599,7 +593,7 @@ export class JsEncryptedUploadV2Host {
     context.addCleanup(() => this.close());
   }
 
-  private requireOwner(context: JsHostContext): void {
+  private requireOwner(context: JsHostContext, aborting = false): void {
     if (this.poisoned) throw this.poison;
     const owner = this.owner;
     if (this.closed || context.signal.aborted || !owner
@@ -608,6 +602,8 @@ export class JsEncryptedUploadV2Host {
       || this.options.ports.persistence.namespace !== this.scope) {
       throw new BotaJsHostError('stale_host_owner', context.operation);
     }
+    // Only terminal cleanup may release this operation's local resources after loss.
+    if (aborting && this.options.isLinkRetired?.()) return;
     this.options.checkOwner(context);
     this.localWifi?.assertHealthy(context);
   }
@@ -705,7 +701,7 @@ export class JsEncryptedUploadV2Host {
         ports: { ble: this.options.ports.ble!, randomBytes: this.options.ports.randomBytes! },
         peripheralId: this.options.peripheralId!, maximumWriteBytes: this.options.maximumWriteBytes!,
         maximumSignedBlobBytes: number(capabilities.maximum_signed_blob_bytes),
-        gatt: this.options.gatt!, checkOwner: this.options.checkOwner,
+        gatt: this.options.gatt!, checkOwner: this.options.checkOwner, isLinkRetired: this.options.isLinkRetired,
         onCleanupFailure: (error, context) => this.markCleanupFailure(error, context) });
     }
     return this.exchange;
@@ -1088,7 +1084,8 @@ export class JsEncryptedUploadV2Host {
     let failed = false;
     let failure: unknown;
     if (context && this.transferAttempted && !this.confirmationAttempted && !this.confirmed) {
-      try { await this.cleanupWrite(wireBytes(this.codec('planEncryptedUploadV2Abort', { request: this.request })), 'CHAR_TRANSFER_CONTROL_V2', context); }
+      try { await writeBleAbort(this.options, this.address('CHAR_TRANSFER_CONTROL_V2'),
+        wireBytes(this.codec('planEncryptedUploadV2Abort', { request: this.request })), context); }
       catch (error) { failed = true; failure = error; this.markCleanupFailure(error, context); }
     }
     if (this.subscription) {
@@ -1108,15 +1105,6 @@ export class JsEncryptedUploadV2Host {
     if (failed) throw failure;
   }
 
-  private async cleanupWrite(value: Uint8Array, characteristic: string, context: JsHostContext): Promise<void> {
-    const cleanup = { ...context, signal: new AbortController().signal };
-    try {
-      this.options.checkOwner(cleanup);
-      await this.options.gatt!(cleanup, () => this.options.ports.ble!.write(this.address(characteristic), value, true, cleanup));
-      this.options.checkOwner(cleanup);
-    } finally { value.fill(0); }
-  }
-
   private markCleanupFailure(error: unknown, context?: JsHostContext): void {
     if (!this.poisoned) this.poison = error;
     this.poisoned = true;
@@ -1127,6 +1115,24 @@ export class JsEncryptedUploadV2Host {
     try { await subscription.remove(); }
     catch (error) { this.markCleanupFailure(error, context); throw error; }
   }
+}
+
+async function writeBleAbort(
+  options: Pick<JsEncryptedUploadV2Options, 'gatt' | 'checkOwner' | 'isLinkRetired'> & { ports: Partial<Pick<BotaJsHostPorts, 'ble'>> },
+  address: GattAddress, value: Uint8Array, context: JsHostContext,
+): Promise<void> {
+  const cleanup = { ...context, signal: new AbortController().signal };
+  try {
+    if (options.isLinkRetired?.()) return;
+    await options.gatt!(cleanup, async () => {
+      options.checkOwner(cleanup);
+      await options.ports.ble!.write(address, value, true, cleanup);
+    });
+    options.checkOwner(cleanup);
+  } catch (error) {
+    // Loss can race an already queued write. The old GATT session has ended.
+    if (!options.isLinkRetired?.()) throw error;
+  } finally { value.fill(0); }
 }
 
 function event(name: string, payload?: JsValue): JsValue {

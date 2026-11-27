@@ -52,8 +52,39 @@ export function createBlePlxPort(manager: BlePlxManager): JsBlePort {
   let scan: JsHostSubscription | undefined;
   const connected = new Map<string, Peripheral>();
   const connectionGenerations = new Map<string, bigint>();
+  const linkLossObservers = new Set<(peripheralId: string, generation: bigint, reason?: string) => void>();
+  // PLX's native disconnection event carries only the peripheral ID. After
+  // synthesizing a power-off loss, an old native event can reach a new listener.
+  const verifyNativeLoss = new Set<string>();
   let connectionGeneration = 0n;
   const uncertainConnections = new Set<string>();
+  const retireLink = (peripheralId: string, generation: bigint, reason?: string) => {
+    if (connectionGenerations.get(peripheralId) !== generation) return;
+    connected.delete(peripheralId);
+    connectionGenerations.delete(peripheralId);
+    uncertainConnections.delete(peripheralId);
+    for (const notify of linkLossObservers) notify(peripheralId, generation, reason);
+  };
+  const confirmGattLoss = (peripheralId: string | undefined, generation: bigint | undefined, error: unknown) => {
+    const code = (error as { errorCode?: number } | null)?.errorCode;
+    if (!peripheralId || generation === undefined || connectionGenerations.get(peripheralId) !== generation ||
+        (code !== 102 && code !== 201 && code !== 205)) return;
+    // Android may reject GATT traffic before delivering its
+    // disconnection event. Only an OS-confirmed loss retires the captured link.
+    return (async () => {
+      let lost = false;
+      try {
+        lost = await manager.isDeviceConnected?.(peripheralId) === false ||
+          (code === 102 && await manager.state?.() === 'PoweredOff');
+      } catch {
+        try { lost = await manager.state?.() === 'PoweredOff'; } catch { return; }
+      }
+      if (lost && connectionGenerations.get(peripheralId) === generation) {
+        verifyNativeLoss.add(peripheralId);
+        retireLink(peripheralId, generation, 'Bluetooth link disconnected');
+      }
+    })();
+  };
   const advertisementMetadata = new Map<string, ReturnType<typeof decodeBotaAdvertisement>>();
   const id = (value: string | undefined): string => {
     if (!value) throw new Error('GATT call requires a captured peripheral ID');
@@ -113,7 +144,16 @@ export function createBlePlxPort(manager: BlePlxManager): JsBlePort {
       let active = true, removed = false;
       let removal: Promise<void> | undefined;
       const subscription = manager.onStateChange!(value => {
-        if (active && !context.signal.aborted) onState(value);
+        if (!active || context.signal.aborted) return;
+        onState(value);
+        // Power loss invalidates every GATT link even when Android omits the
+        // peripheral-specific notification. Each observer checks its generation.
+        if (value === 'PoweredOff') {
+          for (const [peripheralId, generation] of connectionGenerations) {
+            verifyNativeLoss.add(peripheralId);
+            retireLink(peripheralId, generation, 'Bluetooth is powered off');
+          }
+        }
       }, false);
       const remove = () => {
         if (removed) return Promise.resolve();
@@ -258,9 +298,12 @@ export function createBlePlxPort(manager: BlePlxManager): JsBlePort {
     async discoverServices(peripheralId, context) {
       check(context);
       const device = connected.get(peripheralId);
-      if (!device) throw new Error('Peripheral has no local connection');
+      const generation = connectionGenerations.get(peripheralId);
+      if (!device || generation === undefined) throw new Error('Peripheral has no local connection');
       const discovered = await device.discoverAllServicesAndCharacteristics();
       check(context);
+      if (connectionGenerations.get(peripheralId) !== generation) throw Object.assign(
+        new Error('Peripheral disconnected during service discovery'), { code: 'connection_failed' });
       connected.set(peripheralId, discovered);
     },
     ...(manager.servicesForDevice ? { async hasService(peripheralId: string, serviceUuid: string, context: JsHostContext) {
@@ -339,26 +382,38 @@ export function createBlePlxPort(manager: BlePlxManager): JsBlePort {
       if (generation === undefined) throw new Error('Peripheral has no local connection');
       let active = true;
       let removed = false;
+      const notify = (id: string, retired: bigint, reason?: string) => {
+        if (active && id === peripheralId && retired === generation) onDisconnect(reason);
+      };
       const subscription = manager.onDeviceDisconnected(peripheralId, error => {
         if (!active || connectionGenerations.get(peripheralId) !== generation) return;
-        connected.delete(peripheralId);
-        connectionGenerations.delete(peripheralId);
-        uncertainConnections.delete(peripheralId);
-        onDisconnect(error?.message);
+        const lost = () => { if (active) retireLink(peripheralId, generation, error?.message); };
+        if (!verifyNativeLoss.has(peripheralId) || !manager.isDeviceConnected) {
+          lost();
+          return;
+        }
+        // Read the current OS link. retireLink checks ownership again after the
+        // asynchronous answer. An unavailable radio cannot attest a live link.
+        void Promise.resolve().then(() => manager.isDeviceConnected!(peripheralId)).then(
+          live => { if (!live) lost(); }, lost);
       });
+      linkLossObservers.add(notify);
       return { async remove() {
         if (removed) return;
         active = false;
+        linkLossObservers.delete(notify);
         await subscription.remove();
         removed = true;
       } };
     },
     async read(address, context) {
       let result: Characteristic;
+      const generation = address.peripheralId ? connectionGenerations.get(address.peripheralId) : undefined;
       try {
         result = await oneShot(context, transactionId => manager.readCharacteristicForDevice(
           id(address.peripheralId), address.serviceUuid, address.characteristicUuid, transactionId));
       } catch (error) {
+        await confirmGattLoss(address.peripheralId, generation, error);
         throw gattError(error, address);
       }
       if (result.value == null) throw new Error('BLE read returned no value');
@@ -366,21 +421,31 @@ export function createBlePlxPort(manager: BlePlxManager): JsBlePort {
     },
     async write(address, value, withResponse, context) {
       const method = withResponse ? manager.writeCharacteristicWithResponseForDevice : manager.writeCharacteristicWithoutResponseForDevice;
+      const generation = address.peripheralId ? connectionGenerations.get(address.peripheralId) : undefined;
       try {
         await oneShot(context, transactionId => method.call(manager, id(address.peripheralId),
           address.serviceUuid, address.characteristicUuid, Buffer.from(value).toString('base64'), transactionId));
-      } catch (error) { throw gattError(error, address, true); }
+      } catch (error) {
+        await confirmGattLoss(address.peripheralId, generation, error);
+        throw gattError(error, address, true);
+      }
     },
     async subscribe(address, onValue, context, onError) {
       check(context);
       let active = true;
       let removed = false;
+      const generation = address.peripheralId ? connectionGenerations.get(address.peripheralId) : undefined;
       const transactionId = `bota:monitor:${context.generation}:${context.requestId}:${++transaction}`;
       try {
         manager.monitorCharacteristicForDevice(id(address.peripheralId),
           address.serviceUuid, address.characteristicUuid, (error, result) => {
             if (!active || context.signal.aborted) return;
-            if (error) { onError?.(gattError(error, address)); return; }
+            if (error) {
+              const report = () => { if (active && !context.signal.aborted) onError?.(gattError(error, address)); };
+              const checking = confirmGattLoss(address.peripheralId, generation, error);
+              if (checking) void checking.then(report, report); else report();
+              return;
+            }
             if (result?.value == null) return;
             onValue(Uint8Array.from(Buffer.from(result.value, 'base64')));
           }, transactionId);

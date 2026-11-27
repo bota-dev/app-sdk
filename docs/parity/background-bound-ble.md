@@ -34,3 +34,16 @@ connected-device foreground service has been promoted.
 These contracts cover normal backgrounding and lock within a live session.
 Force-quit, process termination and recording transfer during lock have separate
 qualification requirements. Firmware advertising intervals are integration measurements.
+
+## Resuming a V2 recording after a phone Bluetooth power cycle
+
+Powering off Bluetooth retires the current GATT connection. When the adapter
+returns, a host with automatic reconnection enabled can observe `bluetoothReady`
+on `devices` and wait for `deviceConnected` before retrying the same recording.
+An explicit disconnect requires the user to request reconnection.
+
+After a durable `WINDOW_ACK`, an eligible retry uses `RESUME_REQUEST` with the
+original upload session, transport ID and confirmed byte offset. A new connection
+still performs the bound-device security and identity checks. Before the first
+checkpoint the transfer starts at byte zero. If the server selects a successor
+session, its authorization governs the next transfer.

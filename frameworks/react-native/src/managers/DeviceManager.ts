@@ -3,6 +3,7 @@ import type { CountryConfigurationDelivery, CountryConfigurationResult } from '.
 import type { FindBindingProvider } from '../findDevice';
 import type { FindDeviceCapabilities, FindDeviceStatus } from '../findDevice';
 import EventEmitter from 'eventemitter3';
+import { getCompatibilityBluetoothState } from '../compatibility/bluetoothState';
 import type { ClientPresence } from '../clientPresence';
 
 import type {
@@ -124,6 +125,8 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
   private userDisconnected = false;
   private destroyed = false;
   private readonly disconnectionSubscription: Subscription;
+  private readonly radioSubscription?: Subscription;
+  private radioUnavailable = false;
   private readonly statusRetries = new Map<string, AbortController>();
   private readonly statusFailures = new WeakMap<ConnectedDevice, number>();
   private readonly onStatusInterrupted = (id: string, error: unknown) => {
@@ -147,6 +150,27 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
       this.client,
       (error) => this.handleNativeDisconnection(error)
     );
+    this.radioSubscription = getCompatibilityBluetoothState(this.client)?.watch(state => {
+      if (this.destroyed) return;
+      if (state === 'poweredOff' || state === 'resetting' || state === 'unauthorized' || state === 'unsupported') {
+        this.radioUnavailable = true;
+        this.stopAutoReconnectLoop();
+        this.knownReconnect?.controller.abort();
+      } else if (state === 'poweredOn' && this.radioUnavailable) {
+        this.radioUnavailable = false;
+        const serial = this.autoReconnectSerial;
+        if (serial && this.autoReconnectEnabled && !this.userDisconnected && !this.findConnectedBySerial(serial)) {
+          const id = this.knownBleIds.get(serial);
+          const background = backgroundBleOwners.get(this.client);
+          if (id && background && background.canRecover?.() !== false && this.connectionAttempts === 0) {
+            this.startKnownReconnect({ id, serialNumber: serial });
+          } else {
+            this.startAutoReconnectLoop();
+          }
+        }
+        this.emit('bluetoothReady');
+      }
+    });
   }
 
   async initialize(): Promise<void> {}
@@ -836,6 +860,7 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     if (this.destroyed) return;
     this.destroyed = true;
     this.disconnectionSubscription.remove();
+    this.radioSubscription?.remove();
     statusInterruptions.get(this.client)?.delete(this.onStatusInterrupted);
     this.disableAutoReconnect();
     this.stopScan();
@@ -924,7 +949,7 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
         .catch(() => undefined);
       // Reserve before notifying the app. A focused screen may call reconnect
       // synchronously from the disconnect event and must join the same request.
-      if (background && background.canRecover?.() !== false && this.connectionAttempts === 0) {
+      if (!this.radioUnavailable && background && background.canRecover?.() !== false && this.connectionAttempts === 0) {
         this.startKnownReconnect(device);
       }
       this.emit('connectionStateChanged', device.id, 'disconnected');
@@ -939,7 +964,7 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     }
   }
 
-  private startKnownReconnect(device: ConnectedDevice): void {
+  private startKnownReconnect(device: Pick<ConnectedDevice, 'id' | 'serialNumber'>): void {
     const owner = backgroundBleOwners.get(this.client);
     if (!owner) return;
     this.stopAutoReconnectLoop();
@@ -977,6 +1002,7 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
   }
 
   private startAutoReconnectLoop(): void {
+    if (this.radioUnavailable) return;
     if (this.knownReconnect && !this.knownReconnect.controller.signal.aborted) return;
     if (this.autoReconnectTimer || !this.autoReconnectSerial) return;
     const attempt = async (): Promise<void> => {

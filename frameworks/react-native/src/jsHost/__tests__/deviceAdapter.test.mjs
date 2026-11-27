@@ -86,6 +86,63 @@ for (const serialMatches of [true, false]) {
 const writesBeyondTimeSync = f => f.calls.filter(call => Array.isArray(call) && call[0] === 'write'
   && call[1].characteristicUuid !== f.metadata.CHAR_TIME_SYNC);
 
+test('Android power cycles retire the secure link and reconnect to the paired device without a peripheral event',
+  { timeout: 5000 }, async t => {
+    const f = controlFixture({ platform: 'android' });
+    const { createSecureBlePlxPort } = loadSource('bleSecurity.ts');
+    const { createBotaReactNativeJsRuntime } = loadSource('../runtime.ts');
+    const peripheral = { id: 'android-pin', mtu: 247,
+      async discoverAllServicesAndCharacteristics() { return this; } };
+    const connects = [], losses = [], events = [];
+    let onPower, bonds = 0, probes = 0;
+    f.values.set(f.metadata.CHAR_LINK_SECURITY, Uint8Array.of(1, 1, 16, 0));
+    f.ports.ble = createSecureBlePlxPort({
+      state: async () => 'PoweredOn', onStateChange(listener) { onPower = listener; return { remove() {} }; },
+      onDeviceDisconnected(_id, callback) { losses.push(callback); return { remove() {} }; },
+      async connectToDevice(id, options) { connects.push([id, options.autoConnect === true]); return peripheral; },
+      async isDeviceConnected() { probes++; return true; },
+      async cancelDeviceConnection() { return peripheral; }, async requestMTUForDevice() { return peripheral; },
+      async readCharacteristicForDevice(_id, _service, characteristic) {
+        return { value: Buffer.from(f.values.get(characteristic)).toString('base64') };
+      },
+      async writeCharacteristicWithResponseForDevice() { return {}; },
+      monitorCharacteristicForDevice() { return { remove() {} }; }, cancelTransaction() {},
+    }, { platform: 'android', bonding: { async ensureBond() { bonds++; }, async cancelBond() {} } });
+    const runtime = createBotaReactNativeJsRuntime(f.ports, {
+      backgroundBle: { setActive() {}, isAvailable: () => true, canRecover: () => true },
+    });
+    t.after(async () => { await runtime.client.destroy(); await f.adapter.destroy(); f.core.dispose(); });
+    await runtime.client.configure({ logLevel: 'none', backgroundSyncEnabled: false });
+    const manager = runtime.client.devices;
+    const first = await manager.connect({ id: peripheral.id, rssi: -60, discoveredAt: new Date(0) });
+    manager.enableAutoReconnect(first.serialNumber);
+    await manager.getStatus(first);
+    manager.on('bluetoothReady', () => events.push('ready'));
+    manager.on('deviceDisconnected', () => events.push('lost'));
+    onPower('PoweredOff'); onPower('PoweredOff');
+    assert.equal(manager.isConnected(first.id), false);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(connects.length, 1, 'a powered-off adapter must not start Android autoConnect');
+    const restored = new Promise(resolve => manager.once('deviceConnected', resolve));
+    onPower('PoweredOn'); onPower('PoweredOn');
+    const second = await restored;
+    assert.equal(second.serialNumber, first.serialNumber);
+    // Android emits an ID only. A late event from before radio-off is routed
+    // to the *current* listener of this same MAC by react-native-ble-plx.
+    losses[1](null, peripheral);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(probes, 1);
+    assert.deepEqual(manager.getConnectedDevices(), [second]);
+    assert.deepEqual(connects, [[first.id, false], [first.id, true]]);
+    assert.equal(bonds, 2, 'the replacement performs its own link-security admission');
+    assert.deepEqual(events, ['lost', 'ready']);
+    await manager.pauseAutoReconnect();
+    onPower('PoweredOff'); onPower('PoweredOn');
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(connects.length, 2, 'explicit pause survives a power cycle');
+    assert.deepEqual(manager.getConnectedDevices(), []);
+  });
+
 function controlFixture(options = {}) {
   const f = fixture(options);
   f.values.set(f.metadata.CHAR_DEVICE_STATUS, Buffer.from('3200000200000000290004000163', 'hex'));
