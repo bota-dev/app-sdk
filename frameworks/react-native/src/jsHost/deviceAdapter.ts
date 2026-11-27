@@ -467,6 +467,7 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
       } } }, 'Connect', { knownPeripheralId: id, signal });
     },
     async reconnect(serialNumber: string, options: NativeReconnectOptions) {
+      await lostLinkCleanup;
       ready();
       const hint = await direct('LoadConnection', context => ports.persistence.load(`connection/${serialNumber}`, context));
       const candidate = hint ? object(object(hint).candidate!) : {};
@@ -782,6 +783,7 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
                 priorCheckpoint: journal === null ? null : object(journal).checkpoint!,
                 expectedMarkersRequired: recording.markersRequired === true,
                 checkOwner: owner => checkWorkflowOwner(owner, device.serialNumber),
+                isLinkRetired: () => retiredPhysicalGenerations.has(lease.physicalGeneration),
                 gatt: (owner, body) => executor.gatt(owner, body), onCleanupFailure: error => executor.markCleanupFailed(error) });
               v2Hosts.set(operationId, host);
               return { TransferEncryptedRecording: { request } };

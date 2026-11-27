@@ -542,6 +542,106 @@ test('a retired disconnect observer cannot clear a replacement using the same OS
   assert.equal(removals, 2);
 });
 
+test('radio-loss disconnect probes respect replacement generations and unverified links', async () => {
+  const ctx = context(), callbacks = [], reports = [], probe = deferred();
+  let power, readLink = () => probe.promise;
+  const port = createBlePlxPort({
+    onStateChange(callback) { power = callback; return { remove() {} }; },
+    onDeviceDisconnected(_id, callback) { callbacks.push(callback); return { remove() {} }; },
+    async connectToDevice(id) { return { id, mtu: 247 }; }, isDeviceConnected: () => readLink(),
+  });
+  const radio = await port.observeBluetoothState(() => {}, ctx);
+  const links = [];
+  const connect = async label => {
+    await port.connect('one-mac', ctx);
+    links.push(await port.observeDisconnect('one-mac', () => reports.push(label), ctx));
+  };
+  try {
+    await connect('first'); power('PoweredOff'); power('PoweredOn');
+    await connect('second');
+    callbacks[1](null, null); await tick();
+    power('PoweredOff'); power('PoweredOn'); await connect('third');
+    probe.resolve(false); await tick();
+    assert.deepEqual(reports, ['first', 'second'], 'late probe cannot retire a newer generation');
+    readLink = async () => false; callbacks[2](null, null); await tick();
+    assert.deepEqual(reports, ['first', 'second', 'third']);
+    await connect('fourth');
+    readLink = async () => { throw Error('OS link status unavailable'); };
+    callbacks[3](null, null); await tick();
+    assert.deepEqual(reports, ['first', 'second', 'third', 'fourth']);
+  } finally { for (const link of links) await link.remove(); await radio.remove(); }
+});
+
+test('power loss during discovery cannot adopt a late result or install a missing disconnect observer', async () => {
+  const ctx = context(), discovery = deferred(); let power;
+  const device = { id: 'one-mac', mtu: 247, discoverAllServicesAndCharacteristics: () => discovery.promise };
+  const port = createBlePlxPort({
+    onStateChange(callback) { power = callback; return { remove() {} }; },
+    async connectToDevice() { return device; },
+    onDeviceDisconnected() { assert.fail('the powered-off link has already retired'); },
+  });
+  const radio = await port.observeBluetoothState(() => {}, ctx);
+  try {
+    await port.connect(device.id, ctx);
+    const discovering = port.discoverServices(device.id, ctx);
+    power('PoweredOff'); power('PoweredOn'); discovery.resolve(device);
+    await assert.rejects(discovering, { code: 'connection_failed' });
+    await assert.rejects(port.observeDisconnect(device.id, () => {}, ctx), /no local connection/);
+  } finally { await radio.remove(); }
+});
+
+test('a failed GATT write retires only its OS-confirmed lost link before the error returns', async () => {
+  const ctx = context(), reports = [], callbacks = [];
+  const sameAddress = { ...address, peripheralId: 'one-mac' };
+  let readLink = async () => false, state = 'PoweredOn', code = 201;
+  const port = createBlePlxPort({
+    async connectToDevice(id) { return { id, mtu: 247 }; },
+    onDeviceDisconnected(_id, callback) { callbacks.push(callback); return { remove() {} }; },
+    async writeCharacteristicWithResponseForDevice() { throw Object.assign(new Error('GATT failed'), { errorCode: code }); },
+    isDeviceConnected: () => readLink(), state: async () => state,
+  });
+  const links = [];
+  const connect = async label => {
+    await port.connect('one-mac', ctx);
+    links.push(await port.observeDisconnect('one-mac', () => reports.push(label), ctx));
+  };
+  const rejectedWrite = () => assert.rejects(port.write(sameAddress, Uint8Array.of(0), true, ctx), { errorCode: code });
+  try {
+    await connect('first'); await rejectedWrite();
+    assert.deepEqual(reports, ['first']);
+    await connect('second'); readLink = async () => true; callbacks[1](null, null); await tick();
+    code = 205; await rejectedWrite();
+    assert.deepEqual(reports, ['first'], 'live link keeps its cleanup fence');
+    readLink = async () => { throw Error('status unknown'); }; await rejectedWrite();
+    assert.deepEqual(reports, ['first'], 'an unconfirmed write failure cannot prove loss');
+    const proof = deferred(); readLink = () => proof.promise;
+    const pending = rejectedWrite(); await tick(); await connect('third'); proof.resolve(false); await pending;
+    assert.deepEqual(reports, ['first'], 'late OS read cannot retire the new generation');
+    code = 102; state = 'PoweredOff'; readLink = async () => { throw Error('radio unavailable'); };
+    await rejectedWrite();
+    assert.deepEqual(reports, ['first', 'third']);
+  } finally { for (const link of links) await link.remove(); }
+});
+
+test('an early Android monitor error is delivered after OS-confirmed loss of its GATT generation', async () => {
+  const ctx = context(), events = [], proof = deferred(); let monitor;
+  const port = createBlePlxPort({
+    async connectToDevice(id) { return { id, mtu: 247 }; },
+    onDeviceDisconnected() { return { remove() {} }; },
+    monitorCharacteristicForDevice(_id, _service, _char, callback) { monitor = callback; },
+    isDeviceConnected: () => proof.promise, async cancelTransaction() {},
+  });
+  await port.connect(address.peripheralId, ctx);
+  const link = await port.observeDisconnect(address.peripheralId, () => events.push('lost'), ctx);
+  const sub = await port.subscribe(address, () => {}, ctx, error => events.push(error.errorCode));
+  try {
+    monitor(Object.assign(new Error('disconnected'), { errorCode: 201 }), null);
+    assert.deepEqual(events, []);
+    proof.resolve(false); await tick();
+    assert.deepEqual(events, ['lost', 201]);
+  } finally { await sub.remove(); await link.remove(); }
+});
+
 test('the real generated BLE policy requests canonical MTU and observes negotiation instead of cached 23', async () => {
   let requested, observations = 0, freshDiscoveries = 0;
   const fresh = { id: 'device', mtu: 512, async discoverAllServicesAndCharacteristics() {

@@ -12,6 +12,7 @@ Device acceptance and application delivery remain separate.
 Use `deviceDisconnected` to update connection state after a peripheral reboot.
 Await `devices.disconnect(device)` before displaying a manual disconnect as
 complete. See [secure BLE disconnect and reconnect](../../docs/parity/ble-link-security.md#disconnect-and-reconnect).
+For interrupted V2 uploads, follow the [Bluetooth power-cycle and resume flow](../../docs/parity/background-bound-ble.md#resuming-a-v2-recording-after-a-phone-bluetooth-power-cycle).
 
 The unpublished [system-connection discovery correction](../../docs/parity/apple-connection-ownership.md#react-native-generated-runtime-system-retrieval)
 lets `createBlePlxPort` query an installed manager's optional `connectedDevices`

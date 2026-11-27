@@ -539,6 +539,36 @@ test('ordinary uploads reuse one context exchanger over only BLE/random ports wi
   await f.host.close();
 });
 
+for (const retired of [false, true]) test(retired
+  ? 'signed-blob cleanup releases local subscriptions after the captured BLE link is gone'
+  : 'uncertain signed-blob ABORT on a live link still fences the owner', async () => {
+  const f = protectedFixture();
+  const interrupted = new Error('commit interrupted'), failedAbort = new Error('abort write uncertain');
+  let linkLost = false, abortSent = false;
+  const failures = [];
+  const exchanger = new JsUploadContextExchange({
+    core: f.core, ports: { randomBytes: f.ports.randomBytes, ble: {
+      ...f.ports.ble,
+      async write(address, value) {
+        if (value[0] === 32) { linkLost = retired; throw interrupted; }
+        if (value[0] === 33) { abortSent = true; throw failedAbort; }
+        return f.ports.ble.write(address, value);
+      },
+    } },
+    peripheralId: 'physical', maximumWriteBytes: 244, maximumSignedBlobBytes: 1024,
+    gatt: (_context, body) => body(),
+    checkOwner() { if (linkLost) throw new Error('owner disconnected'); },
+    isLinkRetired: () => linkLost, onCleanupFailure: error => failures.push(error),
+  });
+  await assert.rejects(exchanger.sendSignedBlob(1, Uint8Array.of(77), f.context),
+    error => error === (retired ? interrupted : failedAbort));
+  assert.equal(abortSent, !retired);
+  assert.deepEqual(failures, retired ? [] : [failedAbort]);
+  assert(f.calls.some(([operation, characteristic]) => operation === 'unsubscribe' && characteristic === 'signed'));
+  await exchanger.close();
+  await f.host.close();
+});
+
 test('a broken random port cannot spin indefinitely or write a context command', async () => {
   const f = protectedFixture();
   const exchanger = new JsUploadContextExchange({ core: f.core, ports: { ble: f.ports.ble, randomBytes: length => new Uint8Array(length) },
@@ -581,7 +611,10 @@ test('manifest reconciliation prevents an unnecessary ciphertext PUT before subm
   await f.host.close();
 });
 
-test('generated Rust coordinator and receiver complete canonical ciphertext over primitive BLE and durable files', async () => {
+for (const interrupt of [false, true]) test(interrupt
+  ? 'Rust BLE receiver survives physical loss after WINDOW_ACK and resumes its original session at the durable offset'
+  : 'generated Rust coordinator and receiver complete canonical ciphertext over primitive BLE and durable files', { timeout: 30000 }, async () => {
+  const firstAck = deferred();
   const { createGeneratedJsCore } = loadSource('core.ts');
   const { BotaJsHostExecutor } = loadSource('executor.ts');
   const core = createGeneratedJsCore();
@@ -603,15 +636,14 @@ test('generated Rust coordinator and receiver complete canonical ciphertext over
   // This is a simulated firmware producer. Production parses and frames only through Rust.
   const frame = (type, size) => { const value = Buffer.alloc(size); value[0] = type; value[1] = 2; value.writeBigUInt64LE(session, 4); return value; };
   const notify = value => listeners.get(metadata.CHAR_RECORDING_TRANSFER_V2)(Uint8Array.from(value));
-  const streamWindow = () => {
-    const ack = vector('ble-start-ack'); ack.writeUInt16LE(216, 90); notify(ack);
-    let sequence = 0;
-    for (let offset = 0; offset < ciphertext.length; offset += 216) {
-      const chunk = ciphertext.subarray(offset, offset + 216), data = frame(0x41, 28 + chunk.length);
+  const streamWindow = (from, until, revision, firstSequence) => {
+    let sequence = firstSequence - 1;
+    for (let offset = from; offset < until; offset += 216) {
+      const chunk = ciphertext.subarray(offset, Math.min(offset + 216, until)), data = frame(0x41, 28 + chunk.length);
       data.writeUInt32LE(++sequence, 12); data.writeBigUInt64LE(BigInt(offset), 16); data.writeUInt16LE(chunk.length, 24); chunk.copy(data, 28); notify(data);
     }
-    const end = frame(0x42, 68); end.writeUInt32LE(1, 12); end.writeUInt32LE(1, 16); end.writeUInt32LE(sequence, 20);
-    end.writeBigUInt64LE(330n, 24); digest(ciphertext).copy(end, 32); end.writeUInt32LE(1, 64); notify(end);
+    const end = frame(0x42, 68); end.writeUInt32LE(revision, 12); end.writeUInt32LE(firstSequence, 16); end.writeUInt32LE(sequence, 20);
+    end.writeBigUInt64LE(BigInt(until), 24); digest(ciphertext.subarray(0, until)).copy(end, 32); end.writeUInt32LE(revision, 64); notify(end);
   };
   const streamManifest = () => {
     for (let offset = 0; offset < manifest.length; offset += 128) {
@@ -619,13 +651,13 @@ test('generated Rust coordinator and receiver complete canonical ciphertext over
       data.writeUInt16LE(manifest.length, 12); data.writeUInt16LE(offset, 14); data.writeUInt16LE(chunk.length, 16);
       digest(manifest).copy(data, 20); chunk.copy(data, 52); notify(data);
     }
-    const eof = frame(0x44, 92); eof.writeUInt32LE(2, 12); eof.writeUInt32LE(1, 16); eof.writeBigUInt64LE(330n, 20);
+    const eof = frame(0x44, 92); eof.writeUInt32LE(interrupt ? 1 : 2, 12); eof.writeUInt32LE(1, 16); eof.writeBigUInt64LE(330n, 20);
     digest(ciphertext).copy(eof, 28); digest(manifest).copy(eof, 60); notify(eof);
   };
   const document = (magic, size) => { const bytes = Buffer.alloc(size); bytes.write(magic); bytes.writeUInt16LE(1, 8); bytes.writeUInt16LE(size, 10); return bytes; };
   const ports = { platform: 'test', randomBytes: length => new Uint8Array(length).fill(1),
     persistence: { namespace: scope, async load(key) { return saved.get(key) ?? null; },
-      async save(key, value) { calls.push('durable-checkpoint'); saved.set(key, value); }, async remove(key) { saved.delete(key); } },
+      async save(key, value) { if (key === 'encrypted-upload-v2/canonical-transfer') calls.push('durable-checkpoint'); saved.set(key, value); }, async remove(key) { saved.delete(key); } },
     files: { async open(id) { return { id, scope, kind: 'file' }; }, async flush() {},
       async truncate(handle, length) { buffers.set(handle.id, buffers.get(handle.id).subarray(0, Number(length))); },
       async metadata(handle) { return { durableUnits: buffers.get(handle.id).length.toString() }; },
@@ -633,7 +665,10 @@ test('generated Rust coordinator and receiver complete canonical ciphertext over
       async read(handle, offset, count) { return Uint8Array.from(buffers.get(handle.id).subarray(Number(offset), Number(offset) + count)); },
       async remove() { throw new Error('Physical/local deletion is outside this transfer test'); } },
     ble: { async subscribe(address, callback) { listeners.set(address.characteristicUuid, callback); return { async remove() { calls.push('unsubscribe'); listeners.delete(address.characteristicUuid); } }; },
-      async read() { const payload = contextState === 1 ? Buffer.alloc(16, 7) : contextState === 2 ? Buffer.alloc(116, 8) : Buffer.alloc(0);
+      async connect() {}, async disconnect() {}, async discoverServices() {},
+      async read(address) {
+        if (address.characteristicUuid === metadata.CHAR_SERIAL_NUMBER) return Buffer.from(request.device);
+        const payload = contextState === 1 ? Buffer.alloc(16, 7) : contextState === 2 ? Buffer.alloc(116, 8) : Buffer.alloc(0);
         const bytes = Buffer.alloc(12 + payload.length); bytes[0] = 0x66; bytes[1] = 2; bytes[2] = contextState;
         bytes.writeUInt32LE(attempt, 4); bytes.writeUInt16LE(payload.length, 10); payload.copy(bytes, 12); return bytes; },
       async write(address, bytes) {
@@ -648,8 +683,22 @@ test('generated Rust coordinator and receiver complete canonical ciphertext over
         }
         const parsed = core.codec('decodeEncryptedUploadV2Transfer', { bytes: [...bytes] });
         calls.push(parsed.kind);
-        if (parsed.kind === 'start') streamWindow();
-        if (parsed.kind === 'window_ack') { assert.equal(saved.size, 1); assert.equal(parsed.missingSequences.length, 0); streamManifest(); }
+        if (parsed.kind === 'start') {
+          const ack = vector('ble-start-ack'); ack.writeUInt16LE(216, 90); notify(ack);
+          streamWindow(0, interrupt ? 216 : ciphertext.length, 1, 1);
+        }
+        if (parsed.kind === 'resume_request') {
+          assert.equal(Buffer.from(bytes).readBigUInt64LE(4), session);
+          assert.deepEqual([...Buffer.from(bytes).subarray(12, 28)], request.upload_session_uuid);
+          assert.equal(parsed.nextCiphertextOffset, '216');
+          assert.equal(parsed.checkpointRevision, 1);
+          const ack = Buffer.from(bytes); ack[0] = 0x45; notify(ack);
+          streamWindow(216, ciphertext.length, 2, 1);
+        }
+        if (parsed.kind === 'window_ack') {
+          assert(saved.has('encrypted-upload-v2/canonical-transfer')); assert.equal(parsed.missingSequences.length, 0);
+          if (interrupt && !calls.includes('resume_request')) firstAck.resolve(); else streamManifest();
+        }
       },
     } };
   const material = { async authorization() { return Uint8Array.from(vector('authorization-development')); },
@@ -660,16 +709,47 @@ test('generated Rust coordinator and receiver complete canonical ciphertext over
     async finalize() { calls.push('finalize'); }, async completionReceipt() { calls.push('receipt'); return Uint8Array.from(vector('completion-receipt')); },
     async confirmed() { calls.push('confirmed'); }, async cancel() { calls.push('cancel'); } };
   const executor = new BotaJsHostExecutor(core, ports);
-  const host = new JsEncryptedUploadV2Host({ core, ports, request, sink, journalKey: 'canonical-transfer', material,
-    peripheralId: 'physical', maximumWriteBytes: 244, gatt: (context, body) => executor.gatt(context, body), checkOwner: context => executor.check(context) });
-  executor.registerHandler('EncryptedUploadV2', host.handle);
-  const result = await executor.run({ TransferEncryptedRecording: { request } }, { operation: 'TransferRecording', operationId: 'canonical',
+  let connectedGeneration = 1;
+  const makeHost = (generation, priorCheckpoint) => new JsEncryptedUploadV2Host({ core, ports, request, sink, journalKey: 'canonical-transfer', material,
+    priorCheckpoint,
+    isLinkRetired: () => connectedGeneration !== generation,
+    peripheralId: 'physical', maximumWriteBytes: 244, gatt: (context, body) => executor.gatt(context, body),
+    checkOwner(context) {
+      executor.check(context);
+      if (generation !== connectedGeneration) throw new Error('old physical connection');
+    },
+    onCleanupFailure: error => executor.markCleanupFailed(error),
+  });
+  let host = makeHost(connectedGeneration);
+  executor.registerHandler('EncryptedUploadV2', (effect, context) => host.handle(effect, context));
+  const connect = () => executor.run({ Connect: { device: request.device, candidate: {
+    peripheral_id: 'physical', name: null, advertised_address: null, rssi: -64,
+  } } }, { operation: 'Connect' });
+  const sync = id => executor.run({ TransferEncryptedRecording: { request } }, { operation: 'TransferRecording', operationId: id,
     capabilities: ['Ble', 'Persistence', 'Progress', 'HostMaterial', 'RecordingSink', 'NetworkTransfer'] });
+  if (interrupt) await connect();
+  let operation = sync('canonical');
+  if (interrupt) {
+    await firstAck.promise;
+    connectedGeneration++;
+    const stopped = assert.rejects(operation, { code: 'connection_failed' });
+    await executor.peripheralDisconnected('physical');
+    await stopped;
+    const savedCheckpoint = saved.get('encrypted-upload-v2/canonical-transfer').checkpoint;
+    assert.equal(savedCheckpoint.next_ciphertext_offset, '216');
+    assert.deepEqual(buffers.get('sink'), ciphertext.subarray(0, 216));
+    assert.equal(listeners.size, 0);
+    assert.equal(calls.includes('abort'), false);
+    await connect();
+    host = makeHost(connectedGeneration, savedCheckpoint);
+    operation = sync('retry-with-same-cloud-session');
+  }
+  const result = await operation;
   assert.ok(result.notifications.some(value => value.Completed));
-  assert.deepEqual(calls.filter(value => ['durable-checkpoint', 'window_ack', 'reconcile-manifest', 'ciphertext-put', 'manifest-submit', 'finalize', 'receipt', 'confirm', 'confirmed'].includes(value)),
-    ['durable-checkpoint', 'window_ack', 'reconcile-manifest', 'ciphertext-put', 'manifest-submit', 'finalize', 'receipt', 'confirm', 'confirmed']);
+  const expected = [...(interrupt ? ['durable-checkpoint', 'window_ack', 'resume_request'] : []), 'durable-checkpoint', 'window_ack', 'reconcile-manifest', 'ciphertext-put', 'manifest-submit', 'finalize', 'receipt', 'confirm', 'confirmed'];
+  assert.deepEqual(calls.filter(value => expected.includes(value)), expected);
   assert.equal(calls.includes('abort'), false);
-  assert.equal(calls.includes('cancel'), false);
+  assert.equal(calls.includes('cancel'), interrupt);
   assert.equal(listeners.size, 0);
   await executor.destroy();
 });

@@ -193,7 +193,9 @@ test('exact authorization rejection rolls back uncertainty while other failures 
   }
 });
 
-test('restoration checks exact owner and can recover a changed nonce without restarting cloud creation', async () => {
+for (const changedNonce of [false, true]) test(changedNonce
+  ? 'restoring a staged BLE checkpoint with a changed nonce selects the verified successor'
+  : 'restoring a staged BLE checkpoint with the same nonce keeps the original cloud session', async () => {
   const f = fixture((url, request) => {
     if (url.endsWith('/recover')) return response(url, 200, session({ session_id: SUCCESSOR, owner_revision: 3 }));
     if (url.endsWith(SUCCESSOR)) return response(url, 200, session({ session_id: SUCCESSOR, owner_revision: 3 }));
@@ -203,14 +205,21 @@ test('restoration checks exact owner and can recover a changed nonce without res
   try {
     await f.backend.prepare(JSON.stringify(input()));
     await f.backend.cancel('upload-1');
-    f.nonceState.value = '02'.repeat(16);
-    const result = JSON.parse(await f.backend.prepare(JSON.stringify(input('upload-2'))));
-    assert.equal(result.uploadSessionId, SUCCESSOR); assert.equal(result.ownerRevision, 3);
+    if (changedNonce) f.nonceState.value = '02'.repeat(16);
+    const checkpoint = { version: 1, uploadSessionId: SESSION, ownerRevision: 2, revision: 1,
+      nextCiphertextOffset: '216', prefixSha256: hex(ciphertext.subarray(0, 216)), highestContiguousSequence: 1,
+      transportSessionId: '7', sinkRegistrationId: 'sink', windowPackets: 16, dataPayloadBytes: 216 };
+    const result = JSON.parse(await f.backend.prepare(JSON.stringify(input('upload-2', { checkpoint }))));
+    assert.equal(result.recordingId, 'rec_1');
+    assert.equal(result.uploadSessionId, changedNonce ? SUCCESSOR : SESSION);
+    assert.equal(result.ownerRevision, changedNonce ? 3 : 2);
+    assert(f.calls.some(call => call.url.endsWith(SESSION) && call.request.method === 'GET'));
     assert.equal(f.calls.filter(call => call.url.endsWith('/recordings')).length, 1);
     assert.equal(f.calls.filter(call => call.url.endsWith('/sessions')).length, 1);
     const recover = f.calls.find(call => call.url.endsWith('/recover'));
-    assert.equal(JSON.parse(recover.request.body).reason, 'nonce_changed');
-    assert.equal([...f.journal.values()][0].entry.sessionId, SUCCESSOR);
+    if (changedNonce) assert.equal(JSON.parse(recover.request.body).reason, 'nonce_changed');
+    else assert.equal(recover, undefined);
+    assert.equal([...f.journal.values()][0].entry.sessionId, result.uploadSessionId);
     assert.equal([...f.journal.values()][0].recoveryNonceBase64, undefined);
   } finally { await f.backend.dispose(); f.core.dispose?.(); }
 });
