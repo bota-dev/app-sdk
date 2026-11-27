@@ -327,6 +327,21 @@ fn staging_refuses_credentials_headers_expiry_and_redirect_urls() {
         "responseJson":json!({"url":"https://storage.example.com/object?signature=a","method":"PUT","headers":{}}).to_string()})).is_ok());
 }
 #[test]
+fn raw_post_requires_a_generic_target_and_a_supported_method() {
+    let stage = |method, generic| {
+        json!({"type":"Staging","genericTarget":generic,
+        "expiresAt":"2030-01-01T00:00:00Z","nowMs":0,
+        "responseJson":json!({"url":"https://storage.example.com/object","method":method,"headers":{}}).to_string()})
+    };
+    let mut i = input();
+    assert!(run(&i, stage("POST", true)).is_err());
+    i["capability"]["flags"] = json!(0x77f);
+    assert_eq!(run(&i, stage("POST", true)).unwrap()["method"], "POST");
+    assert!(run(&i, stage("POST", false)).is_err());
+    assert!(run(&i, stage("PATCH", true)).is_err());
+}
+
+#[test]
 fn published_http_without_valid_signed_receipt_never_allows_completion() {
     let mut s = session();
     s["state"] = json!("published");

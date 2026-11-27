@@ -16,12 +16,15 @@ import org.junit.Test
 
 class EncryptedUploadV2StagingUploaderTest {
     @Test
-    fun streamsOnlyTheNativeCiphertextFileIntoTheApplicationPutTemplate() = runTest {
+    fun sendsTheExactCiphertextForPutAndPost() = runTest {
         val file = Files.createTempFile("bota-v2", ".ciphertext")
         val ciphertext = ByteArray(192 * 1024) { (it % 251).toByte() }
         Files.write(file, ciphertext)
         var uploaded = byteArrayOf()
+        var observedMethod = ""
         val client = OkHttpClient.Builder().addInterceptor { chain ->
+            observedMethod = chain.request().method
+            assertEquals("yes", chain.request().header("x-signed"))
             val buffer = Buffer()
             chain.request().body!!.writeTo(buffer)
             uploaded = buffer.readByteArray()
@@ -35,14 +38,16 @@ class EncryptedUploadV2StagingUploaderTest {
         }.build()
         val uploader = EncryptedUploadV2StagingUploader(client)
 
-        uploader.upload(
-            Request.Builder().url("https://example.test/upload").header("x-signed", "yes")
-                .put(byteArrayOf().toRequestBody()).build(),
-            file,
-        )
-
-        assertTrue(uploaded.contentEquals(ciphertext))
-        assertEquals(ciphertext.size.toLong(), uploaded.size.toLong())
+        for (method in listOf("PUT", "POST")) {
+            uploader.upload(
+                Request.Builder().url("https://example.test/upload").header("x-signed", "yes")
+                    .method(method, byteArrayOf().toRequestBody()).build(),
+                file,
+            )
+            assertEquals(method, observedMethod)
+            assertTrue(uploaded.contentEquals(ciphertext))
+            assertEquals(ciphertext.size.toLong(), uploaded.size.toLong())
+        }
         uploader.close()
     }
 

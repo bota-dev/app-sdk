@@ -94,6 +94,7 @@ internal class NativeUpload(
     var pointer: UploadPointer? = null
     var receiptDelivered = false
     private var session: JSONObject? = null
+    private var externalTarget = false
     private var uploadCiphertext = true
     private var sendManifest = true
     private var receipt: ByteArray? = null
@@ -259,6 +260,7 @@ internal class NativeUpload(
       }
       timestamp(selected.string("expires_at"))
       var authorization = opaque(selected.string("authorization_base64"), 408, selected.string("authorization_sha256"))
+      externalTarget = authorization[30].toInt() and 0x10 != 0
       if (input.recording.markersRequired) {
         val path = sessionPath() + "/markers/authorization"
         val admission = try {
@@ -329,6 +331,7 @@ internal class NativeUpload(
     private suspend fun reconcileStaging(bytes: ByteArray, evidence: EncryptedUploadV2TransferEvidence): Boolean {
       verifyEvidence(evidence)
       if (!uploadCiphertext) return false
+      if (externalTarget) return true
       return try { retry { manifest(bytes, evidence) }; false }
       catch (error: UploadFailure) {
         if (error.code == "BOTA_UPLOAD_STAGING_MISSING") true else throw error
@@ -342,7 +345,8 @@ internal class NativeUpload(
       operation.check()
       demand(timestamp(session!!.string("expires_at")) > now(), "EXPIRED")
       return sanitized("INVALID_DOCUMENT") {
-        demand(target.string("method") == "PUT", "INVALID_DOCUMENT")
+        val method = target.string("method")
+        demand(method == "PUT" || (method == "POST" && externalTarget && input.flags and 0x400L != 0L), "INVALID_DOCUMENT")
         val url = target.string("url").toHttpUrl()
         demand(url.isHttps && url.username.isEmpty() && url.password.isEmpty() && url.fragment == null, "INVALID_DOCUMENT")
         val headers = target.getJSONObject("headers")
@@ -362,7 +366,7 @@ internal class NativeUpload(
           builder.header(key, value)
         }
         // SDK replaces this bodyless template with its verified native ciphertext source.
-        builder.put(ByteArray(0).toRequestBody(null)).build()
+        builder.method(method, ByteArray(0).toRequestBody(null)).build()
       }
     }
     private suspend fun manifest(bytes: ByteArray, evidence: EncryptedUploadV2TransferEvidence) {

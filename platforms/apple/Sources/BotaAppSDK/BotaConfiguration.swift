@@ -64,7 +64,12 @@ public struct BotaConfiguration: @unchecked Sendable {
                         )
                     },
                     uploadCiphertext: { request, fileURL in
-                        let (_, response) = try await URLSession.shared.upload(for: request, fromFile: fileURL)
+                        let configuration = URLSessionConfiguration.ephemeral
+                        configuration.httpShouldSetCookies = false
+                        configuration.urlCredentialStorage = nil
+                        let session = URLSession(configuration: configuration, delegate: CiphertextUploadDelegate(), delegateQueue: nil)
+                        defer { session.finishTasksAndInvalidate() }
+                        let (_, response) = try await session.upload(for: request, fromFile: fileURL)
                         guard let response = response as? HTTPURLResponse,
                               (200 ..< 300).contains(response.statusCode)
                         else { throw NativeHostError.httpStatus((response as? HTTPURLResponse)?.statusCode ?? 0) }
@@ -354,6 +359,14 @@ public struct BotaConfiguration: @unchecked Sendable {
                 detail: "Bluetooth authorization state is unsupported"
             )
         }
+    }
+}
+
+private final class CiphertextUploadDelegate: NSObject, URLSessionTaskDelegate {
+    func urlSession(_ session: URLSession, task: URLSessionTask,
+                    willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
+                    completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
+        completionHandler(nil)
     }
 }
 

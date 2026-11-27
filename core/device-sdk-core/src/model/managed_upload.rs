@@ -274,6 +274,8 @@ pub enum ManagedUploadEvent {
     },
     Staging {
         response_json: String,
+        #[serde(default)]
+        generic_target: bool,
         expires_at: String,
         now_ms: u64,
     },
@@ -1132,6 +1134,7 @@ impl ManagedUploadRequest {
             )?,
             ManagedUploadEvent::Staging {
                 response_json,
+                generic_target,
                 expires_at,
                 now_ms,
             } => {
@@ -1145,14 +1148,13 @@ impl ManagedUploadRequest {
                     headers: std::collections::BTreeMap<String, String>,
                 }
                 let t: Target = decode(response_json)?;
-                if t.method != "PUT"
+                let generic_capability = input.capability.flags
+                    & crate::generated::protocol::ENCRYPTED_UPLOAD_V2_CAP_GENERIC_TARGET
+                    != 0;
+                if !(t.method == "PUT"
+                    || (t.method == "POST" && *generic_target && generic_capability))
                     || !https_url(&t.url, false)
-                    || !target_headers_valid(
-                        &t.headers,
-                        input.capability.flags
-                            & crate::generated::protocol::ENCRYPTED_UPLOAD_V2_CAP_GENERIC_TARGET
-                            != 0,
-                    )
+                    || !target_headers_valid(&t.headers, generic_capability)
                 {
                     return Err(ManagedUploadError::InvalidDocument);
                 }
