@@ -63,7 +63,7 @@ export interface FirmwareDownloadProvider {
 }
 
 export interface UploadRequestTemplate {
-  method: 'PUT'
+  method: 'PUT' | 'POST'
   url: string
   headers: Readonly<Record<string, string>>
 }
@@ -162,7 +162,7 @@ export interface RecordingUploadProvider {
   }): Promise<import('./uploadContext.ts').UploadContextExchange>
   prepareLegacyUpload(context: LegacyUploadContext): Promise<{
     uploadId: string
-    request: UploadRequestTemplate
+    request: UploadRequestTemplate & { method: 'PUT' }
   }>
   completeLegacyUpload(
     context: LegacyUploadContext & { uploadId: string },

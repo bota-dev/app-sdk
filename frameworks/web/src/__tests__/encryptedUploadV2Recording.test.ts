@@ -236,13 +236,20 @@ test('uncertain v2 LIST cleanup poisons shared BLE ownership', async () => {
   )
 })
 
-test('explicit v2 sync binds fresh capability, stages ciphertext, persists receipt evidence, and confirms', async () => {
+test('explicit v2 sync sends the complete ciphertext, persists receipt evidence, and confirms', async (t) => {
+  for (const method of ['PUT', 'POST'] as const) {
+    await t.test(method, () => checkWholeFileUpload(method))
+  }
+})
+
+async function checkWholeFileUpload(method: 'PUT' | 'POST') {
   const harness = await createHarness()
   const authorization = bytes(
     (await vector('authorization-development')).inputHex,
   )
   const receipt = bytes((await vector('completion-receipt')).inputHex)
   const deliveredReceipt = receipt.slice()
+  if (method === 'POST') authorization[30]! |= 0x10
   const ciphertext = bytes((await vector('storage-partial-block')).inputHex)
   const manifest = bytes((await vector('manifest-hpke')).inputHex)
   assert.equal(ciphertext.byteLength, 330)
@@ -258,7 +265,7 @@ test('explicit v2 sync binds fresh capability, stages ciphertext, persists recei
   let submittedManifest: Uint8Array | null = null
   let uploaded = new Uint8Array()
   const request: UploadRequestTemplate = {
-    method: 'PUT',
+    method,
     url: 'https://upload-secret.example.invalid/v2',
     headers: { Authorization: 'Bearer v2-secret' },
   }
@@ -294,6 +301,8 @@ test('explicit v2 sync binds fresh capability, stages ciphertext, persists recei
   }
   harness.setFetch(async (_input, init) => {
     harness.events.push('fetch:v2')
+    assert.equal(init?.method, method)
+    assert.equal(init?.credentials, 'omit')
     assert.equal(init?.redirect, 'error')
     uploaded = new Uint8Array(await new Response(init?.body).arrayBuffer())
     return new Response(null, { status: 200 })
@@ -412,7 +421,7 @@ test('explicit v2 sync binds fresh capability, stages ciphertext, persists recei
   assert.ok(transferSubscribe >= 0 && transferSubscribe < startWrite)
   assert.equal(harness.storage.recordingJournals.size, 0)
   assert.equal(harness.storage.encryptedUploadV2Checkpoints.size, 0)
-})
+}
 
 test('signed-document correlation IDs do not repeat across v2 host instances', async () => {
   const harness = await createHarness()

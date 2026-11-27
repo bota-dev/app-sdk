@@ -30,7 +30,7 @@ export interface JsV2HttpResponse {
 export type JsV2Fetch = (url: string, request: JsV2HttpRequest) => Promise<JsV2HttpResponse>;
 export interface JsV2UploadTarget {
   readonly url: string;
-  readonly method: 'PUT';
+  readonly method: 'PUT' | 'POST';
   readonly headers: Readonly<Record<string, string>>;
 }
 export interface JsEncryptedUploadV2BackendOptions {
@@ -38,7 +38,7 @@ export interface JsEncryptedUploadV2BackendOptions {
   readonly persistence: JsPersistencePort;
   readonly files: JsFilePort;
   readonly fetch: JsV2Fetch;
-  /** This port uploads a captured opaque file and refuses redirects/cookies. */
+  /** Send the complete file as the raw body with the granted method and headers. Refuse redirects and cookies. */
   readonly uploadFile: (target: JsV2UploadTarget, handle: OpaqueHostHandle, context: JsHostContext) => Promise<void>;
   readonly requestCredentials: (operationId: string, signal?: AbortSignal) => Promise<string>;
   readonly readNonce: (operationId: string, signal?: AbortSignal) => Promise<Uint8Array | string>;
@@ -94,6 +94,7 @@ interface Slot {
   receiptProvided: boolean;
   uploadCiphertext: boolean;
   needsManifest: boolean;
+  externalTarget?: boolean;
   release?: Promise<void>;
   completion?: Promise<void>;
 }
@@ -342,6 +343,8 @@ export function createJsEncryptedUploadV2Backend(options: JsEncryptedUploadV2Bac
     async reconcileStaging(bytes, evidence, context) {
       check(slot, context); reduce(slot.input, { type: 'VerifyEvidence', evidence: mapEvidence(evidence) });
       if (!slot.uploadCiphertext) return false;
+      // An external manifest can be accepted before the object is present.
+      if (slot.externalTarget) return true;
       try { await retry(slot, () => manifest(slot, bytes, evidence, context)); return false; }
       catch (error) { if (error instanceof HttpFailure && error.stagingMissing) return true; throw error; }
     },
@@ -352,7 +355,7 @@ export function createJsEncryptedUploadV2Backend(options: JsEncryptedUploadV2Bac
       const plan = reduce(slot.input, { type: 'StagingRequest', entry: slot.entry, evidence: mapEvidence(evidence),
         expiresAt: slot.session!.expires_at, nowMs: String(now()) });
       const text = await http(slot, plan.path, plan.bodyJSON);
-      const target = reduce(slot.input, { type: 'Staging', responseJson: text, expiresAt: slot.session!.expires_at, nowMs: String(now()) });
+      const target = reduce(slot.input, { type: 'Staging', responseJson: text, genericTarget: slot.externalTarget, expiresAt: slot.session!.expires_at, nowMs: String(now()) });
       exactUrl(target.url);
       check(slot, context);
       const hashId = `${slot.input.operationId}:managed-source`;
@@ -526,6 +529,7 @@ export function createJsEncryptedUploadV2Backend(options: JsEncryptedUploadV2Bac
       }
       slot.authorization = Uint8Array.from(reduce(slot.input, { type: 'Authorization', responseJson: response, markerResponseJson: marker ?? null }).bytes);
       check(slot);
+      slot.externalTarget = (slot.authorization[30]! & 0x10) !== 0;
       slot.registration = options.registerMaterial(slot.input.operationId, material(slot));
       check(slot);
       slot.preparing = false;

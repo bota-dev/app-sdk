@@ -12,14 +12,15 @@ import okhttp3.Request
 import okhttp3.RequestBody
 import okio.BufferedSink
 
-internal class EncryptedUploadV2StagingUploader(private val client: OkHttpClient) : AutoCloseable {
+internal class EncryptedUploadV2StagingUploader(client: OkHttpClient) : AutoCloseable {
+    private val client = client.newBuilder().followRedirects(false).followSslRedirects(false).build()
     private val calls = ConcurrentHashMap.newKeySet<Call>()
 
     suspend fun upload(template: Request, file: Path) = withContext(Dispatchers.IO) {
-        require(template.url.isHttps && template.method == "PUT" && (template.body?.contentLength() ?: 0L) == 0L) {
-            "staging request must be an HTTPS PUT with an empty template body"
+        require(template.url.isHttps && template.method in setOf("PUT", "POST") && (template.body?.contentLength() ?: 0L) == 0L) {
+            "staging request must be an HTTPS PUT or POST with an empty template body"
         }
-        val request = template.newBuilder().put(FileRequestBody(file, template.body?.contentType())).build()
+        val request = template.newBuilder().method(template.method, FileRequestBody(file, template.body?.contentType())).build()
         val call = client.newCall(request)
         calls += call
         try {

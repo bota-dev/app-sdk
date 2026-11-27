@@ -114,6 +114,31 @@ test('generated managed policy performs strict create, manifest reconciliation, 
   } finally { await f.backend.dispose(); f.core.dispose?.(); }
 });
 
+test('external staging sends the complete file with the renewed method before the manifest', async () => {
+  const document = Buffer.from(authorization);
+  document[30] |= 0x10;
+  const target = { method: 'POST', url: 'https://storage.example.com/file', headers: { 'content-type': 'application/octet-stream' } };
+  const f = fixture((url, request) => {
+    if (url.endsWith('/sessions')) return response(url, 201, session({ authorization_base64: document.toString('base64'), authorization_sha256: hex(document) }));
+    if (url.endsWith('/staging-url')) return response(url, 200, target);
+    if (url.endsWith('/manifest')) return response(url, 200, {});
+    return baseHandler(url, request);
+  });
+  try {
+    const req = input();
+    req.capability.flags |= 0x0400;
+    await f.backend.prepare(JSON.stringify(req));
+    const material = f.materials.get('upload-1');
+    assert.equal(await material.reconcileStaging(manifest, evidence, f.context()), true);
+    assert.ok(!f.calls.some(call => call.url.endsWith('/manifest')));
+    await material.stageCiphertext(f.sink, evidence, f.context());
+    assert.deepEqual(f.uploads[0][0], target);
+    assert.equal(f.uploads[0][1], f.sink);
+    await material.submitManifest(manifest, evidence, f.context());
+    assert.ok(f.calls.at(-1).url.endsWith('/manifest'));
+  } finally { await f.backend.dispose(); f.core.dispose?.(); }
+});
+
 test('successful manifest reconciliation never repeats PUT after an uncertain prior upload', async () => {
   const f = fixture((url, request) => url.endsWith('/manifest') ? response(url, 200, {}) : baseHandler(url, request));
   try {

@@ -1171,6 +1171,7 @@ export class EncryptedUploadV2Host implements WorkflowEffectHost {
   private boundaryGate: ReturnType<typeof deferred<void>> | null = null
   private startBoundaryTarget: ((event: BoundaryEvent) => Promise<void>) | null = null
   private pumpPromise: Promise<void> | null = null
+  private genericTarget = false
   private preparedAuthorizationSha256: Uint8Array | null = null
   private cancelledValue = false
   private abortPromise: Promise<void> | null = null
@@ -1248,6 +1249,7 @@ export class EncryptedUploadV2Host implements WorkflowEffectHost {
         const source = this.material.authorization
         if (source.byteLength !== 408) throw protocolFailure()
         const digest = sha256(this.core, source)
+        this.genericTarget = (source[30]! & 0x10) !== 0
         await this.signedWriter.send(
           'authorization',
           nextSignedBlobWriteId(),
@@ -1475,7 +1477,7 @@ export class EncryptedUploadV2Host implements WorkflowEffectHost {
           signal,
           'upload',
         )
-        validateUploadRequest(request)
+        validateUploadRequest(request, this.genericTarget)
         await this.uploadCiphertext(request, signal)
       }
       throwIfCancelled(this.cancelledValue, signal)
@@ -1762,11 +1764,12 @@ export class EncryptedUploadV2Host implements WorkflowEffectHost {
     ])
     const body = blobReadableStream(this.blob, combinedSignal)
     const init: RequestInit & { duplex?: 'half' } = {
-      method: 'PUT',
+      method: request.method,
       headers: { ...request.headers },
       body,
       signal: combinedSignal,
       redirect: 'error',
+      credentials: 'omit',
       duplex: 'half',
     }
     const pendingResponse = this.fetcher(request.url, init)
@@ -2689,8 +2692,9 @@ function validateEvidence(value: unknown): void {
 
 function validateUploadRequest(
   request: unknown,
+  genericTarget: boolean,
 ): asserts request is UploadRequestTemplate {
-  if (!isRecord(request) || request.method !== 'PUT') {
+  if (!isRecord(request) || (request.method !== 'PUT' && !(genericTarget && request.method === 'POST'))) {
     throw new BotaSDKError('upload_failed', 'upload')
   }
   if (typeof request.url !== 'string') {

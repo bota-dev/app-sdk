@@ -26,6 +26,7 @@ struct UploadContext: Sendable {
   private var session: UploadSession?
   private var authorizationNonceSHA256: String?
   private var recoveryNonceBase64: String?
+  private var externalTarget = false
   private var uploadCiphertext = true
   private var needsManifest = true
   private var receipt: Data?
@@ -203,6 +204,7 @@ struct UploadContext: Sendable {
     _ = try UploadValidation.date(selected.expires_at)
     guard UploadValidation.hex(selected.authorization_sha256, bytes: 32) else { throw UploadFailure.invalidDocument }
     var authorization = try UploadValidation.document(selected.authorization_base64, hash: selected.authorization_sha256, size: 408)
+    externalTarget = authorization[30] & 0x10 != 0
     if input.recording.markersRequired == true {
       struct Admission: Decodable {
         let profile: String
@@ -291,6 +293,7 @@ struct UploadContext: Sendable {
   func reconcileStaging(_ manifest: Data, evidence: UploadEvidence) async throws -> Bool {
     try verify(evidence)
     guard uploadCiphertext else { return false }
+    if externalTarget { return true }
     do {
       try await retry { try await submitManifest(manifest, evidence: evidence) }
       return false
@@ -306,11 +309,11 @@ struct UploadContext: Sendable {
       body: ["owner_revision": session.owner_revision]))
     try check()
     guard try UploadValidation.date(session.expires_at) > now() else { throw UploadFailure.expired }
-    guard target.method == "PUT", let components = URLComponents(string: target.url), components.scheme == "https",
+    guard target.method == "PUT" || (target.method == "POST" && externalTarget && input.capability.flags & 0x400 != 0), let components = URLComponents(string: target.url), components.scheme == "https",
           components.host != nil, components.user == nil, components.password == nil, components.fragment == nil,
           let url = components.url else { throw UploadFailure.invalidDocument }
     var request = URLRequest(url: url)
-    request.httpMethod = "PUT"
+    request.httpMethod = target.method
     var names = Set<String>()
     var headerBytes = 1
     let forbidden = ["host", "content-length", "transfer-encoding", "connection", "keep-alive", "te", "trailer",

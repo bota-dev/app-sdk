@@ -187,7 +187,7 @@ actor EncryptedUploadV2MaterialRegistry {
         let request = try await entry.provider.stagingRequest(for: evidence)
         try requireCurrent(id: id, registrationID: entry.registrationID)
         guard request.url?.scheme?.lowercased() == "https",
-              request.httpMethod?.uppercased() == "PUT",
+              request.httpMethod == "PUT" || (entry.provider.authorization[30] & 0x10 != 0 && request.httpMethod == "POST"),
               request.httpBody == nil,
               request.httpBodyStream == nil
         else {

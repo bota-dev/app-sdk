@@ -72,9 +72,11 @@ internal class EncryptedUploadV2MaterialRegistry {
         val request = entry.material.stagingRequest(evidence)
         requireCurrent(id, entry.registrationId)
         val contentLength = request.body?.contentLength() ?: 0
-        if (request.url.scheme.lowercase() != "https" || request.method.uppercase() != "PUT" || contentLength != 0L) {
+        val genericTarget = entry.material.authorization[30].toInt() and 0x10 != 0
+        val supportedMethod = request.method == "PUT" || (genericTarget && request.method == "POST")
+        if (request.url.scheme.lowercase() != "https" || !supportedMethod || contentLength != 0L) {
             throw EncryptedUploadV2MaterialRegistryException(
-                "staging request must be an HTTPS PUT with an empty template body",
+                "staging request must be an HTTPS PUT or POST with an empty template body",
             )
         }
         return request
