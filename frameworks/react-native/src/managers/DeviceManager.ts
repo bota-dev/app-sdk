@@ -597,14 +597,9 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
   }
 
   async getRecordingState(device: ConnectedDevice): Promise<RecordingState> {
-    this.requireConnected(device.id);
-    const pending = this.recordingStatePending.get(device.id);
-    if (pending) return pending;
-    try {
-      return await this.readAndCacheRecordingState(device);
-    } catch {
-      return this.cachedRecordingState(device.id);
-    }
+    const connected = this.requireConnected(device.id, device.serialNumber);
+    return this.recordingStatePending.get(device.id)
+      ?? this.refreshRecordingState(connected, Promise.resolve(true));
   }
 
   subscribeToRecordingState(
@@ -861,6 +856,10 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
   }
 
   private rememberConnected(device: ConnectedDevice): void {
+    if (this.connectedDevices.get(device.id) !== device) {
+      this.recordingStateCache.delete(device.id);
+      this.recordingStatePending.delete(device.id);
+    }
     this.connectedDevices.set(device.id, device);
     this.knownBleIds.set(device.serialNumber, device.id);
     if (this.autoReconnectEnabled && this.autoReconnectSerial === device.serialNumber) {
@@ -1049,34 +1048,35 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     grantBlob: string,
     command: 'start' | 'stop'
   ): Promise<{ success: boolean; error?: string }> {
+    const connected = this.requireConnected(device.id, device.serialNumber);
     const operation = command === 'start'
       ? this.client.controls.requestStartRecording(device, grantBlob)
       : this.client.controls.requestStopRecording(device, grantBlob);
-    const pendingState = operation.then(
-      () => this.readAndCacheRecordingState(device),
-      () => this.cachedRecordingState(device.id)
-    );
-    this.recordingStatePending.set(device.id, pendingState);
-    try {
-      const result = await operation;
-      await pendingState;
-      return result;
-    } catch (error) {
-      await pendingState;
-      throw error;
-    } finally {
-      if (this.recordingStatePending.get(device.id) === pendingState) {
-        this.recordingStatePending.delete(device.id);
-      }
-    }
+    // The firmware result settles the command. A status read only refreshes the cache.
+    void this.refreshRecordingState(connected, operation.then(result => result.success));
+    return operation;
   }
 
-  private async readAndCacheRecordingState(
-    device: ConnectedDevice
+  private refreshRecordingState(
+    device: ConnectedDevice,
+    ready: Promise<boolean>
   ): Promise<RecordingState> {
-    const state = await this.client.controls.readRecordingState(device);
-    this.recordingStateCache.set(device.id, state);
-    return state;
+    const previous = this.cachedRecordingState(device.id);
+    const isCurrent = () => this.connectedDevices.get(device.id) === device
+      && this.recordingStatePending.get(device.id) === pending;
+    const pending: Promise<RecordingState> = ready.then(async shouldRead => {
+      if (!shouldRead || !isCurrent()) return previous;
+      const state = await this.client.controls.readRecordingState(device);
+      if (!isCurrent()) return previous;
+      this.recordingStateCache.set(device.id, state);
+      return state;
+    }).catch(() => previous).finally(() => {
+      if (this.recordingStatePending.get(device.id) === pending) {
+        this.recordingStatePending.delete(device.id);
+      }
+    });
+    this.recordingStatePending.set(device.id, pending);
+    return pending;
   }
 
   private cachedRecordingState(deviceId: string): RecordingState {

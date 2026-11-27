@@ -278,6 +278,96 @@ test('internal DeviceManager preserves recording grant overloads and pending sta
   assert.deepEqual(fake.controlCalls.at(-1), ['readAuthNonce', connectedDevice]);
 });
 
+for (const action of ['Start', 'Stop']) {
+  test(`${action} returns its ACK while the recording-state read is still pending`, async () => {
+    const fake = createFakeClient();
+    const read = deferred();
+    const received = { success: true };
+    fake[`${action.toLowerCase()}RecordingResult`] = Promise.resolve(received);
+    fake.recordingState = read.promise;
+    setCompatibilityClientForTesting(fake.client);
+    const manager = new DeviceManager();
+    const device = await manager.connect(discoveredDevice);
+
+    let result;
+    const command = manager[`request${action}Recording`](device, 'grant')
+      .then(value => { result = value; });
+    const status = manager.getRecordingState(device);
+    await tick();
+    try {
+      assert.deepEqual(result, received);
+      assert.equal(fake.recordingStateReadCalls, 1);
+    } finally {
+      read.reject(new Error('Operation was rejected'));
+      await Promise.allSettled([command, status]);
+    }
+    assert.deepEqual(await status, { active: false, initiatedBy: 'local' });
+    assert.equal(fake.recordingControlCalls.length, 1);
+  });
+
+  test(`${action} preserves the device rejection and original command transport error`, async () => {
+    const fake = createFakeClient();
+    const rejected = { success: false, error: 'invalid_grant' };
+    fake[`${action.toLowerCase()}RecordingResult`] = Promise.resolve(rejected);
+    fake.recordingStateError = new Error('Operation was rejected');
+    setCompatibilityClientForTesting(fake.client);
+    const manager = new DeviceManager();
+    const device = await manager.connect(discoveredDevice);
+    const request = () => manager[`request${action}Recording`](device, 'grant');
+    assert.deepEqual(await request(), rejected);
+    const disconnected = new Error('disconnected during grant write');
+    fake[`${action.toLowerCase()}RecordingResult`] = Promise.reject(disconnected);
+    await assert.rejects(request(), error => error === disconnected);
+    assert.equal(fake.recordingStateReadCalls, 0);
+    assert.equal(fake.recordingControlCalls.length, 2);
+  });
+}
+
+test('a delayed Start read cannot replace the state cached by a later Stop', async () => {
+  const fake = createFakeClient();
+  const firstRead = deferred();
+  fake.recordingState = firstRead.promise;
+  fake.stopRecordingResult = Promise.resolve({ success: true });
+  setCompatibilityClientForTesting(fake.client);
+  const manager = new DeviceManager();
+  const device = await manager.connect(discoveredDevice);
+  const start = manager.requestStartRecording(device, 'grant');
+  const afterStart = manager.getRecordingState(device);
+  await tick();
+  const stopped = { active: false, initiatedBy: 'remote' };
+  fake.recordingState = stopped;
+  await manager.requestStopRecording(device, 'grant');
+  assert.deepEqual(await manager.getRecordingState(device), stopped);
+  firstRead.resolve(recordingState);
+  await Promise.all([start, afterStart]);
+  fake.recordingStateError = new Error('read failed');
+  assert.deepEqual(await manager.getRecordingState(device), stopped);
+});
+
+test('a recording-state read remains scoped to the connection that started it', async () => {
+  const fake = createFakeClient();
+  fake.client.devices.connect = async () => ({ ...connectedDevice });
+  setCompatibilityClientForTesting(fake.client);
+  const manager = new DeviceManager();
+  const original = await manager.connect(discoveredDevice);
+  assert.deepEqual(await manager.getRecordingState(original), recordingState);
+  const delayed = deferred();
+  fake.recordingState = delayed.promise;
+  await manager.requestStartRecording(original, 'grant');
+  const originalRead = manager.getRecordingState(original);
+  await tick();
+
+  reportCompatibilityDisconnection(fake.client, new Error('disconnected'));
+  const replacement = await manager.connect(discoveredDevice);
+  const stopped = { active: false, initiatedBy: 'remote' };
+  fake.recordingState = stopped;
+  assert.deepEqual(await manager.getRecordingState(replacement), stopped);
+  delayed.reject(new Error('old link closed'));
+  assert.deepEqual(await originalRead, recordingState);
+  fake.recordingStateError = new Error('read failed');
+  assert.deepEqual(await manager.getRecordingState(replacement), stopped);
+});
+
 test('internal DeviceManager caches recording state and falls back to frozen idle state', async () => {
   const fake = createFakeClient();
   setCompatibilityClientForTesting(fake.client);

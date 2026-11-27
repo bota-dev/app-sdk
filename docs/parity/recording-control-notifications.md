@@ -43,3 +43,12 @@ its five SHA-256 sidecars and exact control sources JAR content were checked for
 private Android candidate preparation. The same-source React Native archive is
 `f54291e3ed79f71ca4f90d7a600b77319ea6562a4a646edc6cf76959b0ef6521`.
 These unpublished CI bytes do not replace immutable public beta.12 packages.
+
+## React Native command result and status reads
+
+The compatibility manager returns the Start or Stop result independently of its
+follow-up recording-state read. A failed read falls back to the cached snapshot
+for state consumers. An explicit device rejection or a transport error from the
+command itself is returned to the caller. Overlapping reads share the pending
+refresh, and a superseded command or connection cannot overwrite a newer
+snapshot.
