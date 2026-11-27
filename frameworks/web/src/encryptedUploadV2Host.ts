@@ -1755,7 +1755,7 @@ export class EncryptedUploadV2Host implements WorkflowEffectHost {
   }
 
   private async uploadCiphertext(
-    request: UploadRequestTemplate,
+    request: UploadRequestTemplate<'PUT' | 'POST'>,
     signal: AbortSignal,
   ): Promise<void> {
     const combinedSignal = AbortSignal.any([
@@ -2693,7 +2693,7 @@ function validateEvidence(value: unknown): void {
 function validateUploadRequest(
   request: unknown,
   genericTarget: boolean,
-): asserts request is UploadRequestTemplate {
+): asserts request is UploadRequestTemplate<'PUT' | 'POST'> {
   if (!isRecord(request) || (request.method !== 'PUT' && !(genericTarget && request.method === 'POST'))) {
     throw new BotaSDKError('upload_failed', 'upload')
   }

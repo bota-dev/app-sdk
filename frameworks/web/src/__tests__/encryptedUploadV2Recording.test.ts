@@ -264,7 +264,7 @@ async function checkWholeFileUpload(method: 'PUT' | 'POST') {
   const callbackEvidence: EncryptedUploadV2Evidence[] = []
   let submittedManifest: Uint8Array | null = null
   let uploaded = new Uint8Array()
-  const request: UploadRequestTemplate = {
+  const request: UploadRequestTemplate<'PUT' | 'POST'> = {
     method,
     url: 'https://upload-secret.example.invalid/v2',
     headers: { Authorization: 'Bearer v2-secret' },

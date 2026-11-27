@@ -62,8 +62,8 @@ export interface FirmwareDownloadProvider {
   }>
 }
 
-export interface UploadRequestTemplate {
-  method: 'PUT' | 'POST'
+export interface UploadRequestTemplate<Method extends 'PUT' | 'POST' = 'PUT'> {
+  method: Method
   url: string
   headers: Readonly<Record<string, string>>
 }
@@ -138,7 +138,7 @@ export interface EncryptedUploadV2Material {
   stagingRequest(
     evidence: EncryptedUploadV2Evidence,
     signal: AbortSignal,
-  ): Promise<UploadRequestTemplate>
+  ): Promise<UploadRequestTemplate<'PUT' | 'POST'>>
   submitManifest(
     manifest: Uint8Array,
     evidence: EncryptedUploadV2Evidence,
@@ -162,7 +162,7 @@ export interface RecordingUploadProvider {
   }): Promise<import('./uploadContext.ts').UploadContextExchange>
   prepareLegacyUpload(context: LegacyUploadContext): Promise<{
     uploadId: string
-    request: UploadRequestTemplate & { method: 'PUT' }
+    request: UploadRequestTemplate
   }>
   completeLegacyUpload(
     context: LegacyUploadContext & { uploadId: string },
