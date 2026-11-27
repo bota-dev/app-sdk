@@ -13,6 +13,11 @@ Use `deviceDisconnected` to update connection state after a peripheral reboot.
 Await `devices.disconnect(device)` before displaying a manual disconnect as
 complete. See [secure BLE disconnect and reconnect](../../docs/parity/ble-link-security.md#disconnect-and-reconnect).
 
+`devices.requestStartRecording` and `devices.requestStopRecording` return the
+device's command result as soon as it is available. Successful commands also
+refresh the recording-state cache. Use `devices.getRecordingState` or subscribe
+to device status when the UI needs the current recording state.
+
 The unpublished [system-connection discovery correction](../../docs/parity/apple-connection-ownership.md#react-native-generated-runtime-system-retrieval)
 lets `createBlePlxPort` query an installed manager's optional `connectedDevices`
 API during scanning. Retrieved candidates still require a normal local connect
