@@ -9,7 +9,7 @@ publish = false
 bota-device-sdk-core = { path = "../../core/device-sdk-core" }
 chacha20poly1305 = "0.11.0"
 hmac = "0.13.0"
-hpke = { version = "0.14.0", default-features = false, features = ["alloc", "chacha", "x25519"] }
+hpke = { version = "0.15.1", default-features = false, features = ["alloc", "chacha", "x25519"] }
 p256 = { version = "0.14.0", default-features = false, features = ["ecdsa", "sha256"] }
 rand_chacha = "0.10.0"
 semver = "1.0.27"
